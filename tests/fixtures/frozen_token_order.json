@@ -1,0 +1,652 @@
+{
+  "_comment": "从冻结的 AlphaMaster 实时提取的「名称/顺序冻结清单」。由 scripts/gen_frozen_fixture.py 生成，请勿手工编辑。M3/M4 回归测试只读本文件，不依赖 AM 可导入。",
+  "source": "AlphaMaster-main/model_core/{features,ops,vocab}.py",
+  "vocab_version": "v9217a2c0d91a",
+  "vocab_schema_tag": "4.0-registry",
+  "feature_count": 65,
+  "operator_count": 62,
+  "vocab_size": 127,
+  "feature_names": [
+    "RET",
+    "RET5",
+    "RET20",
+    "MA_DIFF",
+    "SLOPE20",
+    "ATR",
+    "RVOL",
+    "HL_RANGE",
+    "VOL_REGIME",
+    "DEV",
+    "DEV60",
+    "RSI14",
+    "PRESSURE",
+    "AC1",
+    "VOL_RATIO",
+    "VOL_Z",
+    "PV_CORR",
+    "REL_RET5",
+    "REL_RET20",
+    "REL_VOL",
+    "VWAP_DEV",
+    "BOLL_POS",
+    "BOLL_WIDTH",
+    "MACD_HIST",
+    "OBV_SLOPE",
+    "MFI14",
+    "WILLR_14",
+    "CCI_14",
+    "ROC_12",
+    "TYPICAL_DEV",
+    "EMA_RATIO_12_26",
+    "TREND_STRENGTH_50",
+    "PRICE_POS_50",
+    "TRIX_15",
+    "PPO",
+    "ULT_OSC",
+    "RET_ACCEL",
+    "GK_VOL",
+    "PARKINSON_VOL",
+    "YANG_ZHANG_VOL",
+    "RS_VOL",
+    "AMIHUD_ILLIQ",
+    "KYLE_LAMBDA",
+    "CMF_20",
+    "AD_LINE_SLOPE",
+    "STOCH_K_14",
+    "STOCH_D_3",
+    "AROON_OSC_25",
+    "DMI_ADX_14",
+    "DMI_DIFF_14",
+    "TRIX_SIGNAL",
+    "DONCHIAN_POS_20",
+    "KELTNER_POS_20",
+    "ICHIMOKU_KIJUN_DEV",
+    "ICHIMOKU_TENKAN_DEV",
+    "SUPERTREND_DIR",
+    "SAR_DIST",
+    "ROLL_SKEW_20",
+    "ROLL_KURT_20",
+    "HURST_50",
+    "FRACTAL_DIM_30",
+    "AC2",
+    "RET_ENTROPY_20",
+    "CS_RANK_RET5",
+    "CS_ZSCORE_RET20"
+  ],
+  "operator_names": [
+    "ADD",
+    "SUB",
+    "MUL",
+    "DIV",
+    "NEG",
+    "ABS",
+    "SIGN",
+    "GATE",
+    "JUMP",
+    "DECAY",
+    "DELAY1",
+    "MAX3",
+    "TS_MEAN_5",
+    "TS_MEAN_10",
+    "TS_MEAN_20",
+    "TS_STD_5",
+    "TS_STD_10",
+    "TS_STD_20",
+    "TS_RANK_5",
+    "TS_RANK_10",
+    "TS_RANK_20",
+    "TS_CORR_10",
+    "MOMENTUM_5",
+    "MOMENTUM_10",
+    "TS_MAX_10",
+    "TS_MIN_10",
+    "WMA",
+    "DELAY4",
+    "EMA_5",
+    "EMA_20",
+    "TS_QUANTILE_10",
+    "TS_SKEW_10",
+    "TS_MIN_20",
+    "TS_MAX_20",
+    "DELTA",
+    "TS_ARG_MAX_5",
+    "TS_ARG_MIN_5",
+    "DECAY_LINEAR_5",
+    "SCALE",
+    "COVARIANCE_10",
+    "PRODUCT_5",
+    "SIGNED_POWER_2",
+    "TS_DECAY_EXP_5",
+    "DELTA_5",
+    "CS_RANK",
+    "CS_SCALE",
+    "CS_NEUTRALIZE",
+    "TS_SUM_5",
+    "TS_SUM_10",
+    "TS_SUM_20",
+    "MIN",
+    "MAX",
+    "POWER",
+    "SIGNED_LOG",
+    "SQRT",
+    "TS_ZSCORE_10",
+    "TS_ZSCORE_20",
+    "WINSORIZE",
+    "CLIP",
+    "SIGMOID",
+    "TANH_SQUASH",
+    "IF_GT"
+  ],
+  "features": [
+    {
+      "name": "RET",
+      "category": "trend"
+    },
+    {
+      "name": "RET5",
+      "category": "trend"
+    },
+    {
+      "name": "RET20",
+      "category": "trend"
+    },
+    {
+      "name": "MA_DIFF",
+      "category": "trend"
+    },
+    {
+      "name": "SLOPE20",
+      "category": "trend"
+    },
+    {
+      "name": "ATR",
+      "category": "volatility"
+    },
+    {
+      "name": "RVOL",
+      "category": "volatility"
+    },
+    {
+      "name": "HL_RANGE",
+      "category": "volatility"
+    },
+    {
+      "name": "VOL_REGIME",
+      "category": "volatility"
+    },
+    {
+      "name": "DEV",
+      "category": "reversal"
+    },
+    {
+      "name": "DEV60",
+      "category": "reversal"
+    },
+    {
+      "name": "RSI14",
+      "category": "reversal"
+    },
+    {
+      "name": "PRESSURE",
+      "category": "reversal"
+    },
+    {
+      "name": "AC1",
+      "category": "reversal"
+    },
+    {
+      "name": "VOL_RATIO",
+      "category": "volume"
+    },
+    {
+      "name": "VOL_Z",
+      "category": "volume"
+    },
+    {
+      "name": "PV_CORR",
+      "category": "volume"
+    },
+    {
+      "name": "REL_RET5",
+      "category": "cross_sectional"
+    },
+    {
+      "name": "REL_RET20",
+      "category": "cross_sectional"
+    },
+    {
+      "name": "REL_VOL",
+      "category": "cross_sectional"
+    },
+    {
+      "name": "VWAP_DEV",
+      "category": "volume"
+    },
+    {
+      "name": "BOLL_POS",
+      "category": "channel"
+    },
+    {
+      "name": "BOLL_WIDTH",
+      "category": "volatility"
+    },
+    {
+      "name": "MACD_HIST",
+      "category": "momentum"
+    },
+    {
+      "name": "OBV_SLOPE",
+      "category": "volume"
+    },
+    {
+      "name": "MFI14",
+      "category": "volume"
+    },
+    {
+      "name": "WILLR_14",
+      "category": "reversal"
+    },
+    {
+      "name": "CCI_14",
+      "category": "reversal"
+    },
+    {
+      "name": "ROC_12",
+      "category": "momentum"
+    },
+    {
+      "name": "TYPICAL_DEV",
+      "category": "reversal"
+    },
+    {
+      "name": "EMA_RATIO_12_26",
+      "category": "trend"
+    },
+    {
+      "name": "TREND_STRENGTH_50",
+      "category": "trend"
+    },
+    {
+      "name": "PRICE_POS_50",
+      "category": "trend"
+    },
+    {
+      "name": "TRIX_15",
+      "category": "momentum"
+    },
+    {
+      "name": "PPO",
+      "category": "momentum"
+    },
+    {
+      "name": "ULT_OSC",
+      "category": "momentum"
+    },
+    {
+      "name": "RET_ACCEL",
+      "category": "momentum"
+    },
+    {
+      "name": "GK_VOL",
+      "category": "volatility"
+    },
+    {
+      "name": "PARKINSON_VOL",
+      "category": "volatility"
+    },
+    {
+      "name": "YANG_ZHANG_VOL",
+      "category": "volatility"
+    },
+    {
+      "name": "RS_VOL",
+      "category": "volatility"
+    },
+    {
+      "name": "AMIHUD_ILLIQ",
+      "category": "volume"
+    },
+    {
+      "name": "KYLE_LAMBDA",
+      "category": "volume"
+    },
+    {
+      "name": "CMF_20",
+      "category": "volume"
+    },
+    {
+      "name": "AD_LINE_SLOPE",
+      "category": "volume"
+    },
+    {
+      "name": "STOCH_K_14",
+      "category": "reversal"
+    },
+    {
+      "name": "STOCH_D_3",
+      "category": "reversal"
+    },
+    {
+      "name": "AROON_OSC_25",
+      "category": "reversal"
+    },
+    {
+      "name": "DMI_ADX_14",
+      "category": "trend"
+    },
+    {
+      "name": "DMI_DIFF_14",
+      "category": "trend"
+    },
+    {
+      "name": "TRIX_SIGNAL",
+      "category": "momentum"
+    },
+    {
+      "name": "DONCHIAN_POS_20",
+      "category": "channel"
+    },
+    {
+      "name": "KELTNER_POS_20",
+      "category": "channel"
+    },
+    {
+      "name": "ICHIMOKU_KIJUN_DEV",
+      "category": "channel"
+    },
+    {
+      "name": "ICHIMOKU_TENKAN_DEV",
+      "category": "channel"
+    },
+    {
+      "name": "SUPERTREND_DIR",
+      "category": "channel"
+    },
+    {
+      "name": "SAR_DIST",
+      "category": "channel"
+    },
+    {
+      "name": "ROLL_SKEW_20",
+      "category": "statistical"
+    },
+    {
+      "name": "ROLL_KURT_20",
+      "category": "statistical"
+    },
+    {
+      "name": "HURST_50",
+      "category": "statistical"
+    },
+    {
+      "name": "FRACTAL_DIM_30",
+      "category": "statistical"
+    },
+    {
+      "name": "AC2",
+      "category": "statistical"
+    },
+    {
+      "name": "RET_ENTROPY_20",
+      "category": "statistical"
+    },
+    {
+      "name": "CS_RANK_RET5",
+      "category": "cross_sectional"
+    },
+    {
+      "name": "CS_ZSCORE_RET20",
+      "category": "cross_sectional"
+    }
+  ],
+  "operators": [
+    {
+      "name": "ADD",
+      "arity": 2
+    },
+    {
+      "name": "SUB",
+      "arity": 2
+    },
+    {
+      "name": "MUL",
+      "arity": 2
+    },
+    {
+      "name": "DIV",
+      "arity": 2
+    },
+    {
+      "name": "NEG",
+      "arity": 1
+    },
+    {
+      "name": "ABS",
+      "arity": 1
+    },
+    {
+      "name": "SIGN",
+      "arity": 1
+    },
+    {
+      "name": "GATE",
+      "arity": 3
+    },
+    {
+      "name": "JUMP",
+      "arity": 1
+    },
+    {
+      "name": "DECAY",
+      "arity": 1
+    },
+    {
+      "name": "DELAY1",
+      "arity": 1
+    },
+    {
+      "name": "MAX3",
+      "arity": 1
+    },
+    {
+      "name": "TS_MEAN_5",
+      "arity": 1
+    },
+    {
+      "name": "TS_MEAN_10",
+      "arity": 1
+    },
+    {
+      "name": "TS_MEAN_20",
+      "arity": 1
+    },
+    {
+      "name": "TS_STD_5",
+      "arity": 1
+    },
+    {
+      "name": "TS_STD_10",
+      "arity": 1
+    },
+    {
+      "name": "TS_STD_20",
+      "arity": 1
+    },
+    {
+      "name": "TS_RANK_5",
+      "arity": 1
+    },
+    {
+      "name": "TS_RANK_10",
+      "arity": 1
+    },
+    {
+      "name": "TS_RANK_20",
+      "arity": 1
+    },
+    {
+      "name": "TS_CORR_10",
+      "arity": 2
+    },
+    {
+      "name": "MOMENTUM_5",
+      "arity": 1
+    },
+    {
+      "name": "MOMENTUM_10",
+      "arity": 1
+    },
+    {
+      "name": "TS_MAX_10",
+      "arity": 1
+    },
+    {
+      "name": "TS_MIN_10",
+      "arity": 1
+    },
+    {
+      "name": "WMA",
+      "arity": 1
+    },
+    {
+      "name": "DELAY4",
+      "arity": 1
+    },
+    {
+      "name": "EMA_5",
+      "arity": 1
+    },
+    {
+      "name": "EMA_20",
+      "arity": 1
+    },
+    {
+      "name": "TS_QUANTILE_10",
+      "arity": 1
+    },
+    {
+      "name": "TS_SKEW_10",
+      "arity": 1
+    },
+    {
+      "name": "TS_MIN_20",
+      "arity": 1
+    },
+    {
+      "name": "TS_MAX_20",
+      "arity": 1
+    },
+    {
+      "name": "DELTA",
+      "arity": 1
+    },
+    {
+      "name": "TS_ARG_MAX_5",
+      "arity": 1
+    },
+    {
+      "name": "TS_ARG_MIN_5",
+      "arity": 1
+    },
+    {
+      "name": "DECAY_LINEAR_5",
+      "arity": 1
+    },
+    {
+      "name": "SCALE",
+      "arity": 1
+    },
+    {
+      "name": "COVARIANCE_10",
+      "arity": 2
+    },
+    {
+      "name": "PRODUCT_5",
+      "arity": 1
+    },
+    {
+      "name": "SIGNED_POWER_2",
+      "arity": 1
+    },
+    {
+      "name": "TS_DECAY_EXP_5",
+      "arity": 1
+    },
+    {
+      "name": "DELTA_5",
+      "arity": 1
+    },
+    {
+      "name": "CS_RANK",
+      "arity": 1
+    },
+    {
+      "name": "CS_SCALE",
+      "arity": 1
+    },
+    {
+      "name": "CS_NEUTRALIZE",
+      "arity": 1
+    },
+    {
+      "name": "TS_SUM_5",
+      "arity": 1
+    },
+    {
+      "name": "TS_SUM_10",
+      "arity": 1
+    },
+    {
+      "name": "TS_SUM_20",
+      "arity": 1
+    },
+    {
+      "name": "MIN",
+      "arity": 2
+    },
+    {
+      "name": "MAX",
+      "arity": 2
+    },
+    {
+      "name": "POWER",
+      "arity": 1
+    },
+    {
+      "name": "SIGNED_LOG",
+      "arity": 1
+    },
+    {
+      "name": "SQRT",
+      "arity": 1
+    },
+    {
+      "name": "TS_ZSCORE_10",
+      "arity": 1
+    },
+    {
+      "name": "TS_ZSCORE_20",
+      "arity": 1
+    },
+    {
+      "name": "WINSORIZE",
+      "arity": 1
+    },
+    {
+      "name": "CLIP",
+      "arity": 1
+    },
+    {
+      "name": "SIGMOID",
+      "arity": 1
+    },
+    {
+      "name": "TANH_SQUASH",
+      "arity": 1
+    },
+    {
+      "name": "IF_GT",
+      "arity": 3
+    }
+  ]
+}
