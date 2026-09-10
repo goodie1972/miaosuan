@@ -31,6 +31,7 @@ import types
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 
 # ── 路径 ───────────────────────────────────────────────────────────────────
@@ -40,6 +41,13 @@ _DEFAULT_AM_ROOT = Path(r"D:\backup\BaoBao\PythonProgram\AlphaMaster-main")
 
 #: 冻结快照
 _FIXTURE = Path(__file__).resolve().parent.parent / "fixtures" / "am_vocab_snapshot.json"
+
+#: M5 对拍基准（torch Oracle 生成）
+_FIXTURES_DIR = Path(__file__).resolve().parent.parent / "fixtures"
+_M5_NPZ = _FIXTURES_DIR / "m5_baseline.npz"
+_M5_JSON = _FIXTURES_DIR / "m5_baseline.json"
+_E2E_NPZ = _FIXTURES_DIR / "e2e_xauusd_baseline.npz"
+_E2E_JSON = _FIXTURES_DIR / "e2e_xauusd_meta.json"
 
 
 def am_root() -> Path:
@@ -167,3 +175,40 @@ def am_vocab(am_oracle: tuple[Any | None, bool, str]) -> Any:
 def am_used_torch_stub(am_oracle: tuple[Any | None, bool, str]) -> bool:
     """本次对拍是否使用了 torch 桩（供测试输出披露）。"""
     return am_oracle[1]
+
+
+# ── M5 对拍基准（vm / signal / backtest / evaluator）────────────────────────
+
+
+@pytest.fixture(scope="session")
+def m5_npz() -> dict[str, np.ndarray]:
+    """M5 数值基准（torch Oracle 生成）。"""
+    if not _M5_NPZ.is_file():
+        pytest.skip(f"缺少 M5 基准：{_M5_NPZ}（先跑 scripts/gen_m5_baseline.py）")
+    with np.load(_M5_NPZ) as data:
+        return {k: data[k] for k in data.files}
+
+
+@pytest.fixture(scope="session")
+def m5_meta() -> dict[str, Any]:
+    """M5 元信息与标量结果（torch Oracle 生成）。"""
+    if not _M5_JSON.is_file():
+        pytest.skip(f"缺少 M5 元信息：{_M5_JSON}")
+    return json.loads(_M5_JSON.read_text(encoding="utf-8"))
+
+
+@pytest.fixture(scope="session")
+def e2e_npz() -> dict[str, np.ndarray]:
+    """端到端 XAUUSD 基准（原始面板 + 特征 + 因子）。"""
+    if not _E2E_NPZ.is_file():
+        pytest.skip(f"缺少端到端基准：{_E2E_NPZ}（先跑 scripts/gen_e2e_xauusd_baseline.py）")
+    with np.load(_E2E_NPZ) as data:
+        return {k: data[k] for k in data.files}
+
+
+@pytest.fixture(scope="session")
+def e2e_meta() -> dict[str, Any]:
+    """端到端元信息（形状 / 公式 / 统计量）。"""
+    if not _E2E_JSON.is_file():
+        pytest.skip(f"缺少端到端元信息：{_E2E_JSON}")
+    return json.loads(_E2E_JSON.read_text(encoding="utf-8"))

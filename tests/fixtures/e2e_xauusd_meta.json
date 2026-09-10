@@ -1,0 +1,53 @@
+{
+  "_comment": "由 scripts/gen_e2e_xauusd_baseline.py 用冻结 AM 原生管线生成，请勿手工编辑。",
+  "source": "ParquetDataManager → MT5FeatureEngineer.compute_features → StackVM.execute",
+  "torch_version": "2.14.0+cpu",
+  "numpy_version": "2.5.3",
+  "parquet": "D:\\K线数据\\XAUUSD_H1.parquet",
+  "symbol": "XAUUSD",
+  "timeframe": "H1",
+  "vocab_version": "v9217a2c0d91a",
+  "formula": [
+    33,
+    62,
+    3,
+    87,
+    72,
+    119,
+    73,
+    103
+  ],
+  "formula_decoded": "TRIX_15 → RET_ENTROPY_20 → MA_DIFF → MOMENTUM_5 → GATE → SQRT → JUMP → SCALE",
+  "bars": 8000,
+  "feature_shape": [
+    1,
+    65,
+    8000
+  ],
+  "factor_shape": [
+    1,
+    8000
+  ],
+  "am_stats": {
+    "mean": 0.2589587867259979,
+    "std": 0.8117551803588867,
+    "min": -1.4055795669555664,
+    "max": 3.0,
+    "in_market_ratio": 0.920625
+  },
+  "data_facts": {
+    "rows_raw": 8000,
+    "rows_used": 8000,
+    "columns": [
+      "time",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume"
+    ],
+    "time_min": 1746442800,
+    "time_max": 1788962400,
+    "has_tick_volume": false
+  }
+}
