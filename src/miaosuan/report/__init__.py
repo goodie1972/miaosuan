@@ -3,9 +3,11 @@
 子模块：
 
 * :mod:`miaosuan.report.persist` —— 报告 JSON 持久化 / 反序列化（自 ``core/evaluator.py``
-  拆出，满足「``core/`` 无文件 IO」铁律）。
+  拆出，满足「``core/`` 无文件 IO」铁律）；
+* :mod:`miaosuan.report.metrics` —— 统一绩效指标（Sharpe/Sortino/Calmar/MDD/换手/IC）
+  与成本敏感性曲线（0.5x/1x/2x/3x）。
 
-T02 将新增 ``report/metrics.py``（统一指标 + 成本敏感性曲线）。
+后续 T04 将在 ``gate/cost_curve.py`` 复用本层指标。
 """
 
 from __future__ import annotations
