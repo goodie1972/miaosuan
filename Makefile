@@ -71,6 +71,8 @@ fixtures:
 	$(ORACLE_PYTHON) scripts/gen_frozen_fixture.py
 	$(ORACLE_PYTHON) scripts/gen_ops_baseline.py
 	$(ORACLE_PYTHON) scripts/gen_feature_baseline.py
+	$(ORACLE_PYTHON) scripts/gen_m5_baseline.py
+	$(ORACLE_PYTHON) scripts/gen_e2e_xauusd_baseline.py
 
 clean:
 	-$(PYTHON) -c "import shutil,glob,pathlib;[shutil.rmtree(p,ignore_errors=True) for p in glob.glob('**/__pycache__',recursive=True)]"
