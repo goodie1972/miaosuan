@@ -22,8 +22,11 @@ endif
 # 与本机自带的 Python 3.13 对齐；若环境中有 3.11 可覆盖：make env PYTHON_BOOT=python3.11
 PYTHON_BOOT ?= python
 
+# Oracle python（装有真实 torch，用于重新生成冻结基准）；可用环境变量覆盖。
+ORACLE_PYTHON ?= C:/Users/Administrator/.workbuddy/binaries/python/envs/default/Scripts/python.exe
+
 .DEFAULT_GOAL := help
-.PHONY: help env smoke test parity lint format clean
+.PHONY: help env smoke test parity lint format fixtures clean
 
 help:
 	@echo "妙算（MiaoSuan）可用目标："
@@ -33,6 +36,7 @@ help:
 	@echo "  make parity  与冻结 AlphaMaster 的差分对拍"
 	@echo "  make lint    ruff check + mypy"
 	@echo "  make format  ruff format"
+	@echo "  make fixtures 用 Oracle(torch) 重新生成冻结基准/清单（需 ORACLE_PYTHON）"
 	@echo "  make clean   清理缓存（保留 .venv）"
 
 # ── 环境 ───────────────────────────────────────────────────────────────────
@@ -61,6 +65,12 @@ lint:
 
 format:
 	$(PYTHON) -m ruff format src tests
+
+# ── 冻结基准（Oracle/torch 重新生成；日常不需要，仅当 AM 冻结快照更新时）────────
+fixtures:
+	$(ORACLE_PYTHON) scripts/gen_frozen_fixture.py
+	$(ORACLE_PYTHON) scripts/gen_ops_baseline.py
+	$(ORACLE_PYTHON) scripts/gen_feature_baseline.py
 
 clean:
 	-$(PYTHON) -c "import shutil,glob,pathlib;[shutil.rmtree(p,ignore_errors=True) for p in glob.glob('**/__pycache__',recursive=True)]"
