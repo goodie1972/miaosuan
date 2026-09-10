@@ -1,0 +1,51 @@
+# 妙算 pre-commit 钩子配置
+#
+# 关键防线：
+#   1) gitleaks —— 密钥扫描。AlphaMaster 曾发生明文 token 泄露事故（架构 §9.2 R10），
+#      妙算把 gitleaks 作为强制第一道防线，任何硬编码密钥在提交前即被拦截。
+#   2) ruff —— lint + format（替代 black/isort/flake8 三件套）。
+#   3) pre-commit-hooks —— 大文件拦截 / 行尾空白 / YAML 合法性等基础卫生。
+#
+# 安装：pre-commit install  （或 make env 自动安装）
+# 手动全量扫描：pre-commit run --all-files
+
+minimum_pre_commit_version: "3.6.0"
+default_install_hook_types: [pre-commit, pre-push]
+
+repos:
+  # ── 1. 密钥扫描（强制）────────────────────────────────────────────────
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+        name: gitleaks（密钥扫描）
+        description: 检测硬编码的密钥/token/私钥，防止敏感信息入库
+
+  # ── 2. Python lint + format ──────────────────────────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        name: ruff（lint + 自动修复）
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+        name: ruff-format（格式化）
+
+  # ── 3. 基础卫生 ──────────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-added-large-files
+        name: 拦截大文件
+        args: [--maxkb=2048]          # >2MB 拒绝入库（治 R14：AM 曾提交 433MB checkpoint）
+      - id: check-merge-conflict
+        name: 检查合并冲突标记
+      - id: check-yaml
+        name: 校验 YAML
+      - id: check-toml
+        name: 校验 TOML
+      - id: end-of-file-fixer
+        name: 文件末尾换行
+      - id: trailing-whitespace
+        name: 去除行尾空白
+        args: [--markdown-linebreak-ext=md]
