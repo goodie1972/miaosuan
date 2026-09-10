@@ -21,6 +21,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from .errors import ConfigError
+
 __all__ = [
     "ConfigError",  # 便于统一从 config 导入错误类型
     "GASearchConfig",
@@ -30,8 +32,6 @@ __all__ = [
     "LoggingConfig",
     "AppConfig",
 ]
-
-from .errors import ConfigError
 
 # ── 子配置（均为 frozen dataclass，不可变、可安全共享）─────────────────────
 
