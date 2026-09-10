@@ -1,0 +1,132 @@
+# 妙算（MiaoSuan）—— 唯一配置入口
+#
+# 设计目标（架构 §1.2）：
+#   * 消灭 AlphaMaster「没有 pytest.ini」的问题 —— 所有测试配置集中在此；
+#   * 单一配置源，杜绝 AM 的「双 config 架构倒置」（engine.py 反向 import 根目录 config）；
+#   * Python 目标版本 3.11（架构 §8）。本机无 3.11，实际在 3.13 上验证，
+#     详见 README「已知差异」小节。
+#
+# 常用命令：
+#   pip install -e ".[dev]"     开发安装
+#   pytest                      运行全部测试（含 tests/parity 对拍）
+#   ruff check . && mypy        静态检查
+
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+# ── 项目元数据 ─────────────────────────────────────────────────────────────
+[project]
+name = "miaosuan"
+version = "0.1.0"
+description = "妙算（MiaoSuan）—— 去 torch 的声明式因子挖掘 + AlgoForge 策略调优引擎"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "MiaoSuan Team" }]
+keywords = ["quant", "factor-mining", "genetic-programming", "algoforge", "rpn"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+
+# 运行时核心依赖（纯 numpy 栈，无 torch）
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.1,<3.0",   # 锁 2.x，规避 pandas 3.0 API 变更（架构 §8）
+    "pyarrow>=14.0",
+    "scipy>=1.11",
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+    "jinja2>=3.1",
+    "typer>=0.9",
+]
+
+[project.optional-dependencies]
+# 模式 B（T05）依赖
+tune = ["TA-Lib>=0.4.0", "optuna>=3.4"]
+# 仅 tests/parity 使用：加载冻结的 AlphaMaster 作对拍 Oracle，不进生产依赖
+oracle = ["torch>=2.0"]
+# 开发工具
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.1",
+    "hypothesis>=6.100",
+    "ruff>=0.4",
+    "mypy>=1.9",
+    "pip-tools>=7.4",
+    "pre-commit>=3.6",
+]
+
+# CLI 入口（cli.py 于 T04/M14 实现；此处预声明最终形态）
+[project.scripts]
+miaosuan = "miaosuan.cli:app"
+
+# ── 构建目标 ───────────────────────────────────────────────────────────────
+[tool.hatch.build.targets.wheel]
+packages = ["src/miaosuan"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "README.md", "pyproject.toml"]
+
+# ── pytest（消灭「无 pytest.ini」）────────────────────────────────────────
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["src"]              # 免安装即可 import miaosuan
+addopts = "-ra -q"
+markers = [
+    "parity: 与冻结 AlphaMaster 的差分对拍（tests/parity）",
+    "slow: 慢测试",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]
+
+# ── 覆盖率 ─────────────────────────────────────────────────────────────────
+[tool.coverage.run]
+source = ["src/miaosuan"]
+branch = true
+
+[tool.coverage.report]
+omit = ["src/miaosuan/cli.py"]
+
+# ── mypy ───────────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.11"
+files = ["src/miaosuan"]
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_reexport = false
+ignore_missing_imports = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+
+# ── ruff（lint + format）───────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "RET"]
+ignore = [
+    "E501",   # 行长由 formatter 控制
+    "B008",   # typer 依赖注入惯用法
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

@@ -1,0 +1,52 @@
+# ── 虚拟环境 ──────────────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Python 缓存 / 构建产物 ────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+.mypy_cache/
+.dmypy.json
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+
+# ── 妙算产物（大文件，不入库；结构见架构 §2）──────────────────────────────
+# 用 artifacts/* 而非 artifacts/，以便保留 .gitkeep 占位（目录规则无法再包含文件）
+artifacts/*
+!artifacts/.gitkeep
+
+# ── 日志 ──────────────────────────────────────────────────────────────────
+logs/
+*.log
+
+# ── 数据（大数据文件不入库，仅保留 tests/fixtures 下的小样本）────────────
+*.parquet
+*.pq
+*.feather
+*.h5
+*.sqlite
+*.db
+
+# ── 密钥（兜底；第一道防线是 pre-commit gitleaks）──────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ── IDE / 操作系统 ───────────────────────────────────────────────────────
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
