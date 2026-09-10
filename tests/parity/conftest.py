@@ -118,11 +118,13 @@ def _load_am_vocab() -> tuple[Any | None, bool, str]:
 
     stubbed, restore = _ensure_torch()
     inserted = str(root)
+    # 保证冻结的 AM 仓库**零写入**：导入期不落 __pycache__ 字节码
+    prev_dont_write = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
     sys.path.insert(0, inserted)
     try:
         import importlib
 
-        # 若之前用桩加载过且现在仍用桩，直接复用缓存
         module = importlib.import_module("model_core.vocab")
     except Exception as exc:  # pragma: no cover - 环境相关
         restore()
@@ -130,6 +132,7 @@ def _load_am_vocab() -> tuple[Any | None, bool, str]:
     finally:
         if inserted in sys.path:
             sys.path.remove(inserted)
+        sys.dont_write_bytecode = prev_dont_write
         restore()
 
     return module, stubbed, ""
