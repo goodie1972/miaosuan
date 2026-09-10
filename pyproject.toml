@@ -98,7 +98,11 @@ omit = ["src/miaosuan/cli.py"]
 
 # ── mypy ───────────────────────────────────────────────────────────────────
 [tool.mypy]
-python_version = "3.11"
+# 说明：目标运行版本为 3.11（架构 §8），但本机仅有 3.13；且 numpy 2.5 的 .pyi
+# 使用 PEP 695 ``type`` 语句（需 Python ≥3.12 语法），mypy 以 python_version 决定
+# 解析语法。故此处设为 3.13 以匹配实际验证环境。语法层面的 3.11 兼容性由
+# ruff（target-version = "py311"）与 CI 的 3.11 矩阵保证。
+python_version = "3.13"
 files = ["src/miaosuan"]
 strict = true
 warn_unused_ignores = true
