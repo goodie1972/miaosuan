@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import urllib.parse
 from typing import Any
 
 import pytest
@@ -36,15 +37,18 @@ def _call(
 ) -> tuple[int, Any]:
     """用内存 ASGI 调用 app，返回 ``(状态码, 解析后的 JSON)``。"""
     body = b"" if payload is None else json.dumps(payload).encode("utf-8")
+    # ASGI 把 path 与 query 分开传：路由匹配只看 path，query 单独放 query_string。
+    # 不分家的话 "/api/inspect?path=x" 会整串当 path，匹配不到路由直接 404。
+    path_only, _, query = path.partition("?")
     scope: dict[str, Any] = {
         "type": "http",
         "asgi": {"version": "3.0", "spec_version": "2.3"},
         "http_version": "1.1",
         "method": method,
         "scheme": "http",
-        "path": path,
+        "path": path_only,
         "raw_path": path.encode("utf-8"),
-        "query_string": b"",
+        "query_string": query.encode("utf-8"),
         "root_path": "",
         "headers": [
             (b"host", b"testserver"),
@@ -178,3 +182,100 @@ def test_specs_lists_spec_without_spec_id_key(app: Any, tmp_path: Any) -> None:
     row = next(r for r in data if r["file"] == "spec_no_id.json")
     assert row["spec_id"]          # 列表接口自己派生短 id，不依赖文件里的键
     assert row["n_tokens"] == 3
+
+
+# ── T07：AlgoForge 双主题改造后的新契约 ──────────────────────────────────────
+
+def test_meta_exposes_real_frozen_vocab(app: Any) -> None:
+    """/api/meta 必须回报**真实**冻结词表，页头不能写死数字。
+
+    回归防线：页头"词表 v9217a2c0d91a · 127 tokens"若被硬编码，词表一变就会
+    和内核不一致；这里强制它从 :data:`VOCAB_VERSION` / ``FORMULA_VOCAB`` 派生。
+    """
+    from miaosuan.core.vocab import FORMULA_VOCAB, VOCAB_VERSION
+
+    status, data = _call(app, "GET", "/api/meta")
+    assert status == 200
+    assert data["vocab_version"] == VOCAB_VERSION == "v9217a2c0d91a"
+    assert data["n_tokens"] == FORMULA_VOCAB.size
+    assert data["n_features"] == FORMULA_VOCAB.feature_count
+    assert data["n_operators"] == len(FORMULA_VOCAB.operator_names)
+    assert "XAUUSD" in data["known_symbols"]
+    assert "FOREX_XAUUSD" in data["profiles"]
+
+
+def test_inspect_rejects_path_outside_data_dirs(app: Any) -> None:
+    """/api/inspect 必须拒绝数据目录之外的路径（防目录穿越读到任意文件）。"""
+    status, data = _call(app, "GET", "/api/inspect?path=" + "C:/Windows/System32/config/SAM")
+    assert status == 400
+    assert "数据目录" in data["detail"]
+
+
+def test_inspect_reports_404_for_missing_in_dir_file(app: Any) -> None:
+    """目录内但文件不存在 → 404（区别于"路径非法"的 400）。"""
+    missing = str(server._REPO_ROOT / "data" / "__definitely_missing__.parquet")
+    status, data = _call(app, "GET", "/api/inspect?path=" + urllib.parse.quote(missing))
+    assert status == 404
+    assert "不存在" in data["detail"]
+
+
+def test_strategies_lists_only_real_exports(app: Any, tmp_path: Any) -> None:
+    """只列带 ``STRATEGY_MAGIC`` 的文件 —— artifacts 下的临时脚本不算已导出策略。
+
+    回归防线：该常量由导出模板强制写入，是"这是导出产物"的准确判据。若不过滤，
+    artifacts 里的调试脚本会被当成策略列出，而且每个都带 4 条 lint error（因为
+    lint 规则要求声明该常量），把真实导出淹掉。
+    """
+    (tmp_path / "real_export.py").write_text(
+        'STRATEGY_MAGIC = "661801"\nSTRATEGY_NAME = "x"\n', encoding="utf-8"
+    )
+    (tmp_path / "scratch_debug.py").write_text("print(1)\n", encoding="utf-8")
+
+    status, data = _call(app, "GET", "/api/strategies")
+    assert status == 200
+    files = [row["file"] for row in data]
+    assert "real_export.py" in files
+    assert "scratch_debug.py" not in files
+    row = next(r for r in data if r["file"] == "real_export.py")
+    assert row["magic"] == "661801"
+    assert "lint_errors" in row and "lint_warnings" in row
+
+
+def test_specs_surfaces_symbol_and_timeframe(app: Any, tmp_path: Any) -> None:
+    """/api/specs 要带 symbol / timeframe（⑧ 历史 Spec 表格依赖这两列）。"""
+    (tmp_path / "spec_x.json").write_text(
+        json.dumps({
+            "payload": {"tokens": [51, 121, 53], "vocab_version": "v9217a2c0d91a"},
+            "spec_version": "1.0",
+            "semantics": {"timeframe": "H1"},
+            "provenance": {"config_snapshot": {"symbol": "XAUUSD"}},
+        }),
+        encoding="utf-8",
+    )
+    status, data = _call(app, "GET", "/api/specs")
+    assert status == 200
+    row = next(r for r in data if r["file"] == "spec_x.json")
+    assert row["symbol"] == "XAUUSD"
+    assert row["timeframe"] == "H1"
+
+
+# ── 静态页面：单文件 + 零 CDN + 双主题（防止后来人引入外链或砍掉浅色）────────
+
+def test_index_html_is_single_file_zero_cdn_dual_theme() -> None:
+    """页头/主题/图表都在一个文件里，且不依赖任何外部资源。
+
+    回归防线：一旦有人引 CDN（Chart.js / 字体），离线环境会整页白屏；这里从
+    静态层面把"零外链"钉死。双主题则要求两套 CSS 变量块都还在。
+    """
+    html = server._INDEX_HTML.read_text(encoding="utf-8")
+    assert "<script" in html and html.count("<script") == 1
+    assert 'src="http' not in html and "src='http" not in html
+    assert '<link' not in html  # 零外链样式表
+    assert 'html[data-theme="dark"]' in html
+    assert 'html[data-theme="light"]' in html
+    assert "localStorage" in html
+    # 涨绿跌红（Binance 口径），不要把方向写反
+    assert "#0ecb81" in html and "#f6465d" in html
+    # 三步导航：挖掘 / 回测 / 实时
+    for step in ("01", "02", "03"):
+        assert step in html

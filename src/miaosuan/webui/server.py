@@ -29,7 +29,10 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
 from ..adapters.algoforge.generator import readable_formula
-from ..core.vocab import FORMULA_VOCAB
+from ..adapters.algoforge.lint import lint_source
+from ..core.vocab import FORMULA_VOCAB, VOCAB_VERSION
+from ..data.loader import load
+from ..ir.provenance import MIAOSUAN_VERSION
 from ..market.profiles import EXPECTED_PROFILE_NAMES
 from ..pipeline import _SYMBOL_PROFILE_FALLBACK
 
@@ -83,6 +86,41 @@ def _spec_id(path: Path) -> str:
 _PROFILE_HINT: str = " / ".join(EXPECTED_PROFILE_NAMES)
 #: 已知标的提示（唯一来源 ``pipeline._SYMBOL_PROFILE_FALLBACK``，此处不复制字符串）。
 _SYMBOL_HINT: str = " / ".join(sorted(_SYMBOL_PROFILE_FALLBACK))
+
+
+def _resolve_data_file(path: str) -> Path:
+    """把行情文件路径约束到已知数据目录内（拒绝任意路径 / 路径穿越）。
+
+    与 :func:`_safe_name`（约束 ``artifacts/`` 下的产物）对应，这里约束的是
+    **输入**行情文件：只允许 :data:`_DATA_DIRS` 下的真实文件。
+    """
+    try:
+        resolved = Path(path).resolve()
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail=f"非法路径：{path!r}") from exc
+    for directory in _DATA_DIRS:
+        root = directory.resolve()
+        if resolved == root or root in resolved.parents:
+            return resolved
+    allowed = " / ".join(str(d) for d in _DATA_DIRS)
+    raise HTTPException(
+        status_code=400, detail=f"行情文件不在允许的数据目录内：{path!r}（允许 {allowed}）"
+    )
+
+
+def _strategy_magic(source: str) -> str:
+    """从策略源码里取 ``STRATEGY_MAGIC`` 常量值；取不到返回空串。
+
+    Args:
+        source: 策略 ``.py`` 源码全文。
+
+    Returns:
+        六位 magic 字符串；非导出产物（未声明该常量）返回 ``""``。
+    """
+    for line in source.splitlines():
+        if line.startswith("STRATEGY_MAGIC"):
+            return line.partition("=")[2].strip().strip('"')
+    return ""
 
 
 def _validate_market_choice(symbol: str, market: str) -> None:
@@ -250,6 +288,45 @@ def create_app() -> FastAPI:
                 })
         return out
 
+    @app.get("/api/meta")
+    def meta() -> dict[str, Any]:
+        """全局只读配置：词表冻结锁 + 可选画像 / 已知标的（供页头展示真实值）。"""
+        return {
+            "vocab_version": VOCAB_VERSION,
+            "n_features": FORMULA_VOCAB.feature_count,
+            "n_operators": len(FORMULA_VOCAB.operator_names),
+            "n_tokens": FORMULA_VOCAB.size,
+            "profiles": list(EXPECTED_PROFILE_NAMES),
+            "known_symbols": sorted(_SYMBOL_PROFILE_FALLBACK),
+            "miaosuan_version": MIAOSUAN_VERSION,
+        }
+
+    @app.get("/api/inspect")
+    def inspect_data(path: str) -> dict[str, Any]:
+        """加载行情文件并回报真实元信息（品种 / 周期 / bar 数 / 年限 / 指纹）。"""
+        file_path = _resolve_data_file(path)
+        if not file_path.is_file():
+            raise HTTPException(status_code=404, detail=f"文件不存在：{file_path}")
+        try:
+            panel = load(str(file_path))
+        except Exception as exc:  # noqa: BLE001 - 数据文件千奇百怪，统一转成 400
+            raise HTTPException(status_code=400, detail=f"数据加载失败：{exc}") from exc
+        stamps = panel.time
+        span = int(stamps[-1]) - int(stamps[0]) if len(stamps) > 1 else 0
+        fmt = "%Y-%m-%d"
+        return {
+            "path": str(file_path),
+            "name": file_path.name,
+            "symbol": ", ".join(str(s) for s in panel.symbols),
+            "timeframe": str(panel.timeframe or ""),
+            "n_bars": int(panel.n_bars),
+            "years": round(span / (365.25 * 86400), 2),
+            "fingerprint": panel.fingerprint,
+            "market_profile": panel.market_profile_name,
+            "start": time.strftime(fmt, time.gmtime(int(stamps[0]))) if len(stamps) else "",
+            "end": time.strftime(fmt, time.gmtime(int(stamps[-1]))) if len(stamps) else "",
+        }
+
     @app.get("/api/specs")
     def list_specs() -> list[dict[str, Any]]:
         """列出 artifacts 下所有 StrategySpec JSON（按修改时间倒序）。"""
@@ -269,6 +346,9 @@ def create_app() -> FastAPI:
             payload = data.get("payload") or {}
             tokens = payload.get("tokens") or []
             evidence = data.get("evidence") or {}
+            provenance = data.get("provenance") or {}
+            semantics = data.get("semantics") or {}
+            snapshot = provenance.get("config_snapshot") or {}
             out.append({
                 "file": path.name,
                 "spec_id": _spec_id(path),
@@ -279,25 +359,41 @@ def create_app() -> FastAPI:
                 "deflated_sharpe": evidence.get("deflated_sharpe"),
                 "gate_verdict": evidence.get("gate_verdict", ""),
                 "vocab_version": payload.get("vocab_version", ""),
+                "symbol": str(snapshot.get("symbol") or ""),
+                "timeframe": str(semantics.get("timeframe") or ""),
+                "created_at": str(provenance.get("created_at") or ""),
+                "mtime": time.strftime(
+                    "%Y-%m-%d %H:%M", time.localtime(path.stat().st_mtime)
+                ),
             })
         return out
 
     @app.get("/api/strategies")
     def list_strategies() -> list[dict[str, Any]]:
-        """列出已导出的 AlgoForge 策略 .py（按修改时间倒序）。"""
+        """列出已导出的 AlgoForge 策略 .py（按修改时间倒序）。
+
+        只认**带** ``STRATEGY_MAGIC`` 的文件：该常量由导出模板强制写入，是"这
+        是导出产物"的准确判据。否则 artifacts 下的临时脚本也会被当成策略列出
+        （且每个都带 4 条 lint error——因为 lint 规则要求声明该常量），把真实
+        导出淹掉。
+        """
         out: list[dict[str, Any]] = []
         if not _ARTIFACTS.is_dir():
             return out
         for path in sorted(_ARTIFACTS.glob("*.py"), key=lambda p: p.stat().st_mtime, reverse=True):
-            text_head = path.read_text(encoding="utf-8", errors="replace")[:4000]
-            magic = ""
-            for line in text_head.splitlines():
-                if line.startswith("STRATEGY_MAGIC"):
-                    magic = line.partition("=")[2].strip().strip('"')
-                    break
+            try:
+                source = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            magic = _strategy_magic(source)
+            if not magic:
+                continue
+            issues = lint_source(source)
             out.append({
                 "file": path.name,
                 "magic": magic,
+                "lint_errors": sum(1 for i in issues if i.severity.value == "ERROR"),
+                "lint_warnings": sum(1 for i in issues if i.severity.value == "WARNING"),
                 "size_kb": round(path.stat().st_size / 1024, 1),
                 "mtime": time.strftime("%m-%d %H:%M", time.localtime(path.stat().st_mtime)),
             })
