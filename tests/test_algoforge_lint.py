@@ -78,8 +78,9 @@ def test_syntax_error_is_error() -> None:
 
 
 def test_gate_without_deadband_warns() -> None:
+    # AF004 按 _TOKENS 中是否真含 GATE token（72）判定，样本须与真实导出形态一致
     source = (
-        "# GATE 算子\n"
+        "_TOKENS = (33, 62, 72)\n"
         "_GATE_DEADBAND = 0.0\n"
         'STRATEGY_MAGIC = "1"\nSTRATEGY_NAME = "n"\n'
         'STRATEGY_VERSION = "1"\nSTRATEGY_CHANGELOG = ("v1",)\n'
@@ -89,8 +90,19 @@ def test_gate_without_deadband_warns() -> None:
 
 def test_gate_with_deadband_is_quiet() -> None:
     source = (
-        "# GATE 算子\n"
+        "_TOKENS = (33, 62, 72)\n"
         "_GATE_DEADBAND = 0.05\n"
+        'STRATEGY_MAGIC = "1"\nSTRATEGY_NAME = "n"\n'
+        'STRATEGY_VERSION = "1"\nSTRATEGY_CHANGELOG = ("v1",)\n'
+    )
+    assert _only(source, "AF004") == []
+
+
+def test_af004_ignores_formulas_without_gate_token() -> None:
+    """无 GATE token 的公式即使文本里含 GATE_DEADBAND 也不得误报（R2-P2）。"""
+    source = (
+        "_TOKENS = (0, 1, 65)\n"
+        "GATE_DEADBAND = 0.0  # generate_signal 里的 getattr 兜底字样\n"
         'STRATEGY_MAGIC = "1"\nSTRATEGY_NAME = "n"\n'
         'STRATEGY_VERSION = "1"\nSTRATEGY_CHANGELOG = ("v1",)\n'
     )

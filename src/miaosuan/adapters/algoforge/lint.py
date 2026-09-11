@@ -324,9 +324,45 @@ def _check_nondeterminism(tree: ast.Module) -> list[LintIssue]:
     return issues
 
 
+def _gate_token_id() -> int | None:
+    """GATE 算子的 token id；词表中不存在 GATE 时返回 ``None``。"""
+    try:
+        index = FORMULA_VOCAB.operator_names.index(GATE_TOKEN_NAME)
+    except ValueError:
+        return None
+    return FORMULA_VOCAB.operator_offset + index
+
+
+def _parse_module_tokens(tree: ast.Module) -> tuple[int, ...] | None:
+    """从模块级 ``_TOKENS = (...)`` 常量解析 token 序列；缺失返回 ``None``。"""
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if (
+                isinstance(target, ast.Name)
+                and target.id == "_TOKENS"
+                and isinstance(node.value, ast.Tuple)
+            ):
+                elements = []
+                for element in node.value.elts:
+                    if not (isinstance(element, ast.Constant) and isinstance(element.value, int)):
+                        return None
+                    elements.append(int(element.value))
+                return tuple(elements)
+    return None
+
+
 def _check_gate_deadband(tree: ast.Module, source: str) -> list[LintIssue]:
-    """AF004：含 GATE 但未启用死区保护时给出警告（R1）。"""
-    if GATE_TOKEN_NAME not in source:
+    """AF004：公式确实使用 GATE 算子但死区保护未启用时给出警告（R1）。
+
+    判定依据是 ``_TOKENS`` 中是否真的出现 GATE 的 token id——**不能**用
+    ``"GATE" in source`` 之类的子串判断：生成文件的 ``generate_signal`` 恒含
+    ``GATE_DEADBAND`` 字样（getattr 兜底），按子串判会对所有无 GATE 公式误报。
+    """
+    tokens = _parse_module_tokens(tree)
+    gate_id = _gate_token_id()
+    if tokens is None or gate_id is None or gate_id not in tokens:
         return []
     value: float | None = None
     for node in tree.body:

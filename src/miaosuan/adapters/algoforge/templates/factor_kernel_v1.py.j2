@@ -111,31 +111,34 @@ _OP_FUNCS = {
 {% if has_gate %}
 # ── R1：GATE 零点不连续保护（死区滞回，因果，无未来函数）───────────────────
 _GATE_DEADBAND = {{ gate_deadband }}
+_GATE_TOKEN = {{ gate_token }}
 
 
-def _gate_protected(condition: np.ndarray, x: np.ndarray, y: np.ndarray) -> np.ndarray:
-    """GATE + 死区滞回。
+def _make_gate_protected(deadband: float):
+    """构造启用死区滞回的 GATE 算子（闭包持有 deadband，**无模块级可变状态**）。
 
-    ``_GATE_DEADBAND <= 0`` 时退化为原生 GATE（与回测逐位一致）；``> 0`` 时，
+    ``deadband <= 0`` 时退化为原生 GATE（与回测逐位一致）；``> 0`` 时，
     ``|condition| <= DEADBAND`` 的区间沿用上一根的选择，消除 1-ULP 符号抖动
     造成的分支翻转。逐根前向递推，**只看历史**，不引入未来函数。
     """
-    if _GATE_DEADBAND <= 0.0:
-        return {{ gate_func_name }}(condition, x, y)
-    _n, t = condition.shape
-    out = np.zeros_like(x)
-    prev = 0
-    for i in range(t):
-        c = float(condition[0, i])
-        if c > _GATE_DEADBAND:
-            prev = 1
-        elif c < -_GATE_DEADBAND:
-            prev = 0
-        out[0, i] = x[0, i] if prev else y[0, i]
-    return out
+    def _gate_protected(condition: np.ndarray, x: np.ndarray, y: np.ndarray) -> np.ndarray:
+        if deadband <= 0.0:
+            return {{ gate_func_name }}(condition, x, y)
+        _n, t = condition.shape
+        out = np.zeros_like(x)
+        prev = 0
+        for i in range(t):
+            c = float(condition[0, i])
+            if c > deadband:
+                prev = 1
+            elif c < -deadband:
+                prev = 0
+            out[0, i] = x[0, i] if prev else y[0, i]
+        return out
+    return _gate_protected
 
 
-_OP_FUNCS[{{ gate_token }}] = (_gate_protected, 3)
+_OP_FUNCS[_GATE_TOKEN] = (_make_gate_protected(_GATE_DEADBAND), 3)
 {% endif %}
 
 # ── 栈式求值 + 滚动归一化（对齐 miaosuan.core.vm.StackVM）──────────────────
@@ -212,9 +215,12 @@ def compute_factor(
         传入则覆盖它，使模式 B（tune 改写类属性 ``GATE_DEADBAND`` 后）经
         :meth:`generate_signal` 注入、真正影响死区计算（否则是死参数）。
     """
-    if gate_deadband is not None:
-        global _GATE_DEADBAND
-        _GATE_DEADBAND = float(gate_deadband)
+    {% if has_gate %}
+    # 每次调用都按本次 deadband 重置 gate 条目：闭包工厂不写模块级状态，
+    # 「先带参后不带参」的调用序列不会互相污染（QA Round2 特别审查①）。
+    _db = _GATE_DEADBAND if gate_deadband is None else float(gate_deadband)
+    _OP_FUNCS[_GATE_TOKEN] = (_make_gate_protected(_db), 3)
+    {% endif %}
     raw = {
         "open": np.atleast_2d(np.asarray(open_, dtype=np.float32)),
         "high": np.atleast_2d(np.asarray(high, dtype=np.float32)),
@@ -338,7 +344,7 @@ class {{ class_name }}({{ base_classes | join(", ") }}):
         arrays = _candles_to_arrays(closed)
         if arrays is None:
             return None
-        factor = compute_factor(*arrays, float(self.GATE_DEADBAND))
+        factor = compute_factor(*arrays, float(getattr(self, "GATE_DEADBAND", 0.0)))
         if factor.size < int(self.WARMUP_BARS) + 1:
             return None
         value = float(factor[factor.size - 1])
