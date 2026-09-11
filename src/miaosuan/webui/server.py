@@ -30,6 +30,8 @@ from pydantic import BaseModel
 
 from ..adapters.algoforge.generator import readable_formula
 from ..core.vocab import FORMULA_VOCAB
+from ..market.profiles import EXPECTED_PROFILE_NAMES
+from ..pipeline import _SYMBOL_PROFILE_FALLBACK
 
 __all__ = ["create_app"]
 
@@ -77,6 +79,46 @@ def _spec_id(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()[:12]
 
 
+#: 可选市场画像提示（唯一来源 :data:`EXPECTED_PROFILE_NAMES`，此处不复制字符串）。
+_PROFILE_HINT: str = " / ".join(EXPECTED_PROFILE_NAMES)
+#: 已知标的提示（唯一来源 ``pipeline._SYMBOL_PROFILE_FALLBACK``，此处不复制字符串）。
+_SYMBOL_HINT: str = " / ".join(sorted(_SYMBOL_PROFILE_FALLBACK))
+
+
+def _validate_market_choice(symbol: str, market: str) -> None:
+    """在起子进程**之前**拦掉"必然失败"的标的/画像组合。
+
+    根因：:func:`miaosuan.pipeline.resolve_market` 对未知标的**刻意**抛
+    :class:`ConfigError`（"未知标的报错而不是猜"，避免用错成本 / 年化因子）。
+    但该错误发生在 CLI 子进程里，UI 侧若不前置校验，用户只会看到一段 Python
+    堆栈。这里把它前移成 ``400`` + 可操作文案，**判定语义与 pipeline 完全一致**
+    （显式 market 一律放行，因此不会挡住非标品种）。
+
+    Args:
+        symbol: 表单里的标的代码（可为空）。
+        market: 表单里显式选择的市场画像（可为空）。
+
+    Raises:
+        HTTPException: 400 —— 既未给 ``market``，标的又不在已知集合内。
+    """
+    if market:
+        return
+    if symbol and symbol.upper() in _SYMBOL_PROFILE_FALLBACK:
+        return
+    if not symbol:
+        raise HTTPException(
+            status_code=400,
+            detail=f"请填写标的（{_SYMBOL_HINT}），或显式选择市场画像（{_PROFILE_HINT}）",
+        )
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            f"未知标的 {symbol!r}：请填写已知标的（{_SYMBOL_HINT}），"
+            f"或显式选择市场画像（{_PROFILE_HINT}）"
+        ),
+    )
+
+
 # ── 挖掘任务（单飞 + 增量日志）───────────────────────────────────────────────
 
 @dataclass
@@ -119,7 +161,10 @@ class _JobManager:
         return self._job
 
     def start(self, *, data: str, budget: str, seed: int, symbol: str,
-              timeframe: str, top_k: int, n_folds: int) -> MineJob:
+              timeframe: str, top_k: int, n_folds: int,
+              market: str = "") -> MineJob:
+        # 前置校验：把 pipeline 的 ConfigError 提前成 400，而不是让子进程甩堆栈。
+        _validate_market_choice(symbol, market)
         if self._job is not None and self._job.running:
             raise HTTPException(status_code=409, detail="已有挖掘任务在运行，请等待完成或刷新页面")
         _ARTIFACTS.mkdir(parents=True, exist_ok=True)
@@ -133,6 +178,8 @@ class _JobManager:
             args += ["--symbol", symbol]
         if timeframe:
             args += ["--timeframe", timeframe]
+        if market:
+            args += ["--market", market]
         proc = subprocess.Popen(  # noqa: S603 - 参数来自本机 UI 表单，白名单拼接
             _cli_process(*args),
             stdout=subprocess.PIPE,
@@ -159,6 +206,7 @@ class MineRequest(BaseModel):
     seed: int = 0
     symbol: str = ""
     timeframe: str = ""
+    market: str = ""
     top_k: int = 5
     n_folds: int = 5
 
@@ -283,7 +331,7 @@ def create_app() -> FastAPI:
     def start_mine(req: MineRequest) -> dict[str, Any]:
         job = _jobs.start(
             data=req.data, budget=req.budget, seed=req.seed,
-            symbol=req.symbol, timeframe=req.timeframe,
+            symbol=req.symbol, timeframe=req.timeframe, market=req.market,
             top_k=req.top_k, n_folds=req.n_folds,
         )
         return {"job_id": job.id, "spec_out": job.spec_out, "cmd": " ".join(job.args)}

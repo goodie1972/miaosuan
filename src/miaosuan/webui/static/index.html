@@ -79,8 +79,21 @@
           <option value="deep">deep · 约8小时</option>
         </select></div>
       <div style="max-width:110px"><label>种子（0=默认）</label><input id="seed" type="number" value="0"></div>
-      <div style="max-width:120px"><label>标的</label><input id="symbol" placeholder="XAUUSD"></div>
+      <div style="max-width:120px"><label>标的</label>
+        <input id="symbol" placeholder="XAUUSD" list="symbolOpts">
+        <datalist id="symbolOpts">
+          <option value="XAUUSD">
+          <option value="BTCUSDT">
+        </datalist></div>
       <div style="max-width:100px"><label>周期</label><input id="timeframe" placeholder="H1"></div>
+      <div style="max-width:200px"><label>市场画像（留空 = 按标的自动推断）</label>
+        <select id="market">
+          <option value="" selected>自动推断</option>
+          <option value="FOREX_XAUUSD">FOREX_XAUUSD</option>
+          <option value="CRYPTO_BTC">CRYPTO_BTC</option>
+          <option value="CN_EQUITY_RESEARCH">CN_EQUITY_RESEARCH</option>
+          <option value="US_EQUITY_RESEARCH">US_EQUITY_RESEARCH</option>
+        </select></div>
       <div style="flex:0"><button id="btnMine">开始挖掘</button></div>
     </div>
   </section>
@@ -150,7 +163,7 @@ $("btnMine").onclick = async () => {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ data, budget: $("budget").value,
         seed: +$("seed").value || 0, symbol: $("symbol").value.trim(),
-        timeframe: $("timeframe").value.trim() })
+        timeframe: $("timeframe").value.trim(), market: $("market").value })
     });
     logOffset = 0; $("log").textContent = "";
     startPolling();
