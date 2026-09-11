@@ -19,7 +19,7 @@ from __future__ import annotations
 import contextlib
 import json
 import time
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -55,7 +55,7 @@ _MAX_VERSION: int = 99
 
 
 @contextlib.contextmanager
-def _ledger_lock(path: Path):
+def _ledger_lock(path: Path) -> Iterator[None]:
     """对账本加文件级互斥锁，使「加载→分配→落盘」构成原子临界区。
 
     两个进程若同时冷启动（都看到空账本），无锁时会各自分配到同一个 magic
@@ -80,10 +80,9 @@ def _ledger_lock(path: Path):
             raise RuntimeError(f"获取 magic 账本锁超时：{lock_path}")  # pragma: no cover
         yield
     finally:
-        try:
+        # SIM105：解锁失败不影响「已释放到这儿」的事实，与 try/except/pass 完全等价。
+        with contextlib.suppress(OSError):  # pragma: no cover - 仅在锁已被抢占时触发
             msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
-        except OSError:  # pragma: no cover
-            pass
         fh.close()
 
 

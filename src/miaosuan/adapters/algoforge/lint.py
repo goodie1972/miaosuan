@@ -27,8 +27,8 @@ from __future__ import annotations
 
 import ast
 
-from ..base import LintIssue, LintSeverity
 from ...core.vocab import FORMULA_VOCAB, VocabVersionMismatchError
+from ..base import LintIssue, LintSeverity
 from .contract import GATE_TOKEN_NAME, REQUIRED_CONSTANTS
 
 __all__ = ["CANDLE_NAMES", "has_errors", "lint_source"]
@@ -161,9 +161,8 @@ def _calls_len_of_candle(node: ast.AST) -> bool:
     arg = node.args[0]
     if isinstance(arg, ast.Name) and arg.id.lower() in CANDLE_NAMES:
         return True
-    if isinstance(arg, ast.Attribute) and arg.attr.lower() in CANDLE_NAMES:
-        return True
-    return False
+    # SIM103 等价化简：上面未命中时，返回值即由「是否为 K 线属性名」决定。
+    return isinstance(arg, ast.Attribute) and arg.attr.lower() in CANDLE_NAMES
 
 
 def _is_dynamic_last_index(slice_node: ast.AST) -> bool:
@@ -184,12 +183,15 @@ def _is_dynamic_last_index(slice_node: ast.AST) -> bool:
         right = slice_node.right
         if isinstance(right, ast.Constant) and _as_number(right.value) == 1 and _calls_len_of_candle(slice_node.left):
             return True
-    if isinstance(slice_node, ast.Slice):
-        # candles[-1:]：从最后一根开始（含未收盘）→ repaint
-        if slice_node.lower is not None and _is_negative_one(slice_node.lower):
-            return True
-        # candles[:-1] / candles[-2:-1]：upper=-1 排除最后一根 → 安全，不报
-    return False
+    # SIM102 → SIM103 等价化简：原先的「命中则 return True，否则 return False」
+    # 直接等价于返回条件本身，短路求值顺序与嵌套写法一致：
+    #   * candles[-1:]  —— 切片从最后一根开始（含未收盘）→ repaint
+    #   * candles[:-1] / candles[-2:-1] —— upper=-1 排除最后一根 → 安全，不报
+    return (
+        isinstance(slice_node, ast.Slice)
+        and slice_node.lower is not None
+        and _is_negative_one(slice_node.lower)
+    )
 
 
 def _check_repaint(tree: ast.Module) -> list[LintIssue]:
@@ -198,7 +200,7 @@ def _check_repaint(tree: ast.Module) -> list[LintIssue]:
     for node in ast.walk(tree):
         if not isinstance(node, ast.Subscript):
             continue
-        if not (names := _target_names(node.value)) & CANDLE_NAMES:
+        if not _target_names(node.value) & CANDLE_NAMES:
             continue
         if _is_dynamic_last_index(node.slice):
             issues.append(
