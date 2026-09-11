@@ -1,280 +1,846 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>妙算 · 模式 A 仪表盘</title>
+<title>妙算 · 因子挖掘中心</title>
+<!--
+  配色与尺寸**逐值取自 AlgoForge 前端源码**（已人工复核，非二手转述）：
+    dashboard/frontend/src/style.css:3-28   主题变量
+    dashboard/frontend/src/style.css:67-69  涨绿 #0ecb81 / 跌红 #f6465d / 金 #f0b90b
+    dashboard/frontend/src/style.css:155-163 侧边栏激活项 3px 金色左指示条
+    dashboard/frontend/src/style.css:142-147 卡片渐变
+    dashboard/frontend/src/App.vue:8-78      金色/字号/圆角/各表面色
+    dashboard/frontend/src/stores/app.ts:6-8 主题存 localStorage
+  零 CDN：字体只用本地已有的，缺失时按 fallback 优雅退化。
+-->
 <style>
-  :root {
-    --bg: #f5f6f8; --card: #ffffff; --line: #e3e6ea; --ink: #1f2430;
-    --muted: #6b7280; --brand: #2456d6; --ok: #0c8a4d; --warn: #b45309;
-    --bad: #c02626; --chip: #eef1f6;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink);
-         font: 14px/1.6 "Segoe UI", "Microsoft YaHei", sans-serif; }
-  header { background: var(--card); border-bottom: 1px solid var(--line);
-           padding: 14px 24px; display: flex; align-items: baseline; gap: 14px; }
-  header h1 { font-size: 18px; margin: 0; letter-spacing: 1px; }
-  header .sub { color: var(--muted); font-size: 12px; }
-  main { max-width: 1180px; margin: 20px auto; padding: 0 20px;
-         display: grid; gap: 16px; }
-  section { background: var(--card); border: 1px solid var(--line);
-            border-radius: 10px; padding: 16px 18px; }
-  section h2 { font-size: 14px; margin: 0 0 12px; color: var(--muted);
-               font-weight: 600; letter-spacing: .5px; }
-  label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
-  select, input { width: 100%; padding: 7px 9px; border: 1px solid var(--line);
-                  border-radius: 7px; font: inherit; background: #fff; color: var(--ink); }
-  button { border: 0; border-radius: 8px; padding: 9px 18px; font: inherit;
-           cursor: pointer; background: var(--brand); color: #fff; }
-  button:disabled { opacity: .45; cursor: not-allowed; }
-  button.ghost { background: var(--chip); color: var(--ink); }
-  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
-  .row > div { flex: 1; min-width: 140px; }
-  #log { background: #10131a; color: #c9d4e3; font: 12px/1.5 Consolas, monospace;
-         border-radius: 8px; padding: 12px; height: 240px; overflow-y: auto;
-         white-space: pre-wrap; word-break: break-all; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); }
-  th { color: var(--muted); font-weight: 600; font-size: 12px; }
-  tr:hover td { background: #f7f9fc; }
-  .chip { display: inline-block; padding: 1px 9px; border-radius: 20px;
-          font-size: 12px; background: var(--chip); }
-  .chip.ok { background: #e2f5ea; color: var(--ok); }
-  .chip.bad { background: #fde8e8; color: var(--bad); }
-  .chip.warn { background: #fdf0e0; color: var(--warn); }
-  .mono { font-family: Consolas, monospace; font-size: 12px; }
-  .muted { color: var(--muted); }
-  pre { background: #10131a; color: #c9d4e3; border-radius: 8px; padding: 12px;
-        font: 12px/1.5 Consolas, monospace; white-space: pre-wrap; word-break: break-all;
-        max-height: 300px; overflow-y: auto; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
-  #status { font-size: 12px; color: var(--muted); }
-  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-         background: var(--muted); margin-right: 6px; }
-  .dot.on { background: var(--ok); animation: pulse 1s infinite alternate; }
-  @keyframes pulse { from { opacity: .4; } to { opacity: 1; } }
-  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-  .empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
+:root {
+  /* 共通：强调色与语义色（两套主题一致） */
+  --gold: #f0b90b;
+  --gold-hover: #f5c532;
+  --gold-active: #d4a309;
+  --up: #0ecb81;
+  --down: #f6465d;
+  --warn: #f0a020;
+  --info: #1e70bf;
+  /* 字号 */
+  --fs-base: 15px;
+  --fs-small: 13px;
+  --fs-tiny: 12px;
+  /* 圆角 */
+  --r-card: 12px;
+  --r-btn: 8px;
+  --r-ctrl: 6px;
+  --r-table: 10px;
+  --r-modal: 16px;
+  /* 字体：Outfit 本地有就用，没有则退化到 Segoe UI / system-ui */
+  --font: "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+}
+html[data-theme="dark"] {
+  --bg: #0d1117;
+  --panel: #161b22;
+  --surface: #1c2333;
+  --surface-2: #1a1f2e;
+  --ink: #e6edf3;
+  --ink-2: #8b949e;
+  --ink-3: #7d8590;
+  --line: #2d3139;
+  --line-subtle: #21262d;
+  --code-bg: #0d1117;
+  --input-bg: #0d1117;
+  --card-grad: linear-gradient(135deg, #161b22 0%, #1a1f2e 100%);
+  --shadow: rgba(0, 0, 0, .5);
+  --scroll: #3d4149;
+}
+html[data-theme="light"] {
+  --bg: #f5f7fa;
+  --panel: #ffffff;
+  --surface: #f0f2f5;
+  --surface-2: #f8f9fb;
+  --ink: #1a1a2e;
+  --ink-2: #6e7681;
+  --ink-3: #6e7681;
+  --line: #e0e4e8;
+  --line-subtle: #d0d4d8;
+  --code-bg: #f0f2f5;
+  --input-bg: #f5f7fa;
+  --card-grad: linear-gradient(135deg, #ffffff 0%, #f8f9fb 100%);
+  --shadow: rgba(0, 0, 0, .12);
+  --scroll: #c0c4cc;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: var(--fs-base)/1.6 var(--font);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono { font-family: var(--mono); }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 3px; }
+*:focus-visible { outline: 2px solid rgba(240, 185, 11, .5); outline-offset: 2px; }
+
+/* ── 顶部 ───────────────────────────────────────────────────────────── */
+header {
+  position: sticky; top: 0; z-index: 50;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+  padding: 12px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand .mark {
+  width: 30px; height: 30px; border-radius: var(--r-ctrl); flex: none;
+  background: var(--gold); color: #0d1117;
+  display: grid; place-items: center; font-weight: 800; font-size: 15px;
+}
+.brand h1 { font-size: 17px; margin: 0; letter-spacing: .5px; }
+.brand .sub { color: var(--ink-2); font-size: var(--fs-tiny); }
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 12px; border-radius: 20px; font-size: var(--fs-small);
+  background: var(--surface); border: 1px solid var(--line); color: var(--ink-2);
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); flex: none; }
+.dot.on { background: var(--up); animation: pulse 1s infinite alternate; }
+@keyframes pulse { from { opacity: .4; } to { opacity: 1; } }
+.meta-line { color: var(--ink-2); font-size: var(--fs-tiny); font-family: var(--mono); }
+.spacer { margin-left: auto; }
+
+button, .btn {
+  border: 1px solid var(--line); border-radius: var(--r-btn);
+  padding: 8px 16px; font: inherit; font-size: var(--fs-small);
+  cursor: pointer; background: var(--surface); color: var(--ink);
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+button:hover, .btn:hover { border-color: var(--gold); color: var(--gold); }
+button:active { transform: scale(.98); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.primary { background: var(--gold); border-color: var(--gold); color: #0d1117; font-weight: 600; }
+button.primary:hover { background: var(--gold-hover); border-color: var(--gold-hover); color: #0d1117; }
+button.primary:active { background: var(--gold-active); }
+button.ghost { background: transparent; }
+
+/* ── 三步导航 ───────────────────────────────────────────────────────── */
+nav {
+  position: relative; display: flex; gap: 4px;
+  background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 24px;
+}
+nav button {
+  position: relative; border: 0; border-radius: 0; background: transparent;
+  padding: 12px 18px; color: var(--ink-2); font-size: var(--fs-small);
+}
+nav button:hover { color: var(--ink); background: transparent; border-color: transparent; }
+/* AlgoForge 侧边栏活跃项金色指示条（style.css:155） */
+nav button.active { color: var(--gold); font-weight: 600; background: rgba(240, 185, 11, .12); }
+nav button.active::before {
+  content: ''; position: absolute; left: 0; top: 4px; bottom: 4px;
+  width: 3px; background: var(--gold); border-radius: 0 3px 3px 0;
+}
+nav .step-no { font-family: var(--mono); font-size: var(--fs-tiny); opacity: .7; margin-right: 6px; }
+
+main { max-width: 1440px; margin: 0 auto; padding: 20px 24px 48px; display: grid; gap: 16px; }
+
+/* ── 卡片 ───────────────────────────────────────────────────────────── */
+section.card {
+  background: var(--card-grad);
+  border: 1px solid var(--line); border-radius: var(--r-card); padding: 16px 20px;
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+section.card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px var(--shadow); }
+section.card > h2 {
+  font-size: var(--fs-small); margin: 0 0 12px; color: var(--ink-2);
+  font-weight: 600; letter-spacing: .5px; text-transform: uppercase;
+}
+section.card > h2 .hint { text-transform: none; font-weight: 400; opacity: .8; }
+.grid { display: grid; gap: 16px; }
+.grid2 { grid-template-columns: 1fr 1fr; }
+@media (max-width: 1000px) { .grid2 { grid-template-columns: 1fr; } }
+
+label { font-size: var(--fs-tiny); color: var(--ink-2); display: block; margin-bottom: 4px; }
+select, input {
+  width: 100%; padding: 7px 9px; border: 1px solid var(--line);
+  border-radius: var(--r-ctrl); font: inherit; font-size: var(--fs-small);
+  background: var(--input-bg); color: var(--ink);
+}
+.row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.row > div { flex: 1; min-width: 130px; }
+
+table { width: 100%; border-collapse: collapse; font-size: var(--fs-small); }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line-subtle); }
+th { color: var(--ink-2); font-weight: 600; font-size: var(--fs-tiny); background: var(--surface); }
+tr:hover td { background: var(--surface); }
+.tbl-wrap { border: 1px solid var(--line); border-radius: var(--r-table); overflow: hidden; }
+
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.kv > div {
+  background: var(--surface); border: 1px solid var(--line-subtle);
+  border-radius: var(--r-ctrl); padding: 8px 10px;
+}
+.kv .k { font-size: var(--fs-tiny); color: var(--ink-2); }
+.kv .v { font-family: var(--mono); font-size: var(--fs-small); word-break: break-all; }
+
+.chip {
+  display: inline-block; padding: 1px 9px; border-radius: var(--r-ctrl);
+  font-size: var(--fs-tiny); background: var(--surface); border: 1px solid var(--line);
+}
+.chip.ok { color: var(--up); border-color: var(--up); }
+.chip.bad { color: var(--down); border-color: var(--down); }
+.chip.warn { color: var(--warn); border-color: var(--warn); }
+.up { color: var(--up) !important; }
+.down { color: var(--down) !important; }
+.gold { color: var(--gold) !important; }
+
+pre.log {
+  background: var(--code-bg); color: var(--ink); border: 1px solid var(--line);
+  border-radius: var(--r-ctrl); padding: 12px; height: 260px; overflow-y: auto;
+  font-family: var(--mono); font-size: var(--fs-tiny); line-height: 1.55;
+  white-space: pre-wrap; word-break: break-all; margin: 0;
+}
+.formula-box {
+  background: var(--code-bg); border: 1px solid var(--line); border-radius: var(--r-ctrl);
+  padding: 14px; font-family: var(--mono); font-size: 15px; line-height: 1.7;
+  word-break: break-word;
+}
+.empty { color: var(--ink-2); font-size: var(--fs-small); padding: 10px 0; }
+.muted { color: var(--ink-2); }
+.tiny { font-size: var(--fs-tiny); }
+.mono { font-family: var(--mono); }
+details { border: 1px solid var(--line); border-radius: var(--r-ctrl); padding: 8px 12px; background: var(--surface); }
+details + details { margin-top: 8px; }
+summary { cursor: pointer; font-size: var(--fs-small); color: var(--ink); font-weight: 600; }
+details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; }
+.view { display: none; }
+.view.active { display: grid; }
+.placeholder {
+  border: 1px dashed var(--line); border-radius: var(--r-card);
+  padding: 40px 24px; text-align: center; color: var(--ink-2);
+}
+.placeholder h3 { color: var(--ink); margin: 0 0 8px; }
 </style>
 </head>
 <body>
+
 <header>
-  <h1>妙算 MiaoSuan</h1>
-  <span class="sub">模式 A 仪表盘 —— 挖掘 → 导出 → 校验 · 本机 <span class="mono">127.0.0.1</span></span>
-  <span style="margin-left:auto" id="status"><span class="dot"></span>空闲</span>
+  <div class="brand">
+    <span class="mark">妙</span>
+    <div>
+      <h1>妙算 · 因子挖掘中心</h1>
+      <div class="sub">MiaoSuan · 声明式因子挖掘 → AlgoForge 策略导出</div>
+    </div>
+  </div>
+  <span class="pill" id="statusPill"><span class="dot"></span><span id="statusText">空闲</span></span>
+  <div class="meta-line" id="cfgMeta">词表 — · tokens —</div>
+  <div class="spacer"></div>
+  <button id="btnTheme" class="ghost" title="切换深浅主题">◐ 主题</button>
 </header>
+
+<nav id="stepper">
+  <button data-view="mine" class="active"><span class="step-no">01</span>挖掘</button>
+  <button data-view="backtest"><span class="step-no">02</span>回测</button>
+  <button data-view="live"><span class="step-no">03</span>实时</button>
+</nav>
+
 <main>
-  <!-- ① 启动挖掘 -->
-  <section>
-    <h2>① 启动挖掘（mine）</h2>
-    <div class="row">
-      <div style="flex:2"><label>行情数据（parquet / csv）</label><select id="data"></select></div>
-      <div><label>预算档位</label>
-        <select id="budget">
-          <option value="quick">quick · 约30分钟</option>
-          <option value="standard" selected>standard · 约2小时</option>
-          <option value="deep">deep · 约8小时</option>
-        </select></div>
-      <div style="max-width:110px"><label>种子（0=默认）</label><input id="seed" type="number" value="0"></div>
-      <div style="max-width:120px"><label>标的</label>
-        <input id="symbol" placeholder="XAUUSD" list="symbolOpts">
-        <datalist id="symbolOpts">
-          <option value="XAUUSD">
-          <option value="BTCUSDT">
-        </datalist></div>
-      <div style="max-width:100px"><label>周期</label><input id="timeframe" placeholder="H1"></div>
-      <div style="max-width:200px"><label>市场画像（留空 = 按标的自动推断）</label>
-        <select id="market">
-          <option value="" selected>自动推断</option>
-          <option value="FOREX_XAUUSD">FOREX_XAUUSD</option>
-          <option value="CRYPTO_BTC">CRYPTO_BTC</option>
-          <option value="CN_EQUITY_RESEARCH">CN_EQUITY_RESEARCH</option>
-          <option value="US_EQUITY_RESEARCH">US_EQUITY_RESEARCH</option>
-        </select></div>
-      <div style="flex:0"><button id="btnMine">开始挖掘</button></div>
-    </div>
-  </section>
+  <!-- ══ 01 挖掘 ══════════════════════════════════════════════════ -->
+  <div class="view active" id="view-mine">
 
-  <!-- ② 挖掘日志 -->
-  <section>
-    <h2>② 挖掘进度与日志</h2>
-    <div id="log">尚未启动任务。</div>
-  </section>
-
-  <!-- ③ 候选结果 + 导出 -->
-  <section>
-    <h2>③ 挖掘结果（StrategySpec）与导出</h2>
-    <div id="specBox" class="empty">尚无结果 —— 完成一次挖掘或选择历史 spec。</div>
-    <div class="actions" id="specActions" style="display:none">
-      <div style="min-width:110px"><label>GATE 死区（R1 保护，0=关）</label>
-        <input id="gateDb" type="number" step="0.01" value="0" style="width:110px"></div>
-      <div style="flex:0; align-self:flex-end"><button id="btnExport">导出 AlgoForge 策略</button></div>
-      <div style="flex:0; align-self:flex-end"><button id="btnVerify" class="ghost">校验最近导出</button></div>
-    </div>
-    <pre id="opOut" style="display:none"></pre>
-  </section>
-
-  <!-- ④ 历史产物 -->
-  <div class="grid2">
-    <section>
-      <h2>④ 历史 Spec</h2>
-      <div id="specList" class="empty">加载中…</div>
+    <section class="card">
+      <h2>① 数据文件 <span class="hint">— 指纹把「这次用了哪份数据」钉死</span></h2>
+      <div class="row">
+        <div style="flex:3"><label>行情数据（parquet / csv）</label><select id="data"></select></div>
+        <div style="flex:0"><button id="btnInspect" class="ghost">读取元信息</button></div>
+      </div>
+      <div id="dataMeta" class="empty">选择数据文件后点「读取元信息」—— 展示品种 / 周期 / bar 数 / 年限 / 路径 / 数据指纹。</div>
     </section>
-    <section>
-      <h2>⑤ 已导出策略（AlgoForge .py）</h2>
-      <div id="stratList" class="empty">加载中…</div>
+
+    <section class="card">
+      <h2>② 启动挖掘（mine）</h2>
+      <div class="row">
+        <div><label>预算档位</label>
+          <select id="budget">
+            <option value="quick">quick · 约30分钟</option>
+            <option value="standard" selected>standard · 约2小时</option>
+            <option value="deep">deep · 约8小时</option>
+          </select></div>
+        <div style="max-width:110px"><label>种子（0=默认）</label><input id="seed" type="number" value="0"></div>
+        <div style="max-width:130px"><label>标的</label>
+          <input id="symbol" placeholder="XAUUSD" list="symbolOpts">
+          <datalist id="symbolOpts">
+            <option value="XAUUSD">
+            <option value="BTCUSDT">
+          </datalist></div>
+        <div style="max-width:100px"><label>周期</label><input id="timeframe" placeholder="H1"></div>
+        <div style="max-width:200px"><label>市场画像（留空 = 按标的自动推断）</label>
+          <select id="market"></select></div>
+        <div style="flex:0"><button id="btnMine" class="primary">开始挖掘</button></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>③ 进度与分数</h2>
+      <div class="kv" id="progressKv">
+        <div><div class="k">状态</div><div class="v" id="pState">—</div></div>
+        <div><div class="k">停止原因</div><div class="v" id="pReason">—</div></div>
+        <div><div class="k">代数</div><div class="v" id="pGen">—</div></div>
+        <div><div class="k">评估次数</div><div class="v" id="pEval">—</div></div>
+        <div><div class="k">最优 val_score</div><div class="v" id="pVal">—</div></div>
+        <div><div class="k">DSR（去膨胀夏普）</div><div class="v" id="pDsr">—</div></div>
+        <div><div class="k">多样性</div><div class="v" id="pDiv">—</div></div>
+        <div><div class="k">门禁结论</div><div class="v" id="pGate">—</div></div>
+      </div>
+      <div class="tiny muted" style="margin-top:8px" id="pHoldout"></div>
+    </section>
+
+    <section class="card">
+      <h2>④ Top-5 候选分数 <span class="hint">— 真实数据，非模拟</span></h2>
+      <div id="chart"></div>
+      <div class="tiny muted" style="margin-top:8px">
+        数据来源与口径：<b>CLI 子进程输出的 Top-5 候选行</b>（<span class="mono">[i] 公式 val=… dsr=… verdict=…</span>）。
+        <b>val_score = 验证集得分</b>（口径与 spec 的 evidence.val_score 一致），DSR = 去膨胀夏普。
+        妙算目前<b>不输出逐代分数历史</b>，因此这里画的是候选间的真实对比，而不是编造的学习曲线。
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>⑤ 实时日志 <span class="hint">— 等宽字体 · 自动滚到底</span></h2>
+      <div class="row" style="margin-bottom:8px">
+        <div style="flex:3"><label>实际执行的 CLI 命令</label>
+          <input id="cmdBox" class="mono" readonly value="（尚未启动）"></div>
+        <div style="flex:0"><button id="btnScroll" class="ghost">暂停滚动</button></div>
+      </div>
+      <pre class="log" id="log">尚未启动任务。</pre>
+    </section>
+
+    <section class="card">
+      <h2>⑥ 最优公式</h2>
+      <div class="formula-box" id="formulaBox" >（尚无结果）</div>
+      <div class="row" style="margin-top:10px">
+        <div style="flex:0"><button id="btnCopy" class="ghost">复制公式</button></div>
+        <div class="tiny muted" id="copyHint" style="flex:1;align-self:center"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>⑦ 门禁与谱系 <span class="hint">— 妙算相对 AM 的差异优势</span></h2>
+      <div class="kv" id="lineageKv">
+        <div><div class="k">门禁结论</div><div class="v" id="lGate">—</div></div>
+        <div><div class="k">触发原因</div><div class="v" id="lReasons">—</div></div>
+        <div><div class="k">git sha</div><div class="v" id="lGit">—</div></div>
+        <div><div class="k">随机种子</div><div class="v" id="lSeed">—</div></div>
+        <div><div class="k">词表版本（冻结锁）</div><div class="v" id="lVocab">—</div></div>
+        <div><div class="k">市场画像</div><div class="v" id="lMarket">—</div></div>
+        <div style="grid-column:1/-1"><div class="k">数据指纹</div><div class="v" id="lFp">—</div></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div style="flex:2"><label>校验最近导出的策略（AF lint + 数值保真度）</label>
+          <select id="verifyFile"></select></div>
+        <div style="flex:0"><button id="btnVerify" class="ghost">校验</button></div>
+      </div>
+      <pre class="log" id="verifyOut" style="display:none;height:150px;margin-top:8px"></pre>
+    </section>
+
+    <div class="grid grid2">
+      <section class="card">
+        <h2>⑧ 历史 Spec</h2>
+        <div id="specList" class="empty">加载中…</div>
+      </section>
+      <section class="card">
+        <h2>⑨ 已导出策略（AlgoForge .py）</h2>
+        <div id="stratList" class="empty">加载中…</div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>⑩ 说明 / 帮助</h2>
+      <details>
+        <summary>bar1 语义 —— 为什么策略不会重绘？</summary>
+        <p>导出文件的 <span class="mono">generate_signal</span> 只用<b>已收盘 K 线</b>（<span class="mono">candles[:-1]</span>），
+        最后一根正在形成的 K 线不参与任何计算，因此不存在未来函数（repaint）。
+        AF001 lint 规则会静态拦截任何读取未收盘 K 线的写法。</p>
+      </details>
+      <details>
+        <summary>DSR 是什么？</summary>
+        <p>DSR = Deflated Sharpe Ratio（去膨胀夏普）。搜索过程试了几千个公式，最优结果天然带“选择偏差”；
+        DSR 把试验次数折算进去，看扣掉运气后还剩多少。门禁阈值 DSR ≥ 0.5，低于即 BLOCKED。</p>
+      </details>
+      <details>
+        <summary>BLOCKED 意味着什么？</summary>
+        <p>未通过实盘门禁：导出文件会被强制打上 <span class="mono">RESEARCH_ONLY</span> 警示块、
+        <span class="mono">DEPLOYABLE=False</span>，<b>仅供研究 / 模拟，禁止上实盘</b>。需要重新过门禁并重新导出才会去掉警示。</p>
+      </details>
+      <details>
+        <summary>词表冻结锁（VOCAB_VERSION）的作用</summary>
+        <p>token 只在<b>同一词表</b>下有意义。导出文件内嵌 <span class="mono">VOCAB_VERSION</span>，
+        AF007 规则会与当前内核词表逐位比对；一旦特征/算子顺序变动，旧策略立刻被检出，
+        避免“拿旧 token 喂新内核”的静默错算。</p>
+      </details>
+    </section>
+
+    <section class="card">
+      <h2>⑪ 调试面板 <span class="hint">— 前端异常 + 后端返回</span></h2>
+      <div class="row">
+        <div style="flex:0"><button id="btnDebug" class="ghost">显示调试信息</button></div>
+        <div class="tiny muted" style="align-self:center">默认关闭；打开后展示最近的前端异常与后端响应。</div>
+      </div>
+      <pre class="log" id="dbgOut" style="display:none;height:180px;margin-top:8px"></pre>
+    </section>
+  </div>
+
+  <!-- ══ 02 回测（占位）══════════════════════════════════════════════ -->
+  <div class="view" id="view-backtest">
+    <section class="card">
+      <div class="placeholder">
+        <h3>待接入 · 计划中</h3>
+        <p>回测需要新增一层「回测产出层」：把挖掘得到的因子序列在完整样本上做绩效归因
+        （年化 / 最大回撤 / 换手 / 分段稳定性），目前主干还没有这一层，所以本页暂不提供任何数字。</p>
+        <p class="tiny">宁可空着也不放占位假数据 —— 避免误判为真实绩效。</p>
+      </div>
+    </section>
+  </div>
+
+  <!-- ══ 03 实时（占位）══════════════════════════════════════════════ -->
+  <div class="view" id="view-live">
+    <section class="card">
+      <div class="placeholder">
+        <h3>待接入 · 计划中</h3>
+        <p>实时页需要连接 AlgoForge 后端（HTTP 轮询 + WebSocket 推送）以拿到真实持仓、
+        订单与账户快照。妙算目前只做「挖掘 → 导出」，不直连交易，所以本页暂不提供任何数据。</p>
+        <p class="tiny">宁可空着也不放占位假数据 —— 避免误判为实盘状态。</p>
+      </div>
     </section>
   </div>
 </main>
 
 <script>
 "use strict";
-const $ = id => document.getElementById(id);
-const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let currentSpec = null, logOffset = 0, polling = null;
 
-async function jfetch(url, opt) {
-  const r = await fetch(url, opt);
-  if (!r.ok) {
-    let msg = r.status;
-    try { msg = (await r.json()).detail || msg; } catch (_) {}
-    throw new Error(msg);
-  }
-  return r.json();
-}
-
-/* ── 数据列表 ── */
-async function loadData() {
-  const rows = await jfetch("/api/data");
-  $("data").innerHTML = rows.length
-    ? rows.map(d => `<option value="${esc(d.path)}">${esc(d.name)} · ${d.size_mb}MB · ${d.mtime}</option>`).join("")
-    : `<option value="">（未找到行情文件 —— 请将 parquet 放入 D:\\K线数据\\）</option>`;
-}
-
-/* ── 挖掘 ── */
-$("btnMine").onclick = async () => {
-  const data = $("data").value;
-  if (!data) return alert("请先放置行情数据文件");
-  try {
-    await jfetch("/api/mine", {
-      method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ data, budget: $("budget").value,
-        seed: +$("seed").value || 0, symbol: $("symbol").value.trim(),
-        timeframe: $("timeframe").value.trim(), market: $("market").value })
-    });
-    logOffset = 0; $("log").textContent = "";
-    startPolling();
-  } catch (e) { alert(e.message); }
+/* ── 全局状态 ─────────────────────────────────────────────────────── */
+var $ = function (id) { return document.getElementById(id); };
+var state = {
+  view: "mine",
+  spec: null,
+  logOffset: 0,
+  polling: null,
+  autoscroll: true,
+  debug: false,
+  cmd: "",
+  candidates: [],
+  errors: [],
+  trace: []
 };
+var THEME_KEY = "miaosuan-theme";
+
+function esc(s) {
+  return String(s === null || s === undefined ? "" : s).replace(/[&<>"']/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+  });
+}
+function dbg(msg) {
+  state.trace.push(new Date().toISOString() + "  " + msg);
+  if (state.trace.length > 50) { state.trace.shift(); }
+  if (state.debug) { $("dbgOut").textContent = state.trace.join("\n"); }
+}
+
+/* ── 主题（localStorage，切 data-theme 属性，不刷新）───────────────── */
+function applyTheme(t) {
+  document.documentElement.setAttribute("data-theme", t);
+  try { localStorage.setItem(THEME_KEY, t); } catch (e) { /* 隐私模式忽略 */ }
+}
+function initTheme() {
+  var saved = "dark";
+  try { saved = localStorage.getItem(THEME_KEY) || "dark"; } catch (e) { /* ignore */ }
+  if (saved !== "dark" && saved !== "light") { saved = "dark"; }
+  applyTheme(saved);
+}
+
+/* ── 视图切换 ─────────────────────────────────────────────────────── */
+function setView(v) {
+  state.view = v;
+  ["mine", "backtest", "live"].forEach(function (name) {
+    var el = $("view-" + name);
+    if (el) { el.className = "view" + (name === v ? " active" : ""); }
+  });
+  var btns = document.querySelectorAll("#stepper button");
+  for (var i = 0; i < btns.length; i++) {
+    var b = btns[i];
+    if (b.getAttribute("data-view") === v) { b.className = "active"; } else { b.className = ""; }
+  }
+}
+
+/* ── 请求封装 ─────────────────────────────────────────────────────── */
+function jfetch(url, opt) {
+  return fetch(url, opt).then(function (r) {
+    // 先容错解析 body：后端 4xx/5xx 也返回 JSON {"detail": ...}，非 JSON 时退化成 null。
+    return r.json().catch(function () { return null; }).then(function (body) {
+      if (!r.ok) {
+        var detail = (body && body.detail) ? body.detail : ("HTTP " + r.status);
+        throw new Error(detail);
+      }
+      dbg("OK  " + url);
+      return body;
+    });
+  }).catch(function (err) {
+    state.errors.push(url + " → " + err.message);
+    dbg("ERR " + url + " → " + err.message);
+    throw err;
+  });
+}
+function post(url, payload) {
+  return jfetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+}
+
+/* ── 全局配置 meta ────────────────────────────────────────────────── */
+function loadMeta() {
+  jfetch("/api/meta").then(function (m) {
+    $("cfgMeta").textContent = "词表 " + m.vocab_version
+      + " · " + m.n_tokens + " tokens（" + m.n_features + " 特征 + " + m.n_operators + " 算子）"
+      + " · v" + m.miaosuan_version;
+    var sel = $("market");
+    var html = '<option value="" selected>自动推断</option>';
+    (m.profiles || []).forEach(function (p) { html += '<option value="' + esc(p) + '">' + esc(p) + "</option>"; });
+    sel.innerHTML = html;
+  }).catch(function () {
+    $("cfgMeta").textContent = "词表 — · tokens —";
+  });
+}
+
+/* ── 数据文件 ─────────────────────────────────────────────────────── */
+function loadData() {
+  jfetch("/api/data").then(function (rows) {
+    if (!rows.length) {
+      $("data").innerHTML = '<option value="">（未找到行情文件 —— 请将 parquet 放入 D:\\K线数据\\ 或 data\\）</option>';
+      return;
+    }
+    $("data").innerHTML = rows.map(function (d) {
+      return '<option value="' + esc(d.path) + '">' + esc(d.name) + " · " + d.size_mb + "MB · " + esc(d.mtime) + "</option>";
+    }).join("");
+  }).catch(function (e) {
+    $("data").innerHTML = '<option value="">（行情列表加载失败：' + esc(e.message) + "）</option>";
+  });
+}
+
+function inspect() {
+  var p = $("data").value;
+  if (!p) { $("dataMeta").className = "empty"; $("dataMeta").textContent = "请先选择数据文件。"; return; }
+  $("dataMeta").className = "empty";
+  $("dataMeta").textContent = "读取中…";
+  jfetch("/api/inspect?path=" + encodeURIComponent(p)).then(function (m) {
+    $("dataMeta").className = "kv";
+    $("dataMeta").innerHTML = [
+      ["品种", m.symbol], ["周期", m.timeframe], ["bar 数", m.n_bars],
+      ["数据年限", m.years + " 年"], ["市场画像", m.market_profile || "(数据未自带)"],
+      ["时间范围", m.start + " → " + m.end]
+    ].map(function (kv) {
+      return '<div><div class="k">' + esc(kv[0]) + '</div><div class="v">' + esc(kv[1]) + "</div></div>";
+    }).join("") +
+      '<div style="grid-column:1/-1"><div class="k">文件路径</div><div class="v">' + esc(m.path) + "</div></div>" +
+      '<div style="grid-column:1/-1"><div class="k">数据指纹</div><div class="v">' + esc(m.fingerprint) + "</div></div>";
+  }).catch(function (e) {
+    $("dataMeta").className = "empty";
+    $("dataMeta").textContent = "读取失败：" + e.message;
+  });
+}
+
+/* ── 日志解析（全部来自 CLI 真实输出，不做任何模拟）────────────────── */
+function parseLog(lines) {
+  var stats = { reason: "—", gen: "—", evalN: "—", div: "—", holdout: "" };
+  var cands = [];
+  lines.forEach(function (line) {
+    var m;
+    if ((m = line.match(/停止原因：(\S+)\s+代数=(\d+)\s+评估=(\d+)/))) {
+      stats.reason = m[1]; stats.gen = m[2]; stats.evalN = m[3];
+    }
+    if ((m = line.match(/多样性：最低\s+([\d.]+)\s*\/\s*初始\s+([\d.]+)\s*=\s*([\d.]+)/))) {
+      stats.div = m[3] + " (" + m[1] + "/" + m[2] + ")";
+    }
+    if ((m = line.match(/开发区\s+(\d+)\s*\/\s*全量\s+(\d+)\s*根（hold-out 未触碰=(\S+?)）?$/))) {
+      stats.holdout = "开发区 " + m[1] + " / 全量 " + m[2] + " 根 · hold-out 未触碰=" + (m[3] || "—");
+    }
+    if ((m = line.match(/^\[(\d)\]\s+(.+?)\s+val=([\d.]+)\s+dsr=([\d.eE+-]+)\s+verdict=(\S+)/))) {
+      cands.push({ i: parseInt(m[1], 10), formula: m[2], val: parseFloat(m[3]), dsr: parseFloat(m[4]), verdict: m[5] });
+    }
+  });
+  return { stats: stats, candidates: cands };
+}
+
+/* ── Top-5 候选柱状图（内联 SVG 手绘，零依赖）─────────────────────── */
+function verdictColor(v) {
+  if (v === "DEPLOYABLE" || v === "PASS") { return "var(--up)"; }
+  if (v === "BLOCKED" || v === "FAIL") { return "var(--down)"; }
+  return "var(--warn)";
+}
+function renderChart(cands) {
+  var box = $("chart");
+  if (!cands || !cands.length) {
+    box.innerHTML = '<div class="empty">暂无候选数据 —— 完成一次挖掘后，这里显示 CLI 输出的 Top-5 候选真实得分。</div>';
+    return;
+  }
+  var max = 0;
+  cands.forEach(function (c) { if (c.val > max) { max = c.val; } });
+  if (max <= 0) { max = 1; }
+  var rowH = 32, x0 = 210, barW = 360, h = cands.length * rowH + 14;
+  var svg = '<svg viewBox="0 0 640 ' + h + '" width="100%" height="' + h + '" role="img" aria-label="Top 候选 val_score">';
+  // 颜色走 style 而不是 fill= 属性：表现属性里用 var() 在部分浏览器不代换，
+  // 会整块变黑（或不可见）。style 里用 var() 是稳定支持的写法。
+  var mono = 'font-family:var(--mono);font-size:11px';
+  cands.forEach(function (c, k) {
+    var y = k * rowH + 6;
+    var w = Math.max(2, Math.round(c.val / max * barW));
+    var label = c.formula.length > 26 ? c.formula.slice(0, 25) + "…" : c.formula;
+    svg += '<text x="4" y="' + (y + 15) + '" style="fill:var(--ink-2);' + mono + '">' + esc(label) + "</text>";
+    svg += '<rect x="' + x0 + '" y="' + (y + 3) + '" width="' + w + '" height="16" rx="3"'
+      + ' style="fill:' + verdictColor(c.verdict) + ';opacity:0.85"></rect>';
+    svg += '<text x="' + (x0 + w + 8) + '" y="' + (y + 15) + '" style="fill:var(--ink);' + mono + '">'
+      + c.val.toFixed(4) + "  dsr " + c.dsr.toFixed(3) + "</text>";
+  });
+  svg += "</svg>";
+  box.innerHTML = svg;
+}
+
+/* ── 挖掘 ─────────────────────────────────────────────────────────── */
+function setStatus(text, on) {
+  $("statusText").textContent = text;
+  var dot = $("statusPill").querySelector(".dot");
+  if (dot) { dot.className = on ? "dot on" : "dot"; }
+}
+
+function startMine() {
+  var data = $("data").value;
+  if (!data) { alert("请先选择行情数据文件"); return; }
+  post("/api/mine", {
+    data: data,
+    budget: $("budget").value,
+    seed: parseInt($("seed").value, 10) || 0,
+    symbol: $("symbol").value.trim(),
+    timeframe: $("timeframe").value.trim(),
+    market: $("market").value
+  }).then(function (r) {
+    state.cmd = r.cmd || "";
+    $("cmdBox").value = "python -m miaosuan.cli " + (r.cmd || "");
+    state.logOffset = 0;
+    state.candidates = [];
+    $("log").textContent = "";
+    startPolling();
+  }).catch(function (e) { alert(e.message); });
+}
 
 function startPolling() {
-  if (polling) return;
-  polling = setInterval(pollJob, 900);
+  if (state.polling) { return; }
+  state.polling = setInterval(pollJob, 900);
   pollJob();
 }
 
-async function pollJob() {
-  const s = await jfetch("/api/job?offset=" + logOffset);
-  logOffset = s.total;
-  if (s.lines.length) {
-    $("log").textContent += s.lines.join("\n") + "\n";
-    $("log").scrollTop = $("log").scrollHeight;
-  }
-  const dot = $("status").querySelector(".dot");
-  if (s.running) {
-    dot.classList.add("on");
-    $("status").innerHTML = '<span class="dot on"></span>挖掘中…';
-    $("btnMine").disabled = true;
-  } else {
-    dot.classList.remove("on");
-    $("status").innerHTML = '<span class="dot"></span>空闲';
-    $("btnMine").disabled = false;
-    if (polling && s.total > 0) {          // 任务刚结束
-      clearInterval(polling); polling = null;
-      if (s.returncode === 0 && s.spec_out) { await loadSpec(s.spec_out); }
-      refreshLists();
+function pollJob() {
+  jfetch("/api/job?offset=" + state.logOffset).then(function (s) {
+    state.logOffset = s.total;
+    if (s.lines && s.lines.length) {
+      var log = $("log");
+      log.textContent += s.lines.join("\n") + "\n";
+      if (state.autoscroll) { log.scrollTop = log.scrollHeight; }
     }
+    if (s.running) {
+      setStatus("挖掘中", true);
+      $("btnMine").disabled = true;
+    } else {
+      setStatus("空闲", false);
+      $("btnMine").disabled = false;
+      if (state.polling && s.total > 0) {
+        clearInterval(state.polling);
+        state.polling = null;
+        finishJob(s);
+      }
+    }
+    // 进度区随日志实时更新
+    var all = $("log").textContent.split("\n");
+    var parsed = parseLog(all);
+    state.candidates = parsed.candidates;
+    renderChart(parsed.candidates);
+    fillProgress(parsed.stats, s.running);
+  }).catch(function () { /* 轮询失败静默，避免打断 */ });
+}
+
+function fillProgress(st, running) {
+  $("pReason").textContent = st.reason;
+  $("pGen").textContent = st.gen;
+  $("pEval").textContent = st.evalN;
+  $("pDiv").textContent = st.div;
+  $("pHoldout").textContent = st.holdout;
+  // 状态以**后端 running 标志**为准：轮询定时器空闲时也在跑，不能拿它当"挖掘中"。
+  $("pState").textContent = running ? "挖掘中" : (st.reason === "—" ? "空闲" : "已完成");
+}
+
+function finishJob(s) {
+  if (s.returncode === 0 && s.spec_out) {
+    jfetch("/api/spec/" + encodeURIComponent(s.spec_out)).then(function (spec) {
+      state.spec = s.spec_out;
+      renderSpec(spec);
+      refreshLists();
+    }).catch(function (e) { dbg("spec 加载失败：" + e.message); refreshLists(); });
+  } else {
+    refreshLists();
   }
 }
 
-/* ── spec 展示 ── */
+function renderSpec(s) {
+  var ev = s.evidence || {}, pv = s.provenance || {};
+  $("pVal").textContent = ev.val_score === undefined || ev.val_score === null ? "—" : Number(ev.val_score).toFixed(4);
+  $("pDsr").textContent = ev.deflated_sharpe === undefined || ev.deflated_sharpe === null ? "—" : Number(ev.deflated_sharpe).toFixed(4);
+  $("pGate").innerHTML = verdictChip(ev.gate_verdict);
+  $("formulaBox").textContent = s.formula_full || "（无公式）";
+
+  $("lGate").innerHTML = verdictChip(ev.gate_verdict);
+  var reasons = ev.gate_reasons || [];
+  $("lReasons").textContent = reasons.length ? reasons.join(" / ") : "（无）";
+  $("lGit").textContent = pv.git_sha || "—";
+  $("lSeed").textContent = pv.seed === undefined || pv.seed === null ? "—" : pv.seed;
+  $("lVocab").textContent = pv.vocab_version || "—";
+  $("lMarket").textContent = pv.market || "—";
+  $("lFp").textContent = pv.data_fingerprint || "—";
+  refreshLists();
+}
+
 function verdictChip(v) {
-  const cls = v === "DEPLOYABLE" ? "ok" : v === "BLOCKED" ? "bad" : "warn";
-  return `<span class="chip ${cls}">${esc(v || "-")}</span>`;
+  var cls = v === "DEPLOYABLE" ? "ok" : (v === "BLOCKED" ? "bad" : "warn");
+  return '<span class="chip ' + cls + '">' + esc(v || "-") + "</span>";
 }
 
-async function loadSpec(file) {
-  const s = await jfetch("/api/spec/" + encodeURIComponent(file));
-  currentSpec = file;
-  const ev = s.evidence || {}, pv = s.provenance || {};
-  $("specBox").innerHTML = `
-    <table>
-      <tr><th>策略名</th><td>${esc(s.name)}</td><th>spec_id</th><td class="mono">${esc(String(s.spec_id).slice(0,12))}</td></tr>
-      <tr><th>公式（RPN）</th><td colspan="3" class="mono">${esc(s.formula_full)}</td></tr>
-      <tr><th>验证集得分</th><td>${ev.val_score ?? "-"}</td>
-          <th>去膨胀夏普</th><td>${ev.deflated_sharpe ?? "-"}</td></tr>
-      <tr><th>门禁结论</th><td>${verdictChip(ev.gate_verdict)}</td>
-          <th>词表版本</th><td class="mono">${esc(pv.vocab_version || "-")}</td></tr>
-      <tr><th>数据指纹</th><td class="mono">${esc(String(pv.data_fingerprint || "").slice(0,16))}</td>
-          <th>git / seed</th><td class="mono">${esc(String(pv.git_sha || "").slice(0,8))} / ${esc(pv.seed ?? "-")}</td></tr>
-    </table>`;
-  $("specActions").style.display = "flex";
-  $("opOut").style.display = "none";
+/* ── 复制 ─────────────────────────────────────────────────────────── */
+function copyFormula() {
+  var text = $("formulaBox").textContent || "";
+  if (!text || text === "（尚无结果）") { $("copyHint").textContent = "没有可复制的公式"; return; }
+  var done = function () { $("copyHint").textContent = "已复制"; };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, fallbackCopy);
+  } else { fallbackCopy(); }
+  function fallbackCopy() {
+    var ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); done(); }
+    catch (e) { $("copyHint").textContent = "复制失败，请手动选中"; }
+    document.body.removeChild(ta);
+  }
 }
 
-/* ── 导出 / 校验 ── */
-function showOp(r) {
-  $("opOut").style.display = "block";
-  $("opOut").textContent = r.output || ("（无输出，code=" + r.returncode + "）");
-  $("opOut").scrollTop = 0;
+/* ── 列表 ─────────────────────────────────────────────────────────── */
+function refreshLists() {
+  jfetch("/api/specs").then(function (specs) {
+    if (!specs.length) { $("specList").className = "empty"; $("specList").textContent = "（还没有 spec —— 先跑一次挖掘）"; return; }
+    $("specList").className = "";
+    $("specList").innerHTML = '<div class="tbl-wrap"><table><tr><th>文件</th><th>品种</th><th>周期</th>'
+      + "<th>val</th><th>DSR</th><th>门禁</th><th>时间</th><th></th></tr>"
+      + specs.map(function (s) {
+        return '<tr><td class="mono tiny">' + esc(s.file) + "</td><td>" + esc(s.symbol || "-") + "</td>"
+          + "<td>" + esc(s.timeframe || "-") + "</td>"
+          + "<td>" + (s.val_score === null ? "-" : Number(s.val_score).toFixed(4)) + "</td>"
+          + "<td>" + (s.deflated_sharpe === null ? "-" : Number(s.deflated_sharpe).toFixed(4)) + "</td>"
+          + "<td>" + verdictChip(s.gate_verdict) + "</td>"
+          + '<td class="tiny muted">' + esc(s.mtime || "") + "</td>"
+          + '<td><button class="ghost" onclick="loadSpecByName(\'' + esc(s.file) + '\')">查看</button></td></tr>';
+      }).join("") + "</table></div>";
+  }).catch(function (e) {
+    $("specList").className = "empty"; $("specList").textContent = "加载失败：" + e.message;
+  });
+
+  jfetch("/api/strategies").then(function (rows) {
+    var sel = $("verifyFile");
+    if (!rows.length) {
+      $("stratList").className = "empty"; $("stratList").textContent = "（还没有导出策略）";
+      sel.innerHTML = '<option value="">（暂无）</option>';
+      return;
+    }
+    sel.innerHTML = rows.map(function (s) {
+      return '<option value="' + esc(s.file) + '">' + esc(s.file) + "</option>";
+    }).join("");
+    $("stratList").className = "";
+    $("stratList").innerHTML = '<div class="tbl-wrap"><table><tr><th>文件</th><th>magic</th>'
+      + "<th>lint</th><th>时间</th><th></th></tr>"
+      + rows.map(function (s) {
+        var l = '<span class="chip ' + (s.lint_errors ? "bad" : "ok") + '">'
+          + s.lint_errors + "E / " + s.lint_warnings + "W</span>";
+        return '<tr><td class="mono tiny">' + esc(s.file) + '</td><td class="mono">' + esc(s.magic) + "</td>"
+          + "<td>" + l + '</td><td class="tiny muted">' + esc(s.mtime) + "</td>"
+          + '<td><a href="/api/file/' + encodeURIComponent(s.file) + '" download>下载</a></td></tr>';
+      }).join("") + "</table></div>";
+  }).catch(function (e) {
+    $("stratList").className = "empty"; $("stratList").textContent = "加载失败：" + e.message;
+  });
 }
 
-$("btnExport").onclick = async () => {
-  if (!currentSpec) return alert("请先选择 spec");
-  $("btnExport").disabled = true;
-  try {
-    const r = await jfetch("/api/export", { method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ spec: currentSpec, gate_deadband: +$("gateDb").value || 0 }) });
-    showOp(r);
+function loadSpecByName(file) {
+  jfetch("/api/spec/" + encodeURIComponent(file)).then(function (spec) {
+    state.spec = file;
+    renderSpec(spec);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }).catch(function (e) { alert(e.message); });
+}
+
+/* ── 校验 ─────────────────────────────────────────────────────────── */
+function runVerify() {
+  var f = $("verifyFile").value;
+  if (!f) { alert("还没有已导出的策略文件"); return; }
+  var out = $("verifyOut");
+  out.style.display = "block";
+  out.textContent = "校验中…";
+  post("/api/verify", { file: f }).then(function (r) {
+    out.textContent = r.output || ("（无输出，code=" + r.returncode + "）");
     refreshLists();
-  } catch (e) { alert(e.message); }
-  $("btnExport").disabled = false;
-};
-
-$("btnVerify").onclick = async () => {
-  const pys = [...document.querySelectorAll("#stratList table tr[data-file]")]
-    .map(tr => tr.dataset.file);
-  if (!pys.length) return alert("还没有已导出的策略文件");
-  try {
-    const r = await jfetch("/api/verify", { method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ file: pys[0] }) });
-    showOp(r);
-  } catch (e) { alert(e.message); }
-};
-
-/* ── 历史列表 ── */
-async function refreshLists() {
-  const specs = await jfetch("/api/specs");
-  $("specList").innerHTML = specs.length ? `<table><tr><th>文件</th><th>名称</th><th>门禁</th><th>val</th><th></th></tr>` +
-    specs.map(s => `<tr><td class="mono">${esc(s.file)}</td><td>${esc(s.name)}</td>
-      <td>${verdictChip(s.gate_verdict)}</td><td>${s.val_score ?? "-"}</td>
-      <td><button class="ghost" onclick="loadSpec('${esc(s.file)}')">查看</button></td></tr>`).join("") + `</table>`
-    : `（还没有 spec —— 先跑一次挖掘）`;
-
-  const strats = await jfetch("/api/strategies");
-  $("stratList").innerHTML = strats.length ? `<table><tr><th>文件</th><th>magic</th><th>时间</th><th></th></tr>` +
-    strats.map(s => `<tr data-file="${esc(s.file)}"><td class="mono">${esc(s.file)}</td>
-      <td class="mono">${esc(s.magic)}</td><td class="muted">${esc(s.mtime)}</td>
-      <td><a href="/api/file/${encodeURIComponent(s.file)}" download>下载</a></td></tr>`).join("") + `</table>`
-    : `（还没有导出策略）`;
+  }).catch(function (e) { out.textContent = "校验失败：" + e.message; });
 }
 
-loadData(); refreshLists(); pollJob();
+/* ── 绑定 ─────────────────────────────────────────────────────────── */
+function bind() {
+  $("btnTheme").onclick = function () {
+    var cur = document.documentElement.getAttribute("data-theme");
+    applyTheme(cur === "dark" ? "light" : "dark");
+  };
+  var btns = document.querySelectorAll("#stepper button");
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].onclick = (function (btn) {
+      return function () { setView(btn.getAttribute("data-view")); };
+    })(btns[i]);
+  }
+  $("btnInspect").onclick = inspect;
+  $("data").onchange = inspect;
+  $("btnMine").onclick = startMine;
+  $("btnCopy").onclick = copyFormula;
+  $("btnVerify").onclick = runVerify;
+  $("btnScroll").onclick = function () {
+    state.autoscroll = !state.autoscroll;
+    $("btnScroll").textContent = state.autoscroll ? "暂停滚动" : "恢复滚动";
+  };
+  $("btnDebug").onclick = function () {
+    state.debug = !state.debug;
+    $("dbgOut").style.display = state.debug ? "block" : "none";
+    $("btnDebug").textContent = state.debug ? "隐藏调试信息" : "显示调试信息";
+    if (state.debug) { $("dbgOut").textContent = state.trace.join("\n") || "（暂无记录）"; }
+  };
+  window.onerror = function (msg, src, ln) {
+    state.errors.push("JS: " + msg + " @" + src + ":" + ln);
+    dbg("JS ERROR " + msg + " @" + src + ":" + ln);
+  };
+}
+
+/* ── 启动 ─────────────────────────────────────────────────────────── */
+function boot() {
+  initTheme();
+  bind();
+  setView("mine");
+  loadMeta();
+  loadData();
+  renderChart([]);
+  refreshLists();   // ⑧⑨ 两张表首屏就要有内容，否则一直停在"加载中…"
+  startPolling();
+}
+boot();
 </script>
 </body>
 </html>
