@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>妙算 · 模式 A 仪表盘</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --line: #e3e6ea; --ink: #1f2430;
+    --muted: #6b7280; --brand: #2456d6; --ok: #0c8a4d; --warn: #b45309;
+    --bad: #c02626; --chip: #eef1f6;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.6 "Segoe UI", "Microsoft YaHei", sans-serif; }
+  header { background: var(--card); border-bottom: 1px solid var(--line);
+           padding: 14px 24px; display: flex; align-items: baseline; gap: 14px; }
+  header h1 { font-size: 18px; margin: 0; letter-spacing: 1px; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  main { max-width: 1180px; margin: 20px auto; padding: 0 20px;
+         display: grid; gap: 16px; }
+  section { background: var(--card); border: 1px solid var(--line);
+            border-radius: 10px; padding: 16px 18px; }
+  section h2 { font-size: 14px; margin: 0 0 12px; color: var(--muted);
+               font-weight: 600; letter-spacing: .5px; }
+  label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  select, input { width: 100%; padding: 7px 9px; border: 1px solid var(--line);
+                  border-radius: 7px; font: inherit; background: #fff; color: var(--ink); }
+  button { border: 0; border-radius: 8px; padding: 9px 18px; font: inherit;
+           cursor: pointer; background: var(--brand); color: #fff; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.ghost { background: var(--chip); color: var(--ink); }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .row > div { flex: 1; min-width: 140px; }
+  #log { background: #10131a; color: #c9d4e3; font: 12px/1.5 Consolas, monospace;
+         border-radius: 8px; padding: 12px; height: 240px; overflow-y: auto;
+         white-space: pre-wrap; word-break: break-all; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  tr:hover td { background: #f7f9fc; }
+  .chip { display: inline-block; padding: 1px 9px; border-radius: 20px;
+          font-size: 12px; background: var(--chip); }
+  .chip.ok { background: #e2f5ea; color: var(--ok); }
+  .chip.bad { background: #fde8e8; color: var(--bad); }
+  .chip.warn { background: #fdf0e0; color: var(--warn); }
+  .mono { font-family: Consolas, monospace; font-size: 12px; }
+  .muted { color: var(--muted); }
+  pre { background: #10131a; color: #c9d4e3; border-radius: 8px; padding: 12px;
+        font: 12px/1.5 Consolas, monospace; white-space: pre-wrap; word-break: break-all;
+        max-height: 300px; overflow-y: auto; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+  #status { font-size: 12px; color: var(--muted); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+         background: var(--muted); margin-right: 6px; }
+  .dot.on { background: var(--ok); animation: pulse 1s infinite alternate; }
+  @keyframes pulse { from { opacity: .4; } to { opacity: 1; } }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>妙算 MiaoSuan</h1>
+  <span class="sub">模式 A 仪表盘 —— 挖掘 → 导出 → 校验 · 本机 <span class="mono">127.0.0.1</span></span>
+  <span style="margin-left:auto" id="status"><span class="dot"></span>空闲</span>
+</header>
+<main>
+  <!-- ① 启动挖掘 -->
+  <section>
+    <h2>① 启动挖掘（mine）</h2>
+    <div class="row">
+      <div style="flex:2"><label>行情数据（parquet / csv）</label><select id="data"></select></div>
+      <div><label>预算档位</label>
+        <select id="budget">
+          <option value="quick">quick · 约30分钟</option>
+          <option value="standard" selected>standard · 约2小时</option>
+          <option value="deep">deep · 约8小时</option>
+        </select></div>
+      <div style="max-width:110px"><label>种子（0=默认）</label><input id="seed" type="number" value="0"></div>
+      <div style="max-width:120px"><label>标的</label><input id="symbol" placeholder="XAUUSD"></div>
+      <div style="max-width:100px"><label>周期</label><input id="timeframe" placeholder="H1"></div>
+      <div style="flex:0"><button id="btnMine">开始挖掘</button></div>
+    </div>
+  </section>
+
+  <!-- ② 挖掘日志 -->
+  <section>
+    <h2>② 挖掘进度与日志</h2>
+    <div id="log">尚未启动任务。</div>
+  </section>
+
+  <!-- ③ 候选结果 + 导出 -->
+  <section>
+    <h2>③ 挖掘结果（StrategySpec）与导出</h2>
+    <div id="specBox" class="empty">尚无结果 —— 完成一次挖掘或选择历史 spec。</div>
+    <div class="actions" id="specActions" style="display:none">
+      <div style="min-width:110px"><label>GATE 死区（R1 保护，0=关）</label>
+        <input id="gateDb" type="number" step="0.01" value="0" style="width:110px"></div>
+      <div style="flex:0; align-self:flex-end"><button id="btnExport">导出 AlgoForge 策略</button></div>
+      <div style="flex:0; align-self:flex-end"><button id="btnVerify" class="ghost">校验最近导出</button></div>
+    </div>
+    <pre id="opOut" style="display:none"></pre>
+  </section>
+
+  <!-- ④ 历史产物 -->
+  <div class="grid2">
+    <section>
+      <h2>④ 历史 Spec</h2>
+      <div id="specList" class="empty">加载中…</div>
+    </section>
+    <section>
+      <h2>⑤ 已导出策略（AlgoForge .py）</h2>
+      <div id="stratList" class="empty">加载中…</div>
+    </section>
+  </div>
+</main>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let currentSpec = null, logOffset = 0, polling = null;
+
+async function jfetch(url, opt) {
+  const r = await fetch(url, opt);
+  if (!r.ok) {
+    let msg = r.status;
+    try { msg = (await r.json()).detail || msg; } catch (_) {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+/* ── 数据列表 ── */
+async function loadData() {
+  const rows = await jfetch("/api/data");
+  $("data").innerHTML = rows.length
+    ? rows.map(d => `<option value="${esc(d.path)}">${esc(d.name)} · ${d.size_mb}MB · ${d.mtime}</option>`).join("")
+    : `<option value="">（未找到行情文件 —— 请将 parquet 放入 D:\\K线数据\\）</option>`;
+}
+
+/* ── 挖掘 ── */
+$("btnMine").onclick = async () => {
+  const data = $("data").value;
+  if (!data) return alert("请先放置行情数据文件");
+  try {
+    await jfetch("/api/mine", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ data, budget: $("budget").value,
+        seed: +$("seed").value || 0, symbol: $("symbol").value.trim(),
+        timeframe: $("timeframe").value.trim() })
+    });
+    logOffset = 0; $("log").textContent = "";
+    startPolling();
+  } catch (e) { alert(e.message); }
+};
+
+function startPolling() {
+  if (polling) return;
+  polling = setInterval(pollJob, 900);
+  pollJob();
+}
+
+async function pollJob() {
+  const s = await jfetch("/api/job?offset=" + logOffset);
+  logOffset = s.total;
+  if (s.lines.length) {
+    $("log").textContent += s.lines.join("\n") + "\n";
+    $("log").scrollTop = $("log").scrollHeight;
+  }
+  const dot = $("status").querySelector(".dot");
+  if (s.running) {
+    dot.classList.add("on");
+    $("status").innerHTML = '<span class="dot on"></span>挖掘中…';
+    $("btnMine").disabled = true;
+  } else {
+    dot.classList.remove("on");
+    $("status").innerHTML = '<span class="dot"></span>空闲';
+    $("btnMine").disabled = false;
+    if (polling && s.total > 0) {          // 任务刚结束
+      clearInterval(polling); polling = null;
+      if (s.returncode === 0 && s.spec_out) { await loadSpec(s.spec_out); }
+      refreshLists();
+    }
+  }
+}
+
+/* ── spec 展示 ── */
+function verdictChip(v) {
+  const cls = v === "DEPLOYABLE" ? "ok" : v === "BLOCKED" ? "bad" : "warn";
+  return `<span class="chip ${cls}">${esc(v || "-")}</span>`;
+}
+
+async function loadSpec(file) {
+  const s = await jfetch("/api/spec/" + encodeURIComponent(file));
+  currentSpec = file;
+  const ev = s.evidence || {}, pv = s.provenance || {};
+  $("specBox").innerHTML = `
+    <table>
+      <tr><th>策略名</th><td>${esc(s.name)}</td><th>spec_id</th><td class="mono">${esc(String(s.spec_id).slice(0,12))}</td></tr>
+      <tr><th>公式（RPN）</th><td colspan="3" class="mono">${esc(s.formula_full)}</td></tr>
+      <tr><th>验证集得分</th><td>${ev.val_score ?? "-"}</td>
+          <th>去膨胀夏普</th><td>${ev.deflated_sharpe ?? "-"}</td></tr>
+      <tr><th>门禁结论</th><td>${verdictChip(ev.gate_verdict)}</td>
+          <th>词表版本</th><td class="mono">${esc(pv.vocab_version || "-")}</td></tr>
+      <tr><th>数据指纹</th><td class="mono">${esc(String(pv.data_fingerprint || "").slice(0,16))}</td>
+          <th>git / seed</th><td class="mono">${esc(String(pv.git_sha || "").slice(0,8))} / ${esc(pv.seed ?? "-")}</td></tr>
+    </table>`;
+  $("specActions").style.display = "flex";
+  $("opOut").style.display = "none";
+}
+
+/* ── 导出 / 校验 ── */
+function showOp(r) {
+  $("opOut").style.display = "block";
+  $("opOut").textContent = r.output || ("（无输出，code=" + r.returncode + "）");
+  $("opOut").scrollTop = 0;
+}
+
+$("btnExport").onclick = async () => {
+  if (!currentSpec) return alert("请先选择 spec");
+  $("btnExport").disabled = true;
+  try {
+    const r = await jfetch("/api/export", { method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ spec: currentSpec, gate_deadband: +$("gateDb").value || 0 }) });
+    showOp(r);
+    refreshLists();
+  } catch (e) { alert(e.message); }
+  $("btnExport").disabled = false;
+};
+
+$("btnVerify").onclick = async () => {
+  const pys = [...document.querySelectorAll("#stratList table tr[data-file]")]
+    .map(tr => tr.dataset.file);
+  if (!pys.length) return alert("还没有已导出的策略文件");
+  try {
+    const r = await jfetch("/api/verify", { method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ file: pys[0] }) });
+    showOp(r);
+  } catch (e) { alert(e.message); }
+};
+
+/* ── 历史列表 ── */
+async function refreshLists() {
+  const specs = await jfetch("/api/specs");
+  $("specList").innerHTML = specs.length ? `<table><tr><th>文件</th><th>名称</th><th>门禁</th><th>val</th><th></th></tr>` +
+    specs.map(s => `<tr><td class="mono">${esc(s.file)}</td><td>${esc(s.name)}</td>
+      <td>${verdictChip(s.gate_verdict)}</td><td>${s.val_score ?? "-"}</td>
+      <td><button class="ghost" onclick="loadSpec('${esc(s.file)}')">查看</button></td></tr>`).join("") + `</table>`
+    : `（还没有 spec —— 先跑一次挖掘）`;
+
+  const strats = await jfetch("/api/strategies");
+  $("stratList").innerHTML = strats.length ? `<table><tr><th>文件</th><th>magic</th><th>时间</th><th></th></tr>` +
+    strats.map(s => `<tr data-file="${esc(s.file)}"><td class="mono">${esc(s.file)}</td>
+      <td class="mono">${esc(s.magic)}</td><td class="muted">${esc(s.mtime)}</td>
+      <td><a href="/api/file/${encodeURIComponent(s.file)}" download>下载</a></td></tr>`).join("") + `</table>`
+    : `（还没有导出策略）`;
+}
+
+loadData(); refreshLists(); pollJob();
+</script>
+</body>
+</html>
