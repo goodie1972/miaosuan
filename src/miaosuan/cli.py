@@ -39,6 +39,7 @@ from .config import AppConfig
 from .core.features import compute_features
 from .core.vm import StackVM
 from .data.loader import load
+from .errors import MiaoSuanError
 from .ir.codec import read_spec, write_spec
 from .ir.provenance import resolve_git_sha
 from .ir.schema import FactorPayload, StrategySpec
@@ -97,7 +98,7 @@ def mine(
 
     try:
         panel = load(data)
-    except (FileNotFoundError, OSError, ValueError) as exc:
+    except (MiaoSuanError, FileNotFoundError, OSError, ValueError) as exc:
         _die(f"无法加载行情数据 {data!r}：{exc}")
     _echo(f"数据：{data}  N={panel.n_symbols} T={panel.n_bars} profile={panel.market_profile_name}")
     _echo(f"指纹：{panel.fingerprint}")
@@ -153,7 +154,7 @@ def export(
     """导出 AlgoForge 策略 .py（自动分配 magic + 静态检查）。"""
     try:
         spec = read_spec(spec_path)
-    except (FileNotFoundError, OSError, ValueError) as exc:
+    except (MiaoSuanError, FileNotFoundError, OSError, ValueError) as exc:
         _die(f"无法读取 spec 文件 {spec_path!r}：{exc}")
     if name:
         spec = StrategySpec(
@@ -220,14 +221,17 @@ def verify(
 
     try:
         panel = load(data)
-    except (FileNotFoundError, OSError, ValueError) as exc:
+    except (MiaoSuanError, FileNotFoundError, OSError, ValueError) as exc:
         _die(f"无法加载行情数据 {data!r}：{exc}")
     raw = panel.to_raw_dict()
     tokens = _extract_tokens(source)
     if not tokens:
         _echo("无法从文件中解析 _TOKENS，跳过数值保真度回归")
         return
-    max_err = _fidelity_error(file, tokens, raw)
+    try:
+        max_err = _fidelity_error(file, tokens, raw)
+    except (MiaoSuanError, RuntimeError, TypeError, KeyError, IndexError, ValueError) as exc:
+        _die(f"数值保真度回归执行失败（{file!r}）：{type(exc).__name__}: {exc}")
     _echo(f"数值保真度：max_abs_err = {max_err:.3e}（阈值 1e-3）")
     if max_err >= 1e-3:
         _die(f"数值保真度不达标：{max_err:.3e} >= 1e-3")
@@ -279,7 +283,10 @@ def report(
     spec_path: str = typer.Option(..., "--spec", help="StrategySpec JSON 路径"),
 ) -> None:
     """打印 spec 的证据与溯源摘要。"""
-    spec = read_spec(spec_path)
+    try:
+        spec = read_spec(spec_path)
+    except (MiaoSuanError, FileNotFoundError, OSError, ValueError) as exc:
+        _die(f"无法读取 spec 文件 {spec_path!r}：{exc}")
     evidence = spec.evidence
     provenance = spec.provenance
     _echo(f"策略名    ：{spec.name}")
