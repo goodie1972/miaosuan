@@ -45,7 +45,7 @@ from .ir.provenance import resolve_git_sha
 from .ir.schema import FactorPayload, StrategySpec
 from .pipeline import run_mine
 
-__all__ = ["app", "export", "mine", "report", "verify"]
+__all__ = ["app", "export", "mine", "report", "ui", "verify"]
 
 app = typer.Typer(
     add_completion=False,
@@ -312,6 +312,25 @@ def report(
     _echo(f"种子      ：{provenance.seed}")
     _echo(f"市场/预算 ：{provenance.market} / {provenance.budget}")
     _echo(f"生成时刻  ：{provenance.created_at}")
+
+
+# ── ui ──────────────────────────────────────────────────────────────────────
+@app.command()
+def ui(
+    host: str = typer.Option("127.0.0.1", "--host", help="监听地址（仅本机）"),
+    port: int = typer.Option(8686, "--port", help="监听端口"),
+) -> None:
+    """启动本地 Web 仪表盘（模式 A 可视化：挖掘 → 导出 → 校验）。"""
+    try:
+        import uvicorn
+    except ImportError as exc:  # pragma: no cover - 依赖缺失
+        _die("缺少 Web 依赖，请在项目 venv 中安装：pip install fastapi uvicorn")
+        raise AssertionError from exc
+
+    from .webui.server import create_app
+
+    _echo(f"妙算仪表盘已启动：http://{host}:{port}（Ctrl+C 退出）")
+    uvicorn.run(create_app(), host=host, port=port, log_level="warning")
 
 
 def main() -> int:
