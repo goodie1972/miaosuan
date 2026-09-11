@@ -1,0 +1,356 @@
+# -*- coding: utf-8 -*-
+"""{{ name }} —— 由妙算（MiaoSuan）自动生成，**请勿手工编辑**。
+
+公式（RPN，{{ n_tokens }} 个 token）
+-----------------------------------
+{{ formula_text }}
+
+语义
+----
+* 因子：``StackVM`` 求值 + 滚动 {{ roll_window }} 期 z-score（clip 到 ±3，前 {{ warmup_bars }}
+  根输出 0）——与 ``miaosuan.core.vm.StackVM`` **逐位同源**（内核源码由 core 原样导出）。
+* 仓位：``exposure = tanh(factor)``；``|exposure| < {{ neutral_band }}`` 视为中性、**不出信号**。
+* bar1 语义（不重绘）：``generate_signal`` **只用已收盘 K 线**（``candles[:-1]``），
+  最后一根未收盘 K 线不参与任何计算，因此不存在未来函数。
+{% if has_gate %}
+* R1 保护：公式含 GATE 算子。GATE 在条件穿越 0 时会 O(1) 跳变，float32 归约误差
+  可让符号在 ±1ULP 抖动，实盘表现为分支反复翻转。生成文件内置**死区滞回**
+  （``GATE_DEADBAND``）；默认 0.0 = 关闭（与回测逐位一致），调大即启用保护。
+{% endif %}
+证据（导出时刻快照，只读）
+-------------------------
+* 验证集得分：{{ evidence.val_score }}（{{ evidence.wf_folds }} 折 Walk-Forward）
+* 去膨胀夏普 DSR：{{ evidence.deflated_sharpe }}（试验次数 {{ evidence.n_trials }}）
+* 成本敏感度：{{ evidence.cost_sensitivity_text }}
+* hold-out 夏普：{{ evidence.holdout_sharpe_text }}
+* 门禁结论：{{ evidence.gate_verdict }}
+
+溯源
+----
+* IR spec id：{{ spec_id }}
+* 生成时刻：{{ generated_at }}
+* git sha：{{ provenance.git_sha }}
+* 词表版本：{{ provenance.vocab_version }}（token 仅在同一词表下有意义）
+* 数据指纹：{{ provenance.data_fingerprint }}
+* 随机种子：{{ provenance.seed }}
+* 市场/品种：{{ provenance.market }}
+"""
+{% if research_only %}
+# ═══════════════════════════════════════════════════════════════════════════
+# ⚠  RESEARCH_ONLY —— 本策略**未通过实盘门禁**，仅供研究 / 模拟，禁止上实盘。
+#
+# 门禁结论：{{ evidence.gate_verdict }}
+# 触发原因：
+{% for reason in evidence.gate_reasons %}#   - {{ reason }}
+{% endfor %}#
+# 需要重新过门禁并重新导出后，本文件才会去掉本警示块。
+# ═══════════════════════════════════════════════════════════════════════════
+{% endif %}
+from __future__ import annotations
+
+import math
+from typing import Any
+
+{% for line in module_header %}{{ line }}
+{% endfor %}
+
+# ── 词表版本（硬约束 H-1 冻结锁；lint AF007 会校验与内核派生版本一致）────────
+VOCAB_VERSION = "{{ vocab_version }}"
+
+# ── 策略身份（AlgoForge 契约：四项必须齐全）────────────────────────────────
+STRATEGY_MAGIC = "{{ magic }}"
+STRATEGY_NAME = "{{ name }}"
+STRATEGY_VERSION = "{{ version }}"
+STRATEGY_CHANGELOG = (
+{% for entry in changelog %}    {{ entry | tojson }},
+{% endfor %})
+
+#: 是否通过实盘门禁（False 时本文件仅供研究）。
+DEPLOYABLE = {{ deployable }}
+
+#: 供 tune 消费的参数空间（与下方类属性一一对应）。
+PARAM_SPACE = (
+{% for p in param_space %}    {
+        "name": {{ p.name | tojson }},
+        "default": {{ p.default }},
+        "kind": {{ p.kind | tojson }},
+        "low": {{ p.low if p.low is not none else "None" }},
+        "high": {{ p.high if p.high is not none else "None" }},
+        "step": {{ p.step if p.step is not none else "None" }},
+        "choices": {{ p.choices | tojson }},
+        "description": {{ p.description | tojson }},
+    },
+{% endfor %})
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 因子内核 —— 以下代码由 miaosuan.core.{features,ops} **原样导出**并统一加前缀
+# 重命名（ft_ / op_），数值与挖掘时逐位一致。**不要手工改动**，否则会破坏
+# 与回测的一致性；改动应回到妙算侧重新挖掘后重新导出。
+# ═══════════════════════════════════════════════════════════════════════════
+
+{% for block in kernel_blocks %}{{ block }}
+
+{% endfor %}
+# ── 公式与算子/特征绑定 ────────────────────────────────────────────────────
+_FEAT_OFFSET = {{ feat_offset }}
+_TOKENS = ({{ tokens | join(", ") }})
+_FEATURE_FUNCS = {
+{% for tid, tname, fname in feature_entries %}    {{ tid }}: {{ fname }},  # {{ tname }}
+{% endfor %}}
+{% for tid, oname, arity, fname in op_entries %}
+def _op_wrap_{{ tid }}(*operands: np.ndarray) -> np.ndarray:
+    """算子 {{ oname }}（arity={{ arity }}）的入口包装。"""
+    return {{ fname }}(*operands)
+
+{% endfor %}
+
+_OP_FUNCS = {
+{% for tid, oname, arity, fname in op_entries %}    {{ tid }}: (_op_wrap_{{ tid }}, {{ arity }}),  # {{ oname }}
+{% endfor %}}
+
+{% if has_gate %}
+# ── R1：GATE 零点不连续保护（死区滞回，因果，无未来函数）───────────────────
+_GATE_DEADBAND = {{ gate_deadband }}
+
+
+def _gate_protected(condition: np.ndarray, x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """GATE + 死区滞回。
+
+    ``_GATE_DEADBAND <= 0`` 时退化为原生 GATE（与回测逐位一致）；``> 0`` 时，
+    ``|condition| <= DEADBAND`` 的区间沿用上一根的选择，消除 1-ULP 符号抖动
+    造成的分支翻转。逐根前向递推，**只看历史**，不引入未来函数。
+    """
+    if _GATE_DEADBAND <= 0.0:
+        return {{ gate_func_name }}(condition, x, y)
+    _n, t = condition.shape
+    out = np.zeros_like(x)
+    prev = 0
+    for i in range(t):
+        c = float(condition[0, i])
+        if c > _GATE_DEADBAND:
+            prev = 1
+        elif c < -_GATE_DEADBAND:
+            prev = 0
+        out[0, i] = x[0, i] if prev else y[0, i]
+    return out
+
+
+_OP_FUNCS[{{ gate_token }}] = (_gate_protected, 3)
+{% endif %}
+
+# ── 栈式求值 + 滚动归一化（对齐 miaosuan.core.vm.StackVM）──────────────────
+_ROLL_WINDOW = {{ roll_window }}
+
+
+def _normalize_output(x: np.ndarray, roll_window: int = _ROLL_WINDOW) -> np.ndarray:
+    """因果滚动标准化（逐位对齐 ``StackVM._normalize_output``）。"""
+    n, t = x.shape
+    global_std = float(x.std(ddof=1)) if t > 1 else 0.0
+    if global_std < 1e-6:
+        return x
+    if n > 1:
+        cs_mean = x.mean(axis=0, keepdims=True)
+        cs_std = np.clip(x.std(axis=0, keepdims=True, ddof=1), 1e-8, None)
+        return np.clip((x - cs_mean) / cs_std, -3.0, 3.0)
+    _roll = int(roll_window)
+    if t < _roll:
+        cnt = np.arange(1, t + 1, dtype=x.dtype).reshape(1, t)
+        cumsum = np.cumsum(x, axis=1)
+        ts_mean = cumsum / cnt
+        cumsum_sq = np.cumsum(x * x, axis=1)
+        ts_var = (cumsum_sq / cnt) - ts_mean * ts_mean
+        ts_std = np.sqrt(np.clip(ts_var, 1e-8, None))
+        return np.asarray(np.clip((x - ts_mean) / ts_std, -3.0, 3.0))
+    pad = np.zeros((n, _roll - 1), dtype=x.dtype)
+    padded = np.concatenate([pad, x], axis=1)
+    windows = np.lib.stride_tricks.sliding_window_view(padded, _roll, axis=1)
+    ts_mean = windows.mean(axis=2)
+    ts_std = np.clip(windows.std(axis=2, ddof=1), 1e-8, None)
+    ts_z = (x - ts_mean) / ts_std
+    ts_z[:, np.arange(t) < (_roll - 1)] = 0.0
+    return np.asarray(np.clip(ts_z, -3.0, 3.0))
+
+
+def _evaluate_rpn(features: dict[int, np.ndarray], tokens: tuple[int, ...]) -> np.ndarray:
+    """前缀（RPN）栈式求值，语义对齐 ``StackVM.execute``。"""
+    stack: list[np.ndarray] = []
+    for token in tokens:
+        if token < _FEAT_OFFSET:
+            stack.append(features[token])
+        else:
+            fn, arity = _OP_FUNCS[token]
+            args: list[np.ndarray] = [stack.pop() for _ in range(arity)]
+            args.reverse()
+            res = fn(*args)
+            if np.isnan(res).any() or np.isinf(res).any():
+                res = np.nan_to_num(res, nan=0.0, posinf=1.0, neginf=-1.0)
+            stack.append(res)
+    return stack[0]
+
+
+def compute_factor(
+    open_: np.ndarray,
+    high: np.ndarray,
+    low: np.ndarray,
+    close: np.ndarray,
+    volume: np.ndarray,
+    gate_deadband: "float | None" = None,
+) -> np.ndarray:
+    """计算因子序列。
+
+    Args:
+        open_: 开盘价，形状 ``[T]``（1D）或 ``[1, T]``。
+        high: 最高价。
+        low: 最低价。
+        close: 收盘价。
+        volume: 成交量。
+
+    Returns:
+        归一化后的因子，形状 ``[T]``（1D）。前 ``_ROLL_WINDOW - 1`` 根为 0（预热）。
+
+        ``gate_deadband`` 为 ``None`` 时沿用模板渲染的模块级默认值 ``_GATE_DEADBAND``；
+        传入则覆盖它，使模式 B（tune 改写类属性 ``GATE_DEADBAND`` 后）经
+        :meth:`generate_signal` 注入、真正影响死区计算（否则是死参数）。
+    """
+    if gate_deadband is not None:
+        global _GATE_DEADBAND
+        _GATE_DEADBAND = float(gate_deadband)
+    raw = {
+        "open": np.atleast_2d(np.asarray(open_, dtype=np.float32)),
+        "high": np.atleast_2d(np.asarray(high, dtype=np.float32)),
+        "low": np.atleast_2d(np.asarray(low, dtype=np.float32)),
+        "close": np.atleast_2d(np.asarray(close, dtype=np.float32)),
+        "volume": np.atleast_2d(np.asarray(volume, dtype=np.float32)),
+    }
+    features = {tid: fn(raw) for tid, fn in _FEATURE_FUNCS.items()}
+    value = _evaluate_rpn(features, _TOKENS)
+    return _normalize_output(value, _ROLL_WINDOW)[0]
+
+
+# ── 平台数据适配 ───────────────────────────────────────────────────────────
+_FIELD_ALIASES: dict[str, tuple[str, ...]] = {
+    "open": ("open", "o", "Open", "OPEN"),
+    "high": ("high", "h", "High", "HIGH"),
+    "low": ("low", "l", "Low", "LOW"),
+    "close": ("close", "c", "Close", "CLOSE"),
+    "volume": ("volume", "v", "tick_volume", "Volume", "VOLUME"),
+}
+
+
+def _candles_to_arrays(candles: Any) -> tuple[Any, ...] | None:
+    """把平台 candle 序列转成 ``(open, high, low, close, volume)`` 五个 1D 数组。
+
+    兼容三种常见形态：``pandas.DataFrame`` / ``dict`` 列表 / 对象列表。
+    长度不足或字段缺失时返回 ``None``（调用方应放弃本次信号）。
+
+    Args:
+        candles: 平台传入的 K 线序列（**只应包含已收盘 K 线**）。
+
+    Returns:
+        五元组；失败返回 ``None``。
+    """
+    if candles is None or len(candles) == 0:
+        return None
+    try:
+        if hasattr(candles, "columns"):
+            columns = {str(c).lower(): c for c in candles.columns}
+            picked: list[Any] = []
+            for key in ("open", "high", "low", "close", "volume"):
+                column = None
+                for alias in _FIELD_ALIASES[key]:
+                    if alias.lower() in columns:
+                        column = columns[alias.lower()]
+                        break
+                if column is None:
+                    return None
+                picked.append(np.asarray(candles[column]).reshape(-1))
+            return tuple(picked)
+        first = candles[0]
+        if isinstance(first, dict):
+            getter = lambda i, k: candles[i][k]  # noqa: E731
+        else:
+            getter = lambda i, k: getattr(candles[i], k)  # noqa: E731
+        out: list[Any] = []
+        for key in ("open", "high", "low", "close", "volume"):
+            values: list[float] = []
+            for i in range(len(candles)):
+                chosen = None
+                for alias in _FIELD_ALIASES[key]:
+                    try:
+                        chosen = getter(i, alias)
+                        break
+                    except (KeyError, AttributeError, TypeError):
+                        continue
+                values.append(0.0 if chosen is None else float(chosen))
+            out.append(np.asarray(values, dtype=np.float64))
+        return tuple(out)
+    except (KeyError, AttributeError, TypeError, IndexError, ValueError):
+        return None
+
+
+class {{ class_name }}({{ base_classes | join(", ") }}):
+    """{{ name }} —— 妙算导出的单因子策略。
+
+    ★ 可调参数写成**类属性**（而非内联字面量），``tune`` 可直接改写并配合
+    ``PARAM_SPACE`` 做搜索；改完记得同步 ``STRATEGY_VERSION`` 与 ``STRATEGY_CHANGELOG``。
+    """
+
+    # ── 身份 ───────────────────────────────────────────────────────────────
+    STRATEGY_MAGIC = STRATEGY_MAGIC
+    STRATEGY_NAME = STRATEGY_NAME
+    STRATEGY_VERSION = STRATEGY_VERSION
+    STRATEGY_CHANGELOG = STRATEGY_CHANGELOG
+
+    # ── ★ 可调参数（类属性，非内联字面量）─────────────────────────────────
+{% for p in param_space %}    {{ p.name }} = {{ p.default }}{% if p.description %}  # {{ p.description }}{% endif %}
+
+{% endfor %}
+    #: 预热根数：历史不足则不出信号（因子前 N 根为 0，无意义）。
+    WARMUP_BARS = {{ warmup_bars }}
+
+    #: 因子滚动归一化窗口（与挖掘时一致，改动会导致 train-serve 不一致）。
+    ROLL_WINDOW = {{ roll_window }}
+
+    #: 是否允许做空。
+    LONG_SHORT = {{ long_short }}
+
+    #: 交易标的（按需改写 / 由外部注入）。
+    SYMBOL = "{{ symbol }}"
+
+    @property
+    def required_bars(self) -> int:
+        """策略启动所需的最少历史 K 线根数（预热 + 最长特征窗口余量）。"""
+        return int(self.WARMUP_BARS) + 300
+
+    def generate_signal(self, candles: Any) -> dict[str, Any] | None:
+        """根据已收盘 K 线生成信号。
+
+        bar1 语义（不重绘）：``candles[-1]`` 是**正在形成**的 K 线，本方法用
+        ``candles[:-1]`` 把它剔除，只用已收盘数据计算，因此不存在未来函数。
+
+        Args:
+            candles: 平台 K 线序列（最后一根允许是未收盘 K 线）。
+
+        Returns:
+            信号字典；数据不足 / 因子中性 / 未过预热期时返回 ``None``。
+        """
+        closed = candles[:-1] if candles is not None and len(candles) > 1 else candles
+        arrays = _candles_to_arrays(closed)
+        if arrays is None:
+            return None
+        factor = compute_factor(*arrays, float(self.GATE_DEADBAND))
+        if factor.size < int(self.WARMUP_BARS) + 1:
+            return None
+        value = float(factor[factor.size - 1])
+        exposure = float(np.tanh(value))
+        if abs(exposure) < float(self.NEUTRAL_BAND):
+            return None
+        if not self.LONG_SHORT and exposure < 0.0:
+            return None
+        return {
+            "symbol": self.SYMBOL,
+            "magic": self.STRATEGY_MAGIC,
+            "side": "BUY" if exposure > 0.0 else "SELL",
+            "exposure": abs(exposure),
+            "factor": value,
+        }
