@@ -307,7 +307,7 @@ def create_app() -> FastAPI:
     def get_spec(name: str) -> dict[str, Any]:
         path = _safe_name(name, suffixes={".json"})
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
+            data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))  # 显式标注，避免 Any 泄漏
         except (OSError, json.JSONDecodeError) as exc:
             raise HTTPException(status_code=400, detail=f"spec 解析失败：{exc}") from exc
         payload = data.get("payload") or {}
