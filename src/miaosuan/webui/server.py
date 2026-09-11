@@ -70,6 +70,13 @@ def _cli_process(*args: str) -> list[str]:
     return [sys.executable, "-m", "miaosuan.cli", *args]
 
 
+def _spec_id(path: Path) -> str:
+    """从文件内容派生稳定短 id（spec JSON 本身不携带 spec_id 键）。"""
+    import hashlib
+
+    return hashlib.sha256(path.read_bytes()).hexdigest()[:12]
+
+
 # ── 挖掘任务（单飞 + 增量日志）───────────────────────────────────────────────
 
 @dataclass
@@ -208,14 +215,15 @@ def create_app() -> FastAPI:
                 data = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 continue
-            if not (isinstance(data, dict) and "payload" in data and "spec_id" in data):
+            if not (isinstance(data, dict) and "payload" in data
+                    and "spec_version" in data):
                 continue
             payload = data.get("payload") or {}
             tokens = payload.get("tokens") or []
             evidence = data.get("evidence") or {}
             out.append({
                 "file": path.name,
-                "spec_id": str(data.get("spec_id", ""))[:12],
+                "spec_id": _spec_id(path),
                 "name": data.get("name", ""),
                 "n_tokens": len(tokens),
                 "formula": readable_formula([int(t) for t in tokens][:12]) if tokens else "",
@@ -257,6 +265,7 @@ def create_app() -> FastAPI:
         payload = data.get("payload") or {}
         tokens = [int(t) for t in (payload.get("tokens") or [])]
         data["formula_full"] = readable_formula(tokens)
+        data["spec_id"] = _spec_id(path)
         data["vocab_summary"] = {
             "size": FORMULA_VOCAB.size,
             "features": FORMULA_VOCAB.feature_count,
