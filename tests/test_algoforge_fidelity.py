@@ -402,7 +402,9 @@ def test_get_dynamic_sl_tp_callable_with_two_positional_args(
     out = strategy.get_dynamic_sl_tp(module.OrderType.BUY, entry)  # 恰好 2 位置参数
     assert isinstance(out, tuple) and len(out) == 2
     sl, tp = out
-    assert sl < entry < tp, f"买入方向应 sl<entry<tp，实际 {out}"
+    # TP 默认关闭（TP_ATR_MULT=0 → tp=0.0，不是 None）；止损仍在正确一侧
+    assert sl < entry, f"买入方向应 sl<entry，实际 {out}"
+    assert tp == 0.0 and tp is not None, f"TP 关闭时应返回 0.0（非 None），实际 {out}"
     # 第 3/4 个参数（新式签名）也应当能传
     assert strategy.get_dynamic_sl_tp(module.OrderType.BUY, entry, 12.0, "entry")
 
@@ -423,8 +425,11 @@ def test_get_dynamic_sl_tp_sides_and_direction_normalization(
 
     buy = strategy.get_dynamic_sl_tp(module.OrderType.BUY, entry)
     sell = strategy.get_dynamic_sl_tp(module.OrderType.SELL, entry)
-    assert buy[0] < entry < buy[1], f"BUY 侧错误：{buy}"
-    assert sell[1] < entry < sell[0], f"SELL 侧错误：{sell}"
+    # TP 默认关闭（tp=0.0），只钉 SL 侧；tp 两侧都必须是 0.0（非 None）
+    assert buy[0] < entry, f"BUY 侧错误：{buy}"
+    assert sell[0] > entry, f"SELL 侧错误：{sell}"
+    assert buy[1] == 0.0 and buy[1] is not None, f"BUY tp 应为 0.0：{buy}"
+    assert sell[1] == 0.0 and sell[1] is not None, f"SELL tp 应为 0.0：{sell}"
     # 枚举 ⇄ 字符串（引擎两处调用分别是枚举与字符串）结果必须一致
     assert strategy.get_dynamic_sl_tp("BUY", entry) == buy
     assert strategy.get_dynamic_sl_tp("SELL", entry) == sell
@@ -445,34 +450,66 @@ def test_get_dynamic_sl_tp_derives_from_real_atr_not_hardcoded(
     expected = entry - max(atr * strategy.SL_ATR_MULT, strategy.MIN_SL_POINTS)
     assert sl == pytest.approx(expected, rel=1e-12), f"止损未按真实 ATR 计算：{sl} vs {expected}"
     # 与「硬编码 ATR=15 + 兜底倍数 2」的结果不同，证明确实用了自算 ATR
-    if abs(atr - 15.0) > 1e-6:
-        assert sl != pytest.approx(entry - 2.0 * 15.0, rel=1e-9)
+    #（仅在两值本应不同时比较，避免 atr*3 恰好=30 的巧合误报）
+    fallback = entry - 2.0 * 15.0
+    if abs(expected - fallback) > 1e-9:
+        assert sl != pytest.approx(fallback, rel=1e-9)
 
 
 def test_get_dynamic_sl_tp_no_fixed_tp_when_multiplier_zero(
     tmp_path: Path, algoforge_stubs: None
 ) -> None:
-    """``TP_ATR_MULT = 0`` → 无固定止盈（``tp = 0``），与现网趋势跟踪写法一致。"""
+    """``TP_ATR_MULT = 0``（**导出默认值**）→ 无固定止盈（``tp = 0.0`` 非 ``None``）。
+
+    ``0`` 是 ``core.bridge.open_order(sl=0, tp=0)`` 的"未提供"默认语义；
+    回测层没有 SL/TP，不设固定止盈最贴近回测口径（趋势跟踪，因子反向出场）。
+    """
     module, _path = _export_module(FORMULAS["am_best"], tmp_path, "sltp0")
     strategy = module.FidelityProbeStrategy()
     strategy.candles = _candle_list(_synthetic_raw(n=1200, seed=43))
-    strategy.TP_ATR_MULT = 0.0
+    assert strategy.TP_ATR_MULT == 0.0, "导出默认应为 TP_ATR_MULT=0（无固定止盈）"
     sl, tp = strategy.get_dynamic_sl_tp(module.OrderType.BUY, 4000.0)
-    assert tp == 0
+    assert tp == 0.0 and tp is not None, f"tp 必须是 0.0（不是 None），实际 {tp!r}"
     assert sl < 4000.0
+    sl_s, tp_s = strategy.get_dynamic_sl_tp(module.OrderType.SELL, 4000.0)
+    assert tp_s == 0.0 and tp_s is not None
+    assert sl_s > 4000.0
+
+
+def test_get_dynamic_sl_tp_sl_is_three_atr(
+    tmp_path: Path, algoforge_stubs: None
+) -> None:
+    """``SL_ATR_MULT = 3``（导出默认值）：``atr=10`` 时止损距离 = 30。"""
+    module, _path = _export_module(FORMULAS["am_best"], tmp_path, "sl3atr")
+    strategy = module.FidelityProbeStrategy()
+    assert strategy.SL_ATR_MULT == 3.0, "导出默认应为 SL_ATR_MULT=3"
+
+    sl, tp = strategy.get_dynamic_sl_tp(module.OrderType.BUY, 2000.0, 10.0)
+    assert sl == pytest.approx(2000.0 - 30.0), f"BUY 止损距离应为 3×ATR=30：{sl}"
+    assert tp == 0.0
+    sl_s, tp_s = strategy.get_dynamic_sl_tp(module.OrderType.SELL, 2000.0, 10.0)
+    assert sl_s == pytest.approx(2000.0 + 30.0), f"SELL 止损距离应为 3×ATR=30：{sl_s}"
+    assert tp_s == 0.0
 
 
 def test_get_dynamic_sl_tp_tp_floor_preserves_ratio(
     tmp_path: Path, algoforge_stubs: None
 ) -> None:
-    """C1 回归：ATR 极小时，止盈地板必须**独立**于止损地板（不能压成 1:1）。
+    """C1 回归：TP 启用时，止盈地板必须**独立**于止损地板（不能压成 1:1）。
 
     旧实现把 ``MIN_SL_POINTS`` 复用作止盈地板 —— ATR→0 时两侧地板相同，
-    设计的 ``TP:SL = TP_ATR_MULT:SL_ATR_MULT``（默认 2:1）会被压成 1:1。
+    设计的 ``TP:SL = TP_ATR_MULT:SL_ATR_MULT`` 会被压成 1:1。
+    导出默认 ``TP_ATR_MULT = 0``（无固定止盈），因此本用例在实例上**本地
+    重新启用止盈**来验证地板与比例逻辑——这也是将来重启 TP 时应遵循的
+    ``MIN_TP_POINTS = MIN_SL_POINTS × TP/SL 倍率`` 推导方式。
     """
     module, _path = _export_module(FORMULAS["am_best"], tmp_path, "sltpratio")
     strategy = module.FidelityProbeStrategy()
     entry = 4000.0
+
+    # 本地启用 TP（不动导出默认值）：倍率与地板按比例重推导
+    strategy.TP_ATR_MULT = 4.0
+    strategy.MIN_TP_POINTS = strategy.MIN_SL_POINTS * 4.0 / strategy.SL_ATR_MULT
 
     # 传入极小 ATR 触发两侧地板（atr_val 优先级最高，无需 K 线）
     sl, tp = strategy.get_dynamic_sl_tp(module.OrderType.BUY, entry, 0.001)
@@ -481,6 +518,7 @@ def test_get_dynamic_sl_tp_tp_floor_preserves_ratio(
     assert sl_dist == pytest.approx(strategy.MIN_SL_POINTS)
     assert tp_dist == pytest.approx(strategy.MIN_TP_POINTS)
     assert tp_dist > sl_dist, "止盈地板不得等于止损地板（否则盈亏比被压成 1:1）"
+    # 比例断言（而非绝对值）：TP:SL 距离比 == 倍率比
     assert tp_dist / sl_dist == pytest.approx(
         strategy.TP_ATR_MULT / strategy.SL_ATR_MULT
     )

@@ -14,9 +14,11 @@
   最后一根未收盘 K 线不参与任何计算，因此不存在未来函数。
 * 风控（SL/TP）：``get_dynamic_sl_tp`` 按平台实际调用契约实现
   （``main.py:1901/1953`` 传 **2 个位置参数**，返回**绝对价格**）。硬止损
-  ``入场价 ∓ {{ sl_atr_mult }}×ATR(14)``，止盈 ``± {{ tp_atr_mult }}×ATR(14)``
-  —— 倍数与平台自身兜底（``athlete.py:113-115``）**同比例**，唯一区别是 ATR
-  用的是**真实值**（由已收盘 K 线算出），不再是硬编码的 15。
+  ``入场价 ∓ {{ sl_atr_mult }}×ATR(14)``，ATR 用的是**真实值**（由已收盘
+  K 线算出），不是平台兜底的硬编码 15。
+  ``TP_ATR_MULT <= 0`` 表示**无固定止盈**（趋势跟踪：持仓全靠因子反向出场），
+  与回测口径一致——回测层没有 SL/TP，设固定止盈会造成实盘与回测行为背离。
+  止损 3×ATR 比平台兜底的 2×ATR 更宽，减少噪音扫损。
 {% if has_gate %}
 * R1 保护：公式含 GATE 算子。GATE 在条件穿越 0 时会 O(1) 跳变，float32 归约误差
   可让符号在 ±1ULP 抖动，实盘表现为分支反复翻转。生成文件内置**死区滞回**
@@ -407,16 +409,20 @@ class {{ class_name }}({{ base_classes | join(", ") }}):
     SYMBOL = "{{ symbol }}"
 
     # ── ★ 风控参数（类属性，便于 tune / 人工复核）─────────────────────────
-    #: 硬止损距离 = ``SL_ATR_MULT × ATR``。默认 2.0 与平台自身兜底同比例。
+    #: 硬止损距离 = ``SL_ATR_MULT × ATR``。默认 3.0：比平台兜底的 2×ATR 更宽，
+    #: 减少噪音扫损（用户拍板，对齐回测口径）。
     SL_ATR_MULT = {{ sl_atr_mult }}
-    #: 止盈距离 = ``TP_ATR_MULT × ATR``；``0`` 表示**无固定止盈**（趋势跟踪）。
+    #: 止盈距离 = ``TP_ATR_MULT × ATR``；``<= 0`` 表示**无固定止盈**
+    #: （趋势跟踪，靠因子反向出场），与回测口径一致。
     TP_ATR_MULT = {{ tp_atr_mult }}
     #: 硬止损最小距离（价格单位）：ATR 极小时防止止损贴脸被噪音扫掉。
     MIN_SL_POINTS = {{ min_sl_points }}
     #: 止盈最小距离（价格单位）：ATR 极小时防止止盈贴脸。
-    #: **不复用 MIN_SL_POINTS**：否则 ATR→0 时两者地板相同，会把
-    #: ``TP/SL = TP_ATR_MULT:SL_ATR_MULT`` 的盈亏比压成 1:1。
-    #: 默认 = ``MIN_SL_POINTS × TP_ATR_MULT / SL_ATR_MULT``，维持同一比例。
+    #: **仅在 TP_ATR_MULT > 0 时生效**（``take_dist = max(...) if tp_mult > 0.0
+    #: else 0.0``）——TP 关闭时本值不参与任何计算。
+    #: 重新启用止盈时需按所选倍数重推导本值：建议 =
+    #: ``MIN_SL_POINTS × TP_ATR_MULT / SL_ATR_MULT`` 以保盈亏比（不得复用
+    #: MIN_SL_POINTS，否则 ATR→0 时两侧地板相同，盈亏比被压成 1:1）。
     MIN_TP_POINTS = {{ min_tp_points }}
     #: ATR 周期（与现网参考实现一致）。
     ATR_PERIOD = {{ atr_period }}
@@ -467,6 +473,12 @@ class {{ class_name }}({{ base_classes | join(", ") }}):
         回退信号。**注意**：``0.0`` 只对 athlete 算"没给"，对 ``_execute_order``
         却算"给了"——会用 ``sl=0`` 挂单。所以入场价非法时这里统一返回
         ``(None, None)``，**绝不返回 ``(0, 0)``**，让两条路径都走各自兜底。
+
+        **TP 关闭的刻意语义**（``TP_ATR_MULT <= 0``，默认即如此）：止盈返回
+        ``0.0`` 而不是 ``None`` —— 与 ``core.bridge.open_order(sl=0, tp=0)``
+        的"未提供"默认语义一致，``tp=0`` 即不设固定止盈（趋势跟踪，持仓全靠
+        因子反向平仓出场，与回测口径一致）。**只对 tp 用 0.0**；止损距离
+        永远是真实价格，非法入场时仍是 ``(None, None)``。
 
         ATR 取值优先级（**bar1 优先**，与因子口径一致）：
         ``atr_val`` → 已收盘 K 线自算 :meth:`_current_atr` → 平台指标缓存
@@ -521,12 +533,13 @@ class {{ class_name }}({{ base_classes | join(", ") }}):
         if atr <= 0.0 or not math.isfinite(atr):
             # ATR 完全不可得：退化成百分比距离。宁可止损离得远，也不给 0
             # （0 会被 athlete 判为"未提供"而改用硬编码 ATR=15）。
-            atr = price * 0.005  # 0.5% —— 与 ATR≈10 时的 2×ATR(≈0.46%) 同量级
+            atr = price * 0.005  # 0.5% —— 与 3×ATR 在 ATR≈price/600 时同量级
 
         stop_dist = max(atr * float(self.SL_ATR_MULT), float(self.MIN_SL_POINTS))
         tp_mult = float(self.TP_ATR_MULT)
         # 止盈地板用**独立的** MIN_TP_POINTS（不是 MIN_SL_POINTS），否则 ATR 极小时
-        # 止损/止盈贴脸同距，2:1 盈亏比被压成 1:1。
+        # 止损/止盈贴脸同距、盈亏比被压成 1:1（仅 TP_ATR_MULT > 0 时相关；
+        # TP 关闭时 take_dist 恒为 0，本值不参与计算）。
         take_dist = max(atr * tp_mult, float(self.MIN_TP_POINTS)) if tp_mult > 0.0 else 0.0
 
         if _is_buy_direction(direction):
