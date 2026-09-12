@@ -232,3 +232,36 @@ def test_exported_source_compiles(tmp_path: Path) -> None:
     target = tmp_path / result.filename
     target.write_text(result.source, encoding="utf-8")
     compile(target.read_text(encoding="utf-8"), str(target), "exec")
+
+
+def test_export_declares_dynamic_sl_tp_and_risk_params() -> None:
+    """导出文件必须实现动态 SL/TP，且风控参数是可调类属性（非内联字面量）。"""
+    source = _port().compile(_spec(AM_BEST)).source
+    assert "def get_dynamic_sl_tp(" in source
+    assert "SL_ATR_MULT = 2.0" in source
+    assert "TP_ATR_MULT = 4.0" in source
+    assert "MIN_SL_POINTS = 3.0" in source
+    assert "ATR_PERIOD = 14" in source
+    assert "_ATR_PERIOD = 14" in source
+
+
+def test_export_sl_tp_extra_params_have_defaults() -> None:
+    """第 3/4 个参数必须有默认值——引擎 ``main.py:1901/1953`` 只传 2 个位置参数。"""
+    source = _port().compile(_spec(AM_BEST)).source
+    assert "atr_val: float | None = None" in source
+    assert 'position_type: str = "entry"' in source
+
+
+def test_export_indicator_values_includes_atr() -> None:
+    """``indicator_values`` 必须带真实 ``atr``（平台兜底读的就是这个键）。"""
+    source = _port().compile(_spec(AM_BEST)).source
+    assert '"atr"' in source
+    assert "_atr_from_arrays" in source
+
+
+def test_non_gate_formula_also_gets_risk_contract() -> None:
+    """风控与 GATE 无关：不含 GATE 的公式同样要带 SL/TP 与真实 ATR。"""
+    source = _port().compile(_spec(SIMPLE)).source
+    assert "def get_dynamic_sl_tp(" in source
+    assert "SL_ATR_MULT = 2.0" in source
+    assert "_gate_protected" not in source
