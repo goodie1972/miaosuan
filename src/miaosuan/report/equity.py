@@ -9,7 +9,9 @@
 
 回测页要的是序列，所以这里**新增**一层产出层：复用 ``core`` 的既有语义
 （仓位映射、前瞻收益、成本模型、指标函数），只把"被丢弃的 pnl"接出来，
-**不修改 ``core`` 的任何已有返回值**。
+**不修改 ``core`` 的任何已有返回值**。成本计费与画像的
+:meth:`~miaosuan.market.profiles.FrozenMarketProfile.apply_cost` 同口径
+（**买卖分边**），非对称画像（A 股卖出印花税）下比 core 的单边标量更准。
 
 口径警告（务必遵守）
 --------------------
@@ -124,7 +126,7 @@ class BacktestRun:
         symbols: 全部品种名。
         timeframe: 周期标识。
         n_bars: 参与回测的 bar 数。
-        cost_rate: 使用的**单边**成本率（来自 :class:`CostModel`，非硬编码）。
+        cost_rate: 使用的**买入单边**成本率（来自 :class:`CostModel`，非硬编码）。
         periods_per_year: 年化因子（来自 :class:`FrozenMarketProfile`）。
         rolling_window: 滚动夏普窗口（bar 数）。
         times: ``[T]`` bar 时间戳。
@@ -136,6 +138,7 @@ class BacktestRun:
         trades: 交易级统计。
         trade_detail: 逐笔明细。
         total_return: 累计收益 = ``cumsum(portfolio_pnl)`` 末值。
+        cost_rate_sell: 卖出单边成本率（非对称画像下与 ``cost_rate`` 不同）。
     """
 
     symbol: str
@@ -154,6 +157,8 @@ class BacktestRun:
     trades: TradeStats
     trade_detail: tuple[Trade, ...] = field(default_factory=tuple)
     total_return: float = 0.0
+    #: 卖出单边成本率（非对称画像下与 ``cost_rate`` 不同；对称画像下相等）。
+    cost_rate_sell: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """序列化为 JSON 友好字典（序列降精度、``nan`` 转 ``None``）。"""
@@ -361,8 +366,8 @@ def run_full_backtest(
         factor    = StackVM().execute(tokens, features)            # [N, T]
         position  = tanh(factor)  （过中性带置 0）                  # [N, T]
         ret       = log(open[t+2] / open[t+1])                     # [N, T]
-        turnover  = |position - prev_position|                     # [N, T]
-        pnl       = position * ret - turnover * cost_rate          # [N, T]
+        pnl       = profile.apply_cost(position, ret)              # [N, T]
+                    = position*ret - (buy_rate·Δpos⁺ + sell_rate·Δpos⁻)
 
     Args:
         tokens: 因子 token 序列（来自 ``StrategySpec.payload.tokens``）。
@@ -396,15 +401,13 @@ def run_full_backtest(
         min_trade_exposure=float(neutral_band),
         long_only=bool(profile.long_only if long_only is None else long_only),
     )
-    prev_pos = np.roll(position, 1, axis=1)
-    prev_pos[:, 0] = 0.0
-    turnover = np.abs(position - prev_pos)
 
-    # 成本率取自画像的 CostModel（commission + slippage），**不硬编码**。
-    # 用 buy_rate（单边）：与 MT5Backtest.cost_rate 的标量口径一致 —— 换手
-    # |Δpos| 每次变动按单边计费，反转（+1→-1，turnover=2）自然付两次。
+    # 成本按**买卖分边**计费，直接复用画像的 apply_cost（与 core 的 ``Δpos⁺/Δpos⁻``
+    # 分边口径一致）。非对称画像（A 股卖出印花税）下，若用单边 buy_rate×总换手，
+    # 卖出腿会被按买入价计费 —— 曲线与门禁就会对不上。
+    pnl = np.asarray(profile.apply_cost(position, ret), dtype=np.float64)
+    # 报告口径：记录买入单边率（对称画像下即单边成本率）；卖出率见 ``to_payload``。
     cost_rate = float(profile.cost_model.buy_rate())
-    pnl = position * ret - turnover * cost_rate
 
     periods_per_year = int(profile.bars_per_year)
     window = (
@@ -445,6 +448,7 @@ def run_full_backtest(
         trades=summarize_trades(trades),
         trade_detail=trades,
         total_return=float(portfolio_pnl.sum()),
+        cost_rate_sell=float(profile.cost_model.sell_rate()),
     )
 
 
@@ -484,10 +488,12 @@ def to_payload(result: BacktestRun, *, max_trades: int = 200) -> dict[str, Any]:
             "timeframe": result.timeframe,
             "n_bars": result.n_bars,
             "cost_rate": result.cost_rate,
+            "cost_rate_sell": result.cost_rate_sell,
             "periods_per_year": result.periods_per_year,
             "rolling_window": result.rolling_window,
             # 口径声明：页面必须照此标注，禁止把 val_score 当绩效展示。
-            "caliber": "逐 bar 净收益 = position*ret - turnover*cost_rate；"
+            "caliber": "逐 bar 净收益 = position*ret - (buy_rate·Δpos⁺ + sell_rate·Δpos⁻)"
+                       "（买卖分边计费，同 profile.apply_cost）；"
                        "Sharpe/Sortino 由该序列算出，与 val_score（搜索适应度）无关",
         },
         "summary": {

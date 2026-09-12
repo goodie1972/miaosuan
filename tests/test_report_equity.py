@@ -24,7 +24,7 @@ from miaosuan.core.signal import MIN_TRADE_EXPOSURE, compute_target_positions_st
 from miaosuan.core.vm import StackVM
 from miaosuan.data.panel import Panel
 from miaosuan.errors import MiaoSuanError
-from miaosuan.market.profiles import FOREX_XAUUSD
+from miaosuan.market.profiles import CN_EQUITY_RESEARCH, FOREX_XAUUSD
 from miaosuan.report.equity import (
     compute_drawdown,
     compute_equity_curve,
@@ -107,6 +107,42 @@ def test_cost_rate_comes_from_profile_not_hardcoded() -> None:
     assert costly.cost_rate == pytest.approx(0.0003)
     # turnover ≥ 0，因此零成本的逐 bar 净收益必然 ≥ 有成本时
     assert result.total_return >= costly.total_return
+
+
+def test_cost_is_split_sides_matching_apply_cost() -> None:
+    """成本必须**买卖分边**（与 ``profile.apply_cost`` 同口径）——回归 B3。
+
+    旧实现用单边 ``buy_rate × 总换手``；非对称画像（A 股卖出印花税）下卖出腿会被
+    按买入价计费。这里用 CN_EQUITY_RESEARCH（asymmetric=True，含 sell_tax）验证：
+    净收益 == ``apply_cost`` 分边口径，且**不等于**单边标量口径。
+    """
+    panel = _panel()
+    result = run_full_backtest(TOKENS, panel, CN_EQUITY_RESEARCH)
+
+    factor = np.asarray(
+        StackVM().execute(list(TOKENS), compute_features(panel.to_raw_dict())), dtype=np.float64
+    )
+    ret = np.asarray(compute_target_ret(panel.open), dtype=np.float64)
+    n_bars = min(factor.shape[1], ret.shape[1])
+    position = compute_target_positions_stateless(
+        factor[:, :n_bars],
+        min_trade_exposure=MIN_TRADE_EXPOSURE,
+        long_only=CN_EQUITY_RESEARCH.long_only,
+    )
+    ret = ret[:, :n_bars]
+
+    # 分边口径（正确）
+    split = CN_EQUITY_RESEARCH.apply_cost(position, ret).mean(axis=0)
+    np.testing.assert_allclose(result.portfolio_pnl, split, rtol=0.0, atol=1e-12)
+    # 非对称画像：卖出率 > 买入率
+    assert result.cost_rate_sell is not None
+    assert result.cost_rate_sell > result.cost_rate
+    # 单边标量口径（旧实现）——必须**不同**，否则 B3 白修
+    prev = np.roll(position, 1, axis=1)
+    prev[:, 0] = 0.0
+    turnover = np.abs(position - prev)
+    scalar = (position * ret - turnover * result.cost_rate).mean(axis=0)
+    assert not np.allclose(result.portfolio_pnl, scalar, rtol=0.0, atol=1e-12)
 
 
 def test_equity_curve_and_drawdown() -> None:
