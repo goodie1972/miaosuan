@@ -368,6 +368,19 @@ def test_index_html_is_single_file_zero_cdn_dual_theme() -> None:
     assert "不是绩效指标" in html or "不是绩效" in html
 
 
+def test_index_html_has_no_inline_onclick_filename_injection() -> None:
+    """回归 B4：文件名不得拼进 ``onclick`` 的 JS 字符串上下文（注入风险）。
+
+    ``onclick="loadSpecByName('<file>')"`` 里，HTML 转义（``&#39;``）会被浏览器在
+    解析 attribute 时**先解码再交给 JS 引擎**，文件名里的引号因此能逃出字符串 →
+    注入。改为 ``data-file`` + 事件委托（``getAttribute``）后不存在该上下文。
+    """
+    html = server._INDEX_HTML.read_text(encoding="utf-8")
+    assert 'onclick="loadSpecByName' not in html
+    assert "data-file=" in html
+    assert 'closest("button[data-file]")' in html
+
+
 # ── 03 实时页：只读代理端点 ────────────────────────────────────────────────
 #
 # 红线（用户明确要求，且其 MT4 正在跑实盘）：**只读，绝不下单**。
