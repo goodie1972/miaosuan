@@ -259,6 +259,42 @@ def test_specs_surfaces_symbol_and_timeframe(app: Any, tmp_path: Any) -> None:
     assert row["timeframe"] == "H1"
 
 
+def test_history_endpoint_returns_real_points(app: Any, tmp_path: Any) -> None:
+    """/api/history 回传 sidecar 原文，供训练曲线画真实逐代曲线。"""
+    (tmp_path / "spec_1.history.json").write_text(
+        json.dumps({
+            "version": 1,
+            "spec": "artifacts/spec_1.json",
+            "budget": "quick",
+            "stop_reason": "MAX_GENERATIONS",
+            "generations": 2,
+            "n_evaluations": 20,
+            "points": [
+                {"generation": 0, "best": 1.0, "mean": 0.5, "diversity": 0.4, "n_evaluations": 10},
+                {"generation": 1, "best": 2.0, "mean": 1.0, "diversity": 0.3, "n_evaluations": 20},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    status, data = _call(app, "GET", "/api/history?name=spec_1.history.json")
+    assert status == 200
+    assert len(data["points"]) == 2
+    assert data["points"][-1]["best"] == 2.0
+
+
+def test_history_endpoint_404_for_missing_file(app: Any) -> None:
+    """没有对应 sidecar → 404（前端按"无历史"降级，不报错）。"""
+    status, data = _call(app, "GET", "/api/history?name=__nope__.history.json")
+    assert status == 404
+    assert "不存在" in data["detail"]
+
+
+def test_history_endpoint_rejects_traversal(app: Any) -> None:
+    """路径穿越必须被挡（与 /api/inspect 同一套约束）。"""
+    status, _ = _call(app, "GET", "/api/history?name=..%2F..%2Fpyproject.toml")
+    assert status in (400, 404)
+
+
 # ── 静态页面：单文件 + 零 CDN + 双主题（防止后来人引入外链或砍掉浅色）────────
 
 def test_index_html_is_single_file_zero_cdn_dual_theme() -> None:
@@ -284,3 +320,7 @@ def test_index_html_is_single_file_zero_cdn_dual_theme() -> None:
     # 三步导航：挖掘 / 回测 / 实时
     for step in ("01", "02", "03"):
         assert step in html
+    # 训练曲线：真实逐代历史 + 无历史时的优雅降级（不能画空图 / 不能报错）
+    assert "renderCurve" in html
+    assert "暂无逐代历史" in html
+    assert "/api/history" in html

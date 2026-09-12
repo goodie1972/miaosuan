@@ -167,6 +167,8 @@ class MineJob:
 
     id: str
     spec_out: str
+    #: 逐代历史 sidecar 名（相对 artifacts，由 CLI 按 --out 派生）。
+    history_out: str
     args: list[str]
     proc: subprocess.Popen[str]
     lines: list[str] = field(default_factory=list)
@@ -229,7 +231,15 @@ class _JobManager:
             errors="replace",
             cwd=str(_REPO_ROOT),
         )
-        job = MineJob(id=uuid.uuid4().hex[:8], spec_out=spec_out.name, args=args, proc=proc)
+        # 逐代历史 sidecar 路径必须与 CLI 的派生规则一致（<out stem>.history.json）。
+        history_out = spec_out.with_suffix(".history.json").name
+        job = MineJob(
+            id=uuid.uuid4().hex[:8],
+            spec_out=spec_out.name,
+            history_out=history_out,
+            args=args,
+            proc=proc,
+        )
         threading.Thread(target=job.pump, daemon=True).start()
         self._job = job
         return job
@@ -438,7 +448,14 @@ def create_app() -> FastAPI:
     def job_status(offset: int = 0) -> dict[str, Any]:
         job = _jobs.job
         if job is None:
-            return {"running": False, "lines": [], "total": 0, "returncode": None, "spec_out": ""}
+            return {
+                "running": False,
+                "lines": [],
+                "total": 0,
+                "returncode": None,
+                "spec_out": "",
+                "history_out": "",
+            }
         with job.lock:
             lines = job.lines[offset:]
             total = len(job.lines)
@@ -449,7 +466,27 @@ def create_app() -> FastAPI:
             "total": total,
             "returncode": returncode,
             "spec_out": job.spec_out,
+            "history_out": job.history_out,
         }
+
+    @app.get("/api/history")
+    def read_history(name: str) -> dict[str, Any]:
+        """读取一次挖掘的逐代历史 sidecar（供训练曲线画图）。
+
+        Args:
+            name: artifacts 下的 sidecar 文件名（如 ``spec_20260912_101530.history.json``）。
+
+        Returns:
+            sidecar 原文（``points`` 为空列表表示本次无历史，前端优雅降级）。
+        """
+        path = _safe_name(name, suffixes={".json"})
+        try:
+            payload: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=f"历史文件解析失败：{exc}") from exc
+        if not isinstance(payload, dict) or not isinstance(payload.get("points"), list):
+            raise HTTPException(status_code=400, detail=f"历史文件格式不正确：{name}")
+        return payload
 
     # ── 导出与校验（同步子进程，秒级返回）────────────────────────────────
     def _run_sync(args: list[str]) -> tuple[int, str]:
