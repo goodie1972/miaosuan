@@ -44,23 +44,29 @@ DEFAULT_TEMPLATE: str = "factor_kernel_v1.py.j2"
 _TEMPLATE_DIR: Path = Path(__file__).resolve().parent / "templates"
 
 # ── 导出策略的默认风控参数（渲染成可调类属性）────────────────────────────────
-#: 硬止损距离 = ``SL_ATR_MULT × ATR``。取 **2.0**，与平台自身兜底
-#: （``athlete.py:114-115``：``price ∓ atr*2``）**同比例**——这样即使我们的
-#: `get_dynamic_sl_tp` 万一没被调用，平台回退出的止损位置也完全一致。
-SL_ATR_MULT: float = 2.0
+#: 硬止损距离 = ``SL_ATR_MULT × ATR``。取 **3.0**（用户拍板）：比平台自身兜底
+#: （``athlete.py:114-115``：``price ∓ atr*2``）更宽，减少噪音扫损。
+#: 注意与平台兜底**不再同比例**——我们的 ATR 是真实值（已收盘 K 线自算），
+#: 即使兜底路径被触发，止损位置也仅是平台自己的回退，不影响我们的单子。
+SL_ATR_MULT: float = 3.0
 
-#: 止盈距离 = ``TP_ATR_MULT × ATR``。取 **4.0**，同样对齐平台兜底
-#: （``athlete.py:115``：``price ± atr*4``）。设为 ``0`` 即无固定止盈（趋势跟踪）。
-TP_ATR_MULT: float = 4.0
+#: 止盈距离 = ``TP_ATR_MULT × ATR``。取 **0.0 = 无固定止盈**（趋势跟踪：
+#: 持仓全靠因子反向平仓出场）。与回测口径一致——回测层（``report/equity.py``）
+#: 没有 SL/TP，设固定止盈反而会造成实盘与回测行为背离。
+#: ``0`` 是 ``core.bridge.open_order(sl=0, tp=0)`` 的"未提供"默认语义，
+#: **不要改成 ``None``**（``None`` 会绕过 athlete 的取值链）。
+TP_ATR_MULT: float = 0.0
 
 #: 硬止损最小距离（价格单位）：ATR 极小时防止止损贴脸被噪音扫掉。
 #: 取自现网参考实现 ``strategies/20260909_h1_alphagate_v1.MIN_SL_POINTS``。
 MIN_SL_POINTS: float = 3.0
 
 #: 止盈最小距离（价格单位）：ATR 极小时防止止盈贴脸。
-#: **不能复用** :data:`MIN_SL_POINTS` —— 否则 ATR→0 时止损与止盈地板相同，
-#: 会把设计的 ``TP/SL = 2:1`` 盈亏比压成 ``1:1``。按同一比例推导：
-#: ``MIN_SL_POINTS × TP_ATR_MULT / SL_ATR_MULT``（默认 3×4/2 = 6.0，维持 2:1）。
+#: **仅在 ``TP_ATR_MULT > 0`` 时生效**（``take_dist = max(...) if tp_mult > 0.0
+#: else 0.0``）——TP 默认关闭后本值不参与任何计算，推导结果为 ``0.0``。
+#: **重新启用止盈时需按所选倍数重推导本值**（建议 =
+#: ``MIN_SL_POINTS × TP_ATR_MULT / SL_ATR_MULT`` 以保盈亏比，且不得复用
+#: ``MIN_SL_POINTS``——否则 ATR→0 时两侧地板相同，盈亏比被压成 1:1）。
 MIN_TP_POINTS: float = (
     MIN_SL_POINTS * TP_ATR_MULT / SL_ATR_MULT if SL_ATR_MULT > 0.0 else MIN_SL_POINTS
 )

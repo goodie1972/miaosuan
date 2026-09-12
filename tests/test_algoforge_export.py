@@ -235,19 +235,28 @@ def test_exported_source_compiles(tmp_path: Path) -> None:
 
 
 def test_export_declares_dynamic_sl_tp_and_risk_params() -> None:
-    """导出文件必须实现动态 SL/TP，且风控参数是可调类属性（非内联字面量）。"""
+    """导出文件必须实现动态 SL/TP，且风控参数是可调类属性（非内联字面量）。
+
+    用户拍板：SL=3×ATR、无固定止盈（``TP_ATR_MULT=0``，对齐回测口径）。
+    ``MIN_TP_POINTS`` 随推导公式变为 0.0（仅 ``TP_ATR_MULT>0`` 时生效）。
+    """
     source = _port().compile(_spec(AM_BEST)).source
     assert "def get_dynamic_sl_tp(" in source
-    assert "SL_ATR_MULT = 2.0" in source
-    assert "TP_ATR_MULT = 4.0" in source
+    assert "SL_ATR_MULT = 3.0" in source
+    assert "TP_ATR_MULT = 0.0" in source
     assert "MIN_SL_POINTS = 3.0" in source
-    assert "MIN_TP_POINTS = 6.0" in source
+    assert "MIN_TP_POINTS = 0.0" in source
     assert "ATR_PERIOD = 14" in source
     assert "_ATR_PERIOD = 14" in source
 
 
 def test_min_tp_points_is_independent_and_scales_with_ratio() -> None:
-    """C1：止盈地板必须**独立**于止损地板，且按 TP:SL 倍率等比缩放（保住 2:1）。"""
+    """C1：止盈地板必须**独立**于止损地板，且按 TP:SL 倍率等比缩放。
+
+    导出默认 ``TP_ATR_MULT=0``（无固定止盈），推导值 ``MIN_TP_POINTS=0.0``
+    不参与计算（``take_dist`` 恒为 0）；这里只断言**比例关系**成立——
+    将来重新启用止盈时按该公式重推导即可保住盈亏比。
+    """
     from miaosuan.adapters.algoforge.generator import (
         MIN_SL_POINTS,
         MIN_TP_POINTS,
@@ -255,11 +264,14 @@ def test_min_tp_points_is_independent_and_scales_with_ratio() -> None:
         TP_ATR_MULT,
     )
 
-    assert MIN_TP_POINTS > MIN_SL_POINTS
+    assert TP_ATR_MULT == 0.0  # TP 默认关闭
+    # 比例断言（非绝对值）：MIN_TP_POINTS 严格按 MIN_SL × TP/SL 倍率推导
     assert pytest.approx(MIN_SL_POINTS * TP_ATR_MULT / SL_ATR_MULT) == MIN_TP_POINTS
     source = _port().compile(_spec(AM_BEST)).source
     assert f"MIN_TP_POINTS = {MIN_TP_POINTS}" in source
     assert "float(self.MIN_TP_POINTS)" in source  # 止盈地板用的是 TP 常量，不是 SL
+    # TP 关闭时地板不参与计算：take_dist 恒为 0
+    assert "if tp_mult > 0.0 else 0.0" in source
 
 
 def test_export_sl_tp_extra_params_have_defaults() -> None:
@@ -280,5 +292,5 @@ def test_non_gate_formula_also_gets_risk_contract() -> None:
     """风控与 GATE 无关：不含 GATE 的公式同样要带 SL/TP 与真实 ATR。"""
     source = _port().compile(_spec(SIMPLE)).source
     assert "def get_dynamic_sl_tp(" in source
-    assert "SL_ATR_MULT = 2.0" in source
+    assert "SL_ATR_MULT = 3.0" in source
     assert "_gate_protected" not in source
