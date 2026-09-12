@@ -81,6 +81,30 @@ def test_magic_is_rendered_as_bare_int_not_string() -> None:
     assert "STRATEGY_MAGIC = '" not in source
 
 
+def test_strategy_declares_name_equal_to_pool_key() -> None:
+    """P0 回归：策略类必须声明 ``name``，且等于策略名（STRATEGY_POOL 的 key）。
+
+    依据（已核 AlgoForge 源码，非转述）：
+      docs/strategy_dev_guide.md:28   ``name = "my_strategy"  # settings.STRATEGY_POOL 的 key``
+      engine_standalone/main.py:106   ``cls = scan_strategies().get(name)``
+      engine_standalone/main.py:529   同上；查不到就 ``Unknown strategy, skip``
+      strategies/scanner.py:94-96     字典 key 取自 ``getattr(cls, "name", None)``
+      strategies/base.py:20           基类默认 ``name = "base"``
+
+    不声明 name 时签名 / 继承 / magic 全对也不加载 —— 基类默认值顶不上池 key。
+    """
+    source = _port().compile(_spec()).source
+    assert '    name = "h1_xauusd_miaosuan"' in source, (
+        "策略类必须声明 name 类属性，且等于 STRATEGY_POOL 的 key"
+    )
+
+
+def test_strategy_name_is_not_the_base_default() -> None:
+    """``name`` 不能是基类默认的 ``"base"``（那样池里查不到，等于没写）。"""
+    source = _port().compile(_spec()).source
+    assert 'name = "base"' not in source
+
+
 def test_required_constants_present() -> None:
     source = _port().compile(_spec()).source
     for name in REQUIRED_CONSTANTS:

@@ -320,6 +320,22 @@ def test_exported_class_is_concrete_not_abstract(tmp_path: Path, algoforge_stubs
     assert "MT4BridgeBase" not in _path.read_text(encoding="utf-8")
 
 
+def test_class_name_attribute_matches_strategy_name(
+    tmp_path: Path, algoforge_stubs: None
+) -> None:
+    """P0 回归：运行期的 ``cls.name`` 必须是策略名，而不是基类默认的 ``"base"``。
+
+    源码里有 ``name = "x"`` 还不够，得确认运行期真的取得到 —— 引擎用
+    ``scan_strategies().get(name)`` 查的是**类属性值**。
+    """
+    module, _path = _export_module(FORMULAS["am_best"], tmp_path, "nameattr")
+    cls = _exported_strategy_class(module)
+    assert cls.name == "fidelity_probe", f"cls.name={cls.name!r}，应为策略名"
+    assert cls.name != "base", "name 落到了基类默认值，池里查不到"
+    # 与 STRATEGY_NAME / 模块级常量同源，不能各写各的
+    assert cls.name == module.STRATEGY_NAME
+
+
 def test_exported_class_inherits_only_base_strategy(
     tmp_path: Path, algoforge_stubs: None
 ) -> None:
