@@ -34,6 +34,7 @@ from miaosuan.report.equity import (
     summarize_trades,
     to_payload,
 )
+from miaosuan.report.metrics import sharpe
 from miaosuan.search.mine import compute_target_ret
 
 TOKENS: tuple[int, ...] = (33, 62, 3, 87, 72, 119, 73, 103)
@@ -140,6 +141,59 @@ def test_rolling_sharpe_warmup_is_nan_and_no_inf() -> None:
     # 样本短于窗口 → 全 nan（前端走空状态）
     short = compute_rolling_sharpe(np.array([0.1, 0.2]), window=10, periods_per_year=6240)
     assert all(math.isnan(v) for v in short)
+
+
+def test_rolling_sharpe_constant_segments_do_not_explode() -> None:
+    """拼接常数段不得把滚动夏普放大成天文数字（回归 B1）。
+
+    旧实现（全局中心化 + ``E[x²]−E[x]²``）在**常数窗口**上发生灾难性抵消：实测
+    该序列 ``window=520``、``ppy=8760`` 时 max|S|≈2.3e9，峰值恰好落在一个 ptp=0
+    的常数窗口上。改为逐窗 ``var(ddof=1)`` 后常数窗口精确为 0，整段不再爆炸。
+    """
+    arr = np.concatenate([np.full(1000, 0.005), np.full(1000, 0.001)])
+    window = 520
+
+    out = compute_rolling_sharpe(arr, window=window, periods_per_year=1)
+    # 完全落在同一常数段内的窗口 → 精确 0（不是 1e9，也不是 inf/nan）
+    for i in range(window - 1, 1000):          # 第一段 0.005 内的满窗
+        assert out[i] == 0.0, (i, out[i])
+    for i in range(1000 + window - 1, 2000):   # 第二段 0.001 内的满窗
+        assert out[i] == 0.0, (i, out[i])
+    # 验收：整段 max|S| < 100（ppy=1，隔离年化因子、只测数值稳健性）
+    assert float(np.nanmax(np.abs(out))) < 100.0
+    # 真实年化因子下也不再是 2.3e9 那种量级（远小于旧的爆炸值）
+    out_real = compute_rolling_sharpe(arr, window=window, periods_per_year=8760)
+    assert float(np.nanmax(np.abs(out_real))) < 1e4
+
+
+def test_rolling_sharpe_matches_per_window_reference() -> None:
+    """与逐窗 ``np.std(ddof=1)`` 朴素参考实现逐点一致（max|Δ| < 1e-9）。"""
+    rng = np.random.default_rng(11)
+    arr = np.concatenate(
+        [rng.normal(0.0, 0.01, 300), np.full(50, 0.004), rng.normal(0.0, 0.02, 250)]
+    )
+    window, ppy = 30, 6240
+    out = compute_rolling_sharpe(arr, window=window, periods_per_year=ppy)
+
+    ref = np.full(arr.size, np.nan)
+    for i in range(window - 1, arr.size):
+        w = arr[i - window + 1 : i + 1]
+        std = float(w.std(ddof=1))
+        ref[i] = 0.0 if std < 1e-12 else float(w.mean() / std * math.sqrt(ppy))
+
+    assert np.array_equal(np.isnan(out), np.isnan(ref))
+    finite = ~np.isnan(out)
+    assert float(np.max(np.abs(out[finite] - ref[finite]))) < 1e-9
+
+
+def test_rolling_sharpe_ddof_matches_metrics_sharpe() -> None:
+    """任一满窗的滚动值 == ``metrics.sharpe(该窗口)``（ddof=1 口径对齐）。"""
+    rng = np.random.default_rng(5)
+    arr = rng.normal(0.001, 0.01, size=200)
+    window, ppy = 25, 6240
+    out = compute_rolling_sharpe(arr, window=window, periods_per_year=ppy)
+    i = 137
+    assert out[i] == pytest.approx(sharpe(arr[i - window + 1 : i + 1], ppy))
 
 
 def test_extract_trades_splits_on_direction_flip() -> None:
