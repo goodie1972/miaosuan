@@ -241,8 +241,25 @@ def test_export_declares_dynamic_sl_tp_and_risk_params() -> None:
     assert "SL_ATR_MULT = 2.0" in source
     assert "TP_ATR_MULT = 4.0" in source
     assert "MIN_SL_POINTS = 3.0" in source
+    assert "MIN_TP_POINTS = 6.0" in source
     assert "ATR_PERIOD = 14" in source
     assert "_ATR_PERIOD = 14" in source
+
+
+def test_min_tp_points_is_independent_and_scales_with_ratio() -> None:
+    """C1：止盈地板必须**独立**于止损地板，且按 TP:SL 倍率等比缩放（保住 2:1）。"""
+    from miaosuan.adapters.algoforge.generator import (
+        MIN_SL_POINTS,
+        MIN_TP_POINTS,
+        SL_ATR_MULT,
+        TP_ATR_MULT,
+    )
+
+    assert MIN_TP_POINTS > MIN_SL_POINTS
+    assert pytest.approx(MIN_SL_POINTS * TP_ATR_MULT / SL_ATR_MULT) == MIN_TP_POINTS
+    source = _port().compile(_spec(AM_BEST)).source
+    assert f"MIN_TP_POINTS = {MIN_TP_POINTS}" in source
+    assert "float(self.MIN_TP_POINTS)" in source  # 止盈地板用的是 TP 常量，不是 SL
 
 
 def test_export_sl_tp_extra_params_have_defaults() -> None:
