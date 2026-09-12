@@ -272,6 +272,13 @@ class VerifyRequest(BaseModel):
     data: str = ""
 
 
+class BacktestRequest(BaseModel):
+    spec: str
+    data: str
+    market: str = ""
+    rolling_window: int = 0
+
+
 # ── App ──────────────────────────────────────────────────────────────────────
 
 def create_app() -> FastAPI:
@@ -507,6 +514,74 @@ def create_app() -> FastAPI:
             args += ["--gate-deadband", str(req.gate_deadband)]
         code, output = _run_sync(args)
         return {"returncode": code, "output": output}
+
+    @app.post("/api/backtest")
+    def run_backtest(req: BacktestRequest) -> dict[str, Any]:
+        """跑一次全样本回测（子进程调 CLI，沿用既定架构）。
+
+        结果同时落盘成 ``artifacts/backtest_<ts>.json`` 便于追溯，并直接回传
+        给前端画图。
+
+        Args:
+            req: 含 spec 文件名、行情路径、可选市场画像与滚动窗口。
+
+        Returns:
+            回测结果 dict（``meta`` / ``summary`` / ``series`` / ``trades``）。
+        """
+        spec_path = _safe_name(req.spec, suffixes={".json"})
+        _ARTIFACTS.mkdir(parents=True, exist_ok=True)
+        stamp = time.strftime("%Y%m%d_%H%M%S")
+        out_path = _ARTIFACTS / f"backtest_{stamp}.json"
+        args = [
+            "backtest",
+            "--spec",
+            str(spec_path),
+            "--data",
+            req.data,
+            "--out",
+            str(out_path),
+        ]
+        if req.market:
+            args += ["--market", req.market]
+        if req.rolling_window:
+            args += ["--rolling-window", str(req.rolling_window)]
+        code, output = _run_sync(args)
+        if code != 0:
+            raise HTTPException(status_code=400, detail=f"回测失败（code={code}）：\n{output}")
+        if not out_path.is_file():
+            raise HTTPException(status_code=500, detail=f"回测未产出结果文件：{out_path.name}")
+        payload: dict[str, Any] = json.loads(out_path.read_text(encoding="utf-8"))
+        payload["output"] = output
+        payload["file"] = out_path.name
+        return payload
+
+    @app.get("/api/backtests")
+    def list_backtests() -> list[dict[str, Any]]:
+        """列出历史回测结果（按修改时间倒序）。"""
+        out: list[dict[str, Any]] = []
+        if not _ARTIFACTS.is_dir():
+            return out
+        for path in sorted(
+            _ARTIFACTS.glob("backtest_*.json"), key=lambda p: p.stat().st_mtime, reverse=True
+        ):
+            try:
+                payload: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            meta = payload["meta"] if isinstance(payload.get("meta"), dict) else {}
+            summary = payload["summary"] if isinstance(payload.get("summary"), dict) else {}
+            out.append(
+                {
+                    "file": path.name,
+                    "mtime": path.stat().st_mtime,
+                    "symbol": str(meta.get("symbol", "")),
+                    "timeframe": str(meta.get("timeframe", "")),
+                    "n_bars": int(meta.get("n_bars", 0) or 0),
+                    "sharpe": float(summary.get("sharpe", 0.0) or 0.0),
+                    "total_return": float(summary.get("total_return", 0.0) or 0.0),
+                }
+            )
+        return out
 
     @app.post("/api/verify")
     def verify(req: VerifyRequest) -> dict[str, Any]:

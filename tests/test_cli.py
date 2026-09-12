@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 from typer.testing import CliRunner
 
@@ -136,6 +137,75 @@ def test_write_history_creates_sidecar_json(tmp_path: Path) -> None:
     data = json.loads(target.read_text(encoding="utf-8"))
     assert data["version"] == 1
     assert [p["generation"] for p in data["points"]] == [0, 1, 2]
+
+
+def _csv(tmp_path: Path, n: int = 400, name: str = "XAUUSD_H1.csv") -> Path:
+    """造一份可加载的 CSV 行情（确定性随机游走）。"""
+    import pandas as pd
+
+    rng = np.random.default_rng(11)
+    steps = rng.normal(0.0, 0.002, size=n)
+    close = 2000.0 * np.exp(np.cumsum(steps))
+    open_ = np.roll(close, 1)
+    open_[0] = close[0]
+    frame = pd.DataFrame(
+        {
+            "time": 1_700_000_000 + np.arange(n) * 3600,
+            "open": open_,
+            "high": np.maximum(open_, close) * 1.001,
+            "low": np.minimum(open_, close) * 0.999,
+            "close": close,
+            "volume": np.full(n, 1000.0),
+        }
+    )
+    path = tmp_path / name
+    frame.to_csv(path, index=False)
+    return path
+
+
+def test_backtest_command_writes_result(tmp_path: Path, spec_file: Path) -> None:
+    """``backtest`` 必须产出**可解析**的结果 JSON，且带口径提醒。"""
+    data = _csv(tmp_path)
+    out = tmp_path / "bt.json"
+    result = runner.invoke(
+        app,
+        ["backtest", "--spec", str(spec_file), "--data", str(data), "--out", str(out)],
+    )
+    assert result.exit_code == 0, result.output
+    assert out.is_file()
+
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload["meta"]["symbol"] == "XAUUSD"
+    assert payload["meta"]["n_bars"] == 400
+    # 成本率来自画像 CostModel，不是硬编码
+    assert payload["meta"]["cost_rate"] == pytest.approx(0.0003)
+    assert payload["series"]["equity"][0] == pytest.approx(1.0)
+    assert len(payload["series"]["equity"]) == 400
+    # 页面上绝不能把 val_score 当绩效：summary 里不该出现它
+    assert "val_score" not in payload["summary"]
+    assert "口径提醒" in result.output
+    assert "不是绩效" in result.output
+
+
+def test_backtest_rejects_non_factor_payload(tmp_path: Path) -> None:
+    """非因子载荷（参数型）要明确报错，而不是回测出一条假曲线。"""
+    from miaosuan.ir.schema import ParamPayload, Provenance, Semantics
+
+    spec = StrategySpec(
+        name="param_only",
+        payload=ParamPayload(template_id="tpl_demo", params={"a": 1.0}),
+        semantics=Semantics(),
+        provenance=Provenance(git_sha="ce83c09", data_fingerprint="deadbeefcafe", seed=42),
+    )
+    spec_file = tmp_path / "param_spec.json"
+    write_spec(spec_file, spec)
+
+    result = runner.invoke(
+        app,
+        ["backtest", "--spec", str(spec_file), "--data", str(_csv(tmp_path, n=50))],
+    )
+    assert result.exit_code == 1
+    assert "不是因子" in result.output
 
 
 def test_help_lists_all_subcommands() -> None:
