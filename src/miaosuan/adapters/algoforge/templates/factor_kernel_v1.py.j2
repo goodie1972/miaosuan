@@ -304,6 +304,12 @@ class {{ class_name }}({{ base_classes | join(", ") }}):
     """
 
     # ── 身份 ───────────────────────────────────────────────────────────────
+    #: **引擎加载主键**（docs/strategy_dev_guide.md:28）：必须等于
+    #: ``settings.STRATEGY_POOL`` 的 key。引擎用 ``scan_strategies().get(name)``
+    #: 查表（main.py:106 / main.py:529），而 scanner 取的是 ``cls.name``；
+    #: 基类默认值是 ``"base"``，不声明就会被判为 Unknown strategy 直接跳过 ——
+    #: 签名 / 继承 / magic 全对也照样不加载。
+    name = "{{ name }}"
     STRATEGY_MAGIC = STRATEGY_MAGIC
     STRATEGY_NAME = STRATEGY_NAME
     STRATEGY_VERSION = STRATEGY_VERSION
