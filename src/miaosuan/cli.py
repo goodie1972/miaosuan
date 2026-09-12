@@ -38,15 +38,18 @@ from .adapters.algoforge.lint import lint_source
 from .adapters.base import install_stub_modules, uninstall_stub_modules
 from .config import AppConfig
 from .core.features import compute_features
+from .core.signal import MIN_TRADE_EXPOSURE
 from .core.vm import StackVM
 from .data.loader import load
 from .errors import MiaoSuanError
 from .ir.codec import read_spec, write_spec
 from .ir.provenance import resolve_git_sha
 from .ir.schema import FactorPayload, StrategySpec
+from .market.profiles import get_profile
 from .pipeline import run_mine
+from .report.equity import run_full_backtest
 
-__all__ = ["app", "export", "mine", "report", "ui", "verify"]
+__all__ = ["app", "backtest", "export", "mine", "report", "ui", "verify"]
 
 app = typer.Typer(
     add_completion=False,
@@ -390,6 +393,89 @@ def report(
     _echo(f"种子      ：{provenance.seed}")
     _echo(f"市场/预算 ：{provenance.market} / {provenance.budget}")
     _echo(f"生成时刻  ：{provenance.created_at}")
+
+
+# ── backtest ────────────────────────────────────────────────────────────────
+@app.command()
+def backtest(
+    spec_path: str = typer.Option(..., "--spec", help="StrategySpec JSON 路径"),
+    data: str = typer.Option(..., "--data", help="行情数据文件（parquet / csv）"),
+    market: str = typer.Option("", "--market", help="市场画像名（缺省按数据自带 profile）"),
+    rolling_window: int = typer.Option(0, "--rolling-window", help="滚动夏普窗口（0 = 按年化 bar 数的 1/12）"),
+    out: str = typer.Option("", "--out", help="回测结果 JSON 输出路径（缺省不落盘）"),
+) -> None:
+    """全样本回测：tokens + 行情 + 画像 → 逐 bar 资金曲线 / 滚动夏普 / 交易统计。
+
+    ⚠ 口径：这里的 Sharpe / Sortino 由**逐 bar 净收益**算出；
+    ``spec.evidence.val_score`` 是搜索适应度（复合评分），**不是绩效**，
+    本命令不读它、页面也不得把它当收益展示。
+    """
+    try:
+        spec = read_spec(spec_path)
+    except (MiaoSuanError, FileNotFoundError, OSError, ValueError) as exc:
+        _die(f"无法读取 spec 文件 {spec_path!r}：{exc}")
+    # 用正向 isinstance 收窄（``_die`` 的返回类型不是 NoReturn，负向收窄不生效）。
+    factor_payload = spec.payload
+    tokens: tuple[int, ...] = ()
+    if isinstance(factor_payload, FactorPayload):
+        tokens = tuple(factor_payload.tokens)
+    else:
+        _die(f"spec 载荷不是因子（{type(factor_payload).__name__}），无法回测")
+
+    try:
+        panel = load(data)
+    except (MiaoSuanError, FileNotFoundError, OSError, ValueError) as exc:
+        _die(f"无法加载行情数据 {data!r}：{exc}")
+
+    profile_name = market or panel.market_profile_name or spec.provenance.market
+    if not profile_name:
+        _die("无法确定市场画像：请用 --market 指定，或确保数据自带 profile")
+    try:
+        profile = get_profile(profile_name)
+    except (KeyError, ValueError) as exc:
+        _die(f"未知市场画像 {profile_name!r}：{exc}")
+
+    try:
+        result = run_full_backtest(
+            tokens,
+            panel,
+            profile,
+            rolling_window=rolling_window or None,
+            neutral_band=float(spec.semantics.neutral_band or 0.0) or MIN_TRADE_EXPOSURE,
+            long_only=not spec.semantics.long_short,
+        )
+    except (MiaoSuanError, ValueError, RuntimeError, TypeError, IndexError) as exc:
+        _die(f"回测执行失败：{type(exc).__name__}: {exc}")
+
+    payload = result.to_dict()
+    if out:
+        target = Path(out)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+
+    m = result.metrics
+    tr = result.trades
+    _echo(f"策略      ：{spec.name}  spec_id={spec.spec_id}")
+    _echo(f"数据      ：{data}  {result.symbol} {result.timeframe}  {result.n_bars} 根")
+    _echo(f"市场画像  ：{profile.name}  单边成本率={result.cost_rate:.6f}  年化 bar={result.periods_per_year}")
+    _echo("─" * 60)
+    _echo(f"累计收益  ：{result.total_return:.6f}")
+    _echo(f"年化收益  ：{m.annual_return:.6f}")
+    _echo(f"Sharpe    ：{m.sharpe:.4f}")
+    _echo(f"Sortino   ：{m.sortino:.4f}")
+    _echo(f"最大回撤  ：{m.max_drawdown:.6f}")
+    _echo(f"交易数    ：{tr.n_trades}")
+    _echo(f"胜率      ：{tr.win_rate:.4f}")
+    _echo(f"盈亏比    ：{tr.profit_factor:.4f}（均盈 {tr.avg_win:.6f} / 均亏 {tr.avg_loss:.6f}）")
+    _echo("─" * 60)
+    _echo(
+        "口径提醒  ：Sharpe/Sortino 由逐 bar 净收益算出；"
+        f"spec 的 val_score={spec.evidence.val_score} 是搜索适应度，不是绩效"
+    )
+    if out:
+        _echo(f"结果已写入：{out}")
 
 
 # ── ui ──────────────────────────────────────────────────────────────────────

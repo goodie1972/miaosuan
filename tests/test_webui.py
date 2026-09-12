@@ -295,6 +295,30 @@ def test_history_endpoint_rejects_traversal(app: Any) -> None:
     assert status in (400, 404)
 
 
+def test_backtest_endpoint_rejects_unknown_spec(app: Any) -> None:
+    """/api/backtest 必须先校验 spec 文件存在（防目录穿越 + 防空跑子进程）。"""
+    status, data = _call(app, "POST", "/api/backtest", {"spec": "__nope__.json", "data": "x.csv"})
+    assert status == 404
+    assert "不存在" in data["detail"]
+
+
+def test_backtests_lists_previous_runs(app: Any, tmp_path: Any) -> None:
+    """/api/backtests 列出历史回测（供回测页复用 / 追溯）。"""
+    (tmp_path / "backtest_20260912_010101.json").write_text(
+        json.dumps({
+            "meta": {"symbol": "XAUUSD", "timeframe": "H1", "n_bars": 8000},
+            "summary": {"sharpe": 0.9762, "total_return": 0.1893},
+        }),
+        encoding="utf-8",
+    )
+    status, data = _call(app, "GET", "/api/backtests")
+    assert status == 200
+    row = next(r for r in data if r["file"] == "backtest_20260912_010101.json")
+    assert row["symbol"] == "XAUUSD"
+    assert row["n_bars"] == 8000
+    assert row["sharpe"] == 0.9762
+
+
 # ── 静态页面：单文件 + 零 CDN + 双主题（防止后来人引入外链或砍掉浅色）────────
 
 def test_index_html_is_single_file_zero_cdn_dual_theme() -> None:
@@ -324,3 +348,9 @@ def test_index_html_is_single_file_zero_cdn_dual_theme() -> None:
     assert "renderCurve" in html
     assert "暂无逐代历史" in html
     assert "/api/history" in html
+    # 回测页已实装（不再是占位）：有运行入口、走 /api/backtest，且带口径警告
+    assert '/api/backtest' in html
+    assert "运行回测" in html
+    assert "待接入 · 计划中" in html  # 03 实时仍是占位，这个断言防止它被误删说明
+    # 口径铁律：val_score 是搜索适应度，不得当绩效展示
+    assert "不是绩效指标" in html or "不是绩效" in html

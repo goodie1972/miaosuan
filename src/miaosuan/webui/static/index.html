@@ -398,15 +398,57 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
     </section>
   </div>
 
-  <!-- ══ 02 回测（占位）══════════════════════════════════════════════ -->
+  <!-- ══ 02 回测 ═══════════════════════════════════════════════════ -->
   <div class="view" id="view-backtest">
     <section class="card">
-      <div class="placeholder">
-        <h3>待接入 · 计划中</h3>
-        <p>回测需要新增一层「回测产出层」：把挖掘得到的因子序列在完整样本上做绩效归因
-        （年化 / 最大回撤 / 换手 / 分段稳定性），目前主干还没有这一层，所以本页暂不提供任何数字。</p>
-        <p class="tiny">宁可空着也不放占位假数据 —— 避免误判为真实绩效。</p>
+      <h2>① 回测配置 <span class="hint">— 子进程调 CLI，不直接 import 内核</span></h2>
+      <div class="row">
+        <div style="flex:2"><label>StrategySpec</label><select id="btSpec"></select></div>
+        <div style="flex:2"><label>行情数据</label><select id="btData"></select></div>
+        <div style="flex:1"><label>市场画像（可空）</label><select id="btMarket"></select></div>
+        <div style="flex:1"><label>滚动窗口（0=自动）</label>
+          <input id="btWindow" class="mono" value="0"></div>
+        <div style="flex:0"><button id="btnBacktest" class="primary">运行回测</button></div>
       </div>
+      <div class="tiny muted" style="margin-top:8px" id="btNote"></div>
+    </section>
+
+    <section class="card">
+      <h2>② 绩效概览 <span class="hint">— 真实指标，非 val_score</span></h2>
+      <div class="kv" id="btKpi">
+        <div><div class="k">累计收益</div><div class="v" id="kTotal">—</div></div>
+        <div><div class="k">年化收益</div><div class="v" id="kAnn">—</div></div>
+        <div><div class="k">Sharpe</div><div class="v" id="kSharpe">—</div></div>
+        <div><div class="k">Sortino</div><div class="v" id="kSortino">—</div></div>
+        <div><div class="k">最大回撤（相对）</div><div class="v" id="kMdd">—</div></div>
+        <div><div class="k">交易数</div><div class="v" id="kTrades">—</div></div>
+        <div><div class="k">胜率</div><div class="v" id="kWin">—</div></div>
+        <div><div class="k">盈亏比（均盈/均亏）</div><div class="v" id="kPf">—</div></div>
+      </div>
+      <div class="tiny muted" style="margin-top:8px" id="btMeta"></div>
+      <div class="tiny muted" style="margin-top:4px">
+        <b>口径警告</b>：以上 Sharpe / Sortino / 年化全部由<b>逐 bar 净收益</b>
+        （<span class="mono">position×ret − turnover×cost</span>）算出。
+        spec 里的 <span class="mono">val_score</span> 是<b>搜索适应度</b>（年化/Sortino/Calmar/IC 的复合评分 + OOS 倍率），
+        <b>不是绩效指标</b>，本页不展示它。
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>③ 资金曲线 <span class="hint">— 内联 SVG</span></h2>
+      <div id="btEquity"></div>
+      <div class="tiny muted" style="margin-top:8px" id="btEquityNote"></div>
+    </section>
+
+    <section class="card">
+      <h2>④ 滚动 Sharpe <span class="hint">— 滑窗，窗口未满处留空</span></h2>
+      <div id="btRolling"></div>
+      <div class="tiny muted" style="margin-top:8px" id="btRollingNote"></div>
+    </section>
+
+    <section class="card">
+      <h2>⑤ 交易明细 <span class="hint">— 方向翻转 = 新的一笔</span></h2>
+      <div id="btTrades" class="empty">尚未运行回测。</div>
     </section>
   </div>
 
@@ -892,6 +934,184 @@ function runVerify() {
   }).catch(function (e) { out.textContent = "校验失败：" + e.message; });
 }
 
+/* ── 回测页 ───────────────────────────────────────────────────────── */
+function loadBacktestOptions() {
+  jfetch("/api/specs").then(function (specs) {
+    if (!specs.length) {
+      $("btSpec").innerHTML = '<option value="">（还没有 spec —— 先跑一次挖掘）</option>';
+      return;
+    }
+    $("btSpec").innerHTML = specs.map(function (s) {
+      return '<option value="' + esc(s.file) + '">' + esc(s.file)
+        + " · " + esc(s.symbol || "-") + " " + esc(s.timeframe || "-") + "</option>";
+    }).join("");
+  }).catch(function (e) {
+    $("btSpec").innerHTML = '<option value="">（spec 列表失败：' + esc(e.message) + "）</option>";
+  });
+  jfetch("/api/data").then(function (rows) {
+    if (!rows.length) {
+      $("btData").innerHTML = '<option value="">（未找到行情文件）</option>';
+      return;
+    }
+    $("btData").innerHTML = rows.map(function (d) {
+      return '<option value="' + esc(d.path) + '">' + esc(d.name) + " · " + d.size_mb + "MB</option>";
+    }).join("");
+  }).catch(function (e) {
+    $("btData").innerHTML = '<option value="">（行情列表失败：' + esc(e.message) + "）</option>";
+  });
+  jfetch("/api/meta").then(function (m) {
+    var html = '<option value="" selected>自动（数据画像 → spec 画像）</option>';
+    (m.profiles || []).forEach(function (p) {
+      html += '<option value="' + esc(p) + '">' + esc(p) + "</option>";
+    });
+    $("btMarket").innerHTML = html;
+  }).catch(function () { /* meta 失败不阻塞 */ });
+}
+
+function runBacktest() {
+  var spec = $("btSpec").value;
+  var data = $("btData").value;
+  if (!spec) { alert("请先选择一个 StrategySpec（先在 01 挖掘页跑一次）"); return; }
+  if (!data) { alert("请选择行情数据文件"); return; }
+  var btn = $("btnBacktest");
+  btn.disabled = true;
+  $("btNote").textContent = "回测中…（子进程调 CLI，全样本逐 bar 计算）";
+  post("/api/backtest", {
+    spec: spec,
+    data: data,
+    market: $("btMarket").value,
+    rolling_window: parseInt($("btWindow").value, 10) || 0
+  }).then(function (r) {
+    renderBacktest(r);
+    $("btNote").textContent = "完成 · 结果已落盘 " + esc(r.file || "");
+  }).catch(function (e) {
+    $("btNote").textContent = "回测失败：" + e.message;
+    alert("回测失败：" + e.message);
+  }).then(function () {
+    btn.disabled = false;
+  });
+}
+
+/* 通用序列折线图（内联 SVG）。null 表示"该点无数据"（如滚动窗口未满），
+   不做插值：遇到 null 就断线。 */
+function renderSeries(boxId, values, opts) {
+  var box = $(boxId);
+  var vals = (values || []).slice();
+  var has = vals.map(function (v) { return v !== null && v !== undefined && isFinite(v); });
+  var n = vals.length;
+  if (!n || !has.some(Boolean)) {
+    box.innerHTML = '<div class="empty">' + esc(opts.emptyText || "暂无数据") + "</div>";
+    return;
+  }
+  var W = 640, H = opts.height || 230, padL = 62, padR = 16, padT = 16, padB = 34;
+  var innerW = W - padL - padR, innerH = H - padT - padB;
+  var lo = Infinity, hi = -Infinity;
+  for (var i = 0; i < n; i++) {
+    if (!has[i]) { continue; }
+    if (vals[i] < lo) { lo = vals[i]; }
+    if (vals[i] > hi) { hi = vals[i]; }
+  }
+  if (!isFinite(lo) || !isFinite(hi)) { lo = 0; hi = 1; }
+  if (hi - lo < 1e-12) { hi = lo + 1; }
+  if (opts.zeroLine) {
+    if (lo > 0) { lo = 0; }
+    if (hi < 0) { hi = 0; }
+  }
+  var pad = (hi - lo) * 0.08;
+  lo -= pad; hi += pad;
+  function xOf(i) { return padL + (n > 1 ? i / (n - 1) * innerW : innerW / 2); }
+  function yOf(v) { return padT + (hi - v) / (hi - lo) * innerH; }
+
+  var svg = '<svg viewBox="0 0 ' + W + " " + H + '" width="100%" height="' + H + '" role="img"'
+    + ' aria-label="' + esc(opts.label || "序列") + '">';
+  var mono = 'font-family:var(--mono);font-size:10px';
+  for (var g = 0; g <= 4; g++) {
+    var v = lo + (hi - lo) * g / 4, y = yOf(v);
+    svg += '<line x1="' + padL + '" y1="' + y.toFixed(2) + '" x2="' + (W - padR) + '" y2="' + y.toFixed(2)
+      + '" style="stroke:var(--line);stroke-width:1"></line>';
+    svg += '<text x="' + (padL - 6) + '" y="' + (y + 3).toFixed(2) + '" text-anchor="end"'
+      + ' style="fill:var(--ink-2);' + mono + '">' + v.toFixed(opts.digits === undefined ? 3 : opts.digits) + "</text>";
+  }
+  if (opts.zeroLine && lo < 0 && hi > 0) {
+    var yz = yOf(0);
+    svg += '<line x1="' + padL + '" y1="' + yz.toFixed(2) + '" x2="' + (W - padR) + '" y2="' + yz.toFixed(2)
+      + '" style="stroke:var(--ink-2);stroke-width:1;stroke-dasharray:4 3"></line>';
+  }
+  var d = "", pen = false;
+  for (var k = 0; k < n; k++) {
+    if (!has[k]) { pen = false; continue; }
+    d += (pen ? " L" : "M") + xOf(k).toFixed(2) + " " + yOf(vals[k]).toFixed(2);
+    pen = true;
+  }
+  svg += '<path d="' + d + '" fill="none" stroke="' + opts.color + '" stroke-width="2"'
+    + ' stroke-linejoin="round" stroke-linecap="round"></path>';
+  // X 轴：首 / 中 / 末 的下标
+  [0, Math.floor((n - 1) / 2), n - 1].forEach(function (i) {
+    svg += '<text x="' + xOf(i).toFixed(2) + '" y="' + (H - padB + 16) + '" text-anchor="middle"'
+      + ' style="fill:var(--ink-2);' + mono + '">' + i + "</text>";
+  });
+  svg += "</svg>";
+  box.innerHTML = svg;
+}
+
+function fmtPct(v) {
+  return (v === null || v === undefined || !isFinite(v)) ? "—" : (v * 100).toFixed(2) + "%";
+}
+function fmtNum(v, digits) {
+  return (v === null || v === undefined || !isFinite(v)) ? "—" : Number(v).toFixed(digits === undefined ? 4 : digits);
+}
+
+function renderBacktest(r) {
+  var s = r.summary || {}, m = r.meta || {};
+  $("kTotal").textContent = fmtPct(s.total_return);
+  $("kAnn").textContent = fmtPct(s.annual_return);
+  $("kSharpe").textContent = fmtNum(s.sharpe);
+  $("kSortino").textContent = fmtNum(s.sortino);
+  $("kMdd").textContent = fmtPct(s.max_drawdown);
+  $("kTrades").textContent = String(s.n_trades === undefined ? "—" : s.n_trades);
+  $("kWin").textContent = fmtPct(s.win_rate);
+  $("kPf").textContent = (s.profit_factor === null || s.profit_factor === undefined)
+    ? "无亏损段" : fmtNum(s.profit_factor);
+  $("btMeta").textContent = m.symbol + " " + m.timeframe + " · " + m.n_bars + " 根 · 单边成本 "
+    + Number(m.cost_rate).toFixed(6) + " · 年化 bar " + m.periods_per_year
+    + " · 滚动窗口 " + m.rolling_window;
+
+  renderSeries("btEquity", (r.series || {}).equity, {
+    color: "var(--gold)", label: "资金曲线", digits: 3,
+    emptyText: "暂无资金曲线"
+  });
+  $("btEquityNote").innerHTML = "口径：权益 = <span class=\"mono\">1 + cumsum(逐 bar 净收益)</span>，"
+    + "净收益已扣成本。回撤峰值（绝对，权益单位）<b>" + fmtNum(s.max_drawdown_abs, 4)
+    + "</b>；概览卡里的" + "最大回撤是<b>相对</b>值 (peak−equity)/peak = " + fmtPct(s.max_drawdown)
+    + " —— 两者单位不同，别混着比。";
+
+  renderSeries("btRolling", (r.series || {}).rolling_sharpe, {
+    color: "var(--info)", label: "滚动 Sharpe", digits: 3, zeroLine: true,
+    emptyText: "暂无滚动 Sharpe（样本可能短于滚动窗口）"
+  });
+  $("btRollingNote").textContent = "口径：滑窗内均值/标准差 × √年化bar，窗口 " + m.rolling_window
+    + " 根；窗口未满的前段留空（不补零、不插值）。";
+
+  var trades = r.trades || [];
+  if (!trades.length) {
+    $("btTrades").className = "empty";
+    $("btTrades").textContent = "本次回测没有产生任何交易（仓位全程未过中性带）。";
+    return;
+  }
+  $("btTrades").className = "";
+  var rows = trades.slice(0, 50).map(function (t) {
+    return '<tr><td>' + t.start + "–" + t.end + "</td>"
+      + '<td><span class="chip ' + (t.direction > 0 ? "ok" : "bad") + '">'
+      + (t.direction > 0 ? "多" : "空") + "</span></td>"
+      + "<td>" + t.bars + "</td>"
+      + '<td style="color:' + (t.pnl >= 0 ? "var(--up)" : "var(--down)") + '">' + t.pnl.toFixed(6) + "</td></tr>";
+  }).join("");
+  $("btTrades").innerHTML = '<div class="tbl-wrap"><table><tr><th>区间(bar)</th><th>方向</th>'
+    + "<th>持仓 bar</th><th>净收益(已扣成本)</th></tr>" + rows + "</table></div>"
+    + '<div class="tiny muted" style="margin-top:6px">共 ' + s.n_trades + " 笔，此处显示前 50 笔"
+    + (r.trades_truncated ? "（明细已截断）" : "") + "。</div>";
+}
+
 /* ── 绑定 ─────────────────────────────────────────────────────────── */
 function bind() {
   $("btnTheme").onclick = function () {
@@ -909,6 +1129,7 @@ function bind() {
   $("btnMine").onclick = startMine;
   $("btnCopy").onclick = copyFormula;
   $("btnVerify").onclick = runVerify;
+  $("btnBacktest").onclick = runBacktest;
   $("btnScroll").onclick = function () {
     state.autoscroll = !state.autoscroll;
     $("btnScroll").textContent = state.autoscroll ? "暂停滚动" : "恢复滚动";
@@ -935,6 +1156,7 @@ function boot() {
   renderChart([]);
   renderCurve([]);  // 首屏无历史 → 走空状态，不画空图
   refreshLists();   // ⑧⑨ 两张表首屏就要有内容，否则一直停在"加载中…"
+  loadBacktestOptions();   // 02 回测页的下拉（spec / 行情 / 画像）
   startPolling();
 }
 boot();
