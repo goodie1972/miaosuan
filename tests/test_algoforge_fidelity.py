@@ -353,3 +353,143 @@ def test_param_space_matches_class_attributes(tmp_path: Path, algoforge_stubs: N
     for entry in module.PARAM_SPACE:
         assert hasattr(strategy, entry["name"]), f"类缺少属性 {entry['name']}"
         assert float(getattr(strategy, entry["name"])) == float(entry["default"])
+
+
+# ── get_dynamic_sl_tp 平台契约（ATR / 止损止盈接口统一）─────────────────────
+
+
+def _candle_list(raw: dict[str, np.ndarray]) -> list[dict[str, float]]:
+    """把合成 OHLCV 转成平台 candle 形态（dict 列表）。"""
+    flat = {key: np.asarray(value)[0] for key, value in raw.items()}
+    n = len(flat["close"])
+    return [
+        {key: float(flat[key][i]) for key in ("open", "high", "low", "close", "volume")}
+        for i in range(n)
+    ]
+
+
+def test_get_dynamic_sl_tp_callable_with_two_positional_args(
+    tmp_path: Path, algoforge_stubs: None
+) -> None:
+    """引擎 ``main.py:1901/1953`` 只传 **2 个位置参数** → 必须能这样调。
+
+    ``goodma`` 的第 3 参 ``atr_val`` 没有默认值，引擎一调用就 TypeError、被
+    ``except`` 吞掉退化成固定点数——动态 SL/TP 实际从未生效。
+    """
+    import inspect
+
+    module, _path = _export_module(FORMULAS["am_best"], tmp_path, "sl2args")
+    strategy = module.FidelityProbeStrategy()
+    strategy.candles = _candle_list(_synthetic_raw(n=1200, seed=31))
+
+    params = inspect.signature(strategy.get_dynamic_sl_tp).parameters
+    positional = [
+        name
+        for name, p in params.items()
+        if name != "self" and p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
+    ]
+    required = [
+        name
+        for name, p in params.items()
+        if name != "self"
+        and p.default is inspect.Parameter.empty
+        and p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
+    ]
+    assert required == ["direction", "entry_price"], f"必填位置参数异常：{required}"
+    assert len(positional) >= 2
+
+    entry = 4000.0
+    out = strategy.get_dynamic_sl_tp(module.OrderType.BUY, entry)  # 恰好 2 位置参数
+    assert isinstance(out, tuple) and len(out) == 2
+    sl, tp = out
+    assert sl < entry < tp, f"买入方向应 sl<entry<tp，实际 {out}"
+    # 第 3/4 个参数（新式签名）也应当能传
+    assert strategy.get_dynamic_sl_tp(module.OrderType.BUY, entry, 12.0, "entry")
+
+
+def test_get_dynamic_sl_tp_sides_and_direction_normalization(
+    tmp_path: Path, algoforge_stubs: None
+) -> None:
+    """买/卖 SL、TP 必须落在**正确一侧**；枚举与字符串必须同侧。
+
+    平台传的是 ``OrderType.BUY`` 枚举，而 ``OrderType.BUY == "BUY"`` 是 ``False``。
+    策略若写成 ``if direction == "BUY"``，BUY 会落进 SELL 分支、**止损挂到入场价
+    上方**（实盘一开仓即被扫）。这里把两侧与两种写法都钉死。
+    """
+    module, _path = _export_module(FORMULAS["am_best"], tmp_path, "slside")
+    strategy = module.FidelityProbeStrategy()
+    strategy.candles = _candle_list(_synthetic_raw(n=1200, seed=37))
+    entry = 4000.0
+
+    buy = strategy.get_dynamic_sl_tp(module.OrderType.BUY, entry)
+    sell = strategy.get_dynamic_sl_tp(module.OrderType.SELL, entry)
+    assert buy[0] < entry < buy[1], f"BUY 侧错误：{buy}"
+    assert sell[1] < entry < sell[0], f"SELL 侧错误：{sell}"
+    # 枚举 ⇄ 字符串（引擎两处调用分别是枚举与字符串）结果必须一致
+    assert strategy.get_dynamic_sl_tp("BUY", entry) == buy
+    assert strategy.get_dynamic_sl_tp("SELL", entry) == sell
+
+
+def test_get_dynamic_sl_tp_derives_from_real_atr_not_hardcoded(
+    tmp_path: Path, algoforge_stubs: None
+) -> None:
+    """止损距离必须由**真实 ATR**（已收盘 K 线自算）派生，不是硬编码 15。"""
+    module, _path = _export_module(FORMULAS["am_best"], tmp_path, "slatr")
+    strategy = module.FidelityProbeStrategy()
+    strategy.candles = _candle_list(_synthetic_raw(n=1200, seed=41))
+    entry = 4000.0
+
+    atr = strategy._current_atr()
+    assert atr > 0.0, "自算 ATR 应 > 0"
+    sl, _tp = strategy.get_dynamic_sl_tp(module.OrderType.BUY, entry)
+    expected = entry - max(atr * strategy.SL_ATR_MULT, strategy.MIN_SL_POINTS)
+    assert sl == pytest.approx(expected, rel=1e-12), f"止损未按真实 ATR 计算：{sl} vs {expected}"
+    # 与「硬编码 ATR=15 + 兜底倍数 2」的结果不同，证明确实用了自算 ATR
+    if abs(atr - 15.0) > 1e-6:
+        assert sl != pytest.approx(entry - 2.0 * 15.0, rel=1e-9)
+
+
+def test_get_dynamic_sl_tp_no_fixed_tp_when_multiplier_zero(
+    tmp_path: Path, algoforge_stubs: None
+) -> None:
+    """``TP_ATR_MULT = 0`` → 无固定止盈（``tp = 0``），与现网趋势跟踪写法一致。"""
+    module, _path = _export_module(FORMULAS["am_best"], tmp_path, "sltp0")
+    strategy = module.FidelityProbeStrategy()
+    strategy.candles = _candle_list(_synthetic_raw(n=1200, seed=43))
+    strategy.TP_ATR_MULT = 0.0
+    sl, tp = strategy.get_dynamic_sl_tp(module.OrderType.BUY, 4000.0)
+    assert tp == 0
+    assert sl < 4000.0
+
+
+def test_get_dynamic_sl_tp_returns_none_on_invalid_entry(
+    tmp_path: Path, algoforge_stubs: None
+) -> None:
+    """入场价非法时返回 ``(None, None)``，**绝不返回 (0, 0)**。
+
+    原因：``_execute_order`` 只判 ``if sl is None``，``0.0`` 会被当「有效值」传进
+    ``open_order(sl=0)``——灾难级。返回 ``None`` 才能让两条路径都走自身兜底。
+    """
+    module, _path = _export_module(FORMULAS["am_best"], tmp_path, "slbad")
+    strategy = module.FidelityProbeStrategy()
+    strategy.candles = _candle_list(_synthetic_raw(n=1200, seed=47))
+    assert strategy.get_dynamic_sl_tp(module.OrderType.BUY, 0.0) == (None, None)
+    assert strategy.get_dynamic_sl_tp(module.OrderType.BUY, float("nan")) == (None, None)
+
+
+def test_indicator_values_carries_real_atr(tmp_path: Path, algoforge_stubs: None) -> None:
+    """六元组里的 ``indicator_values['atr']`` 必须是**真实正数**。
+
+    平台兜底 ``athlete.py:113`` 读的就是这个键（缺省才回退硬编码 15）；把真实 ATR
+    放进去，即使平台走兜底也不会再用假值。
+    """
+    module, _path = _export_module(FORMULAS["am_best"], tmp_path, "slind")
+    strategy = module.FidelityProbeStrategy()
+    strategy.candles = _candle_list(_synthetic_raw(n=1200, seed=51))
+    result = strategy.generate_signal()
+    assert result is not None
+    indicators = result[5]
+    assert "atr" in indicators, "indicator_values 必须带 atr"
+    atr = indicators["atr"]
+    assert isinstance(atr, float) and atr > 0.0, f"atr 应为真实正数，实际 {atr!r}"
+    assert atr == pytest.approx(strategy._current_atr(), abs=1e-6)

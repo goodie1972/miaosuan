@@ -25,13 +25,39 @@ from .kernel import KernelPlan, build_kernel_plan
 from .lint import lint_source
 from .magic_registry import allocate_magic
 
-__all__ = ["AlgoforgePort", "DEFAULT_TEMPLATE", "build_param_space", "readable_formula"]
+__all__ = [
+    "ATR_PERIOD",
+    "AlgoforgePort",
+    "DEFAULT_TEMPLATE",
+    "MIN_SL_POINTS",
+    "SL_ATR_MULT",
+    "TP_ATR_MULT",
+    "build_param_space",
+    "readable_formula",
+]
 
 #: 默认模板文件名。
 DEFAULT_TEMPLATE: str = "factor_kernel_v1.py.j2"
 
 #: 模板目录（与包同目录下的 ``templates/``）。
 _TEMPLATE_DIR: Path = Path(__file__).resolve().parent / "templates"
+
+# ── 导出策略的默认风控参数（渲染成可调类属性）────────────────────────────────
+#: 硬止损距离 = ``SL_ATR_MULT × ATR``。取 **2.0**，与平台自身兜底
+#: （``athlete.py:114-115``：``price ∓ atr*2``）**同比例**——这样即使我们的
+#: `get_dynamic_sl_tp` 万一没被调用，平台回退出的止损位置也完全一致。
+SL_ATR_MULT: float = 2.0
+
+#: 止盈距离 = ``TP_ATR_MULT × ATR``。取 **4.0**，同样对齐平台兜底
+#: （``athlete.py:115``：``price ± atr*4``）。设为 ``0`` 即无固定止盈（趋势跟踪）。
+TP_ATR_MULT: float = 4.0
+
+#: 硬止损最小距离（价格单位）：ATR 极小时防止止损贴脸被噪音扫掉。
+#: 取自现网参考实现 ``strategies/20260909_h1_alphagate_v1.MIN_SL_POINTS``。
+MIN_SL_POINTS: float = 3.0
+
+#: ATR 周期。14 与现网 ``alphagate._get_atr`` / TA-Lib ``ATR`` 默认一致。
+ATR_PERIOD: int = 14
 
 
 def readable_formula(tokens: Sequence[int]) -> str:
@@ -270,6 +296,11 @@ class AlgoforgePort(TargetPort):
             warmup_bars=int(spec.semantics.warmup_bars),
             neutral_band=float(spec.semantics.neutral_band),
             long_short=bool(spec.semantics.long_short),
+            # 风控默认（渲染成可调类属性；见本模块顶部常量）。
+            sl_atr_mult=SL_ATR_MULT,
+            tp_atr_mult=TP_ATR_MULT,
+            min_sl_points=MIN_SL_POINTS,
+            atr_period=ATR_PERIOD,
             param_space=[p.to_dict() for p in param_space],
             evidence={
                 "val_score": evidence.val_score,

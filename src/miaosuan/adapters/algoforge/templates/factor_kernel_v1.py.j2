@@ -12,6 +12,11 @@
 * 仓位：``exposure = tanh(factor)``；``|exposure| < {{ neutral_band }}`` 视为中性、**不出信号**。
 * bar1 语义（不重绘）：``generate_signal`` **只用已收盘 K 线**（``self.candles[:-1]``），
   最后一根未收盘 K 线不参与任何计算，因此不存在未来函数。
+* 风控（SL/TP）：``get_dynamic_sl_tp`` 按平台实际调用契约实现
+  （``main.py:1901/1953`` 传 **2 个位置参数**，返回**绝对价格**）。硬止损
+  ``入场价 ∓ {{ sl_atr_mult }}×ATR(14)``，止盈 ``± {{ tp_atr_mult }}×ATR(14)``
+  —— 倍数与平台自身兜底（``athlete.py:113-115``）**同比例**，唯一区别是 ATR
+  用的是**真实值**（由已收盘 K 线算出），不再是硬编码的 15。
 {% if has_gate %}
 * R1 保护：公式含 GATE 算子。GATE 在条件穿越 0 时会 O(1) 跳变，float32 归约误差
   可让符号在 ±1ULP 抖动，实盘表现为分支反复翻转。生成文件内置**死区滞回**
@@ -296,6 +301,76 @@ def _candles_to_arrays(candles: Any) -> tuple[Any, ...] | None:
         return None
 
 
+# ── ATR / 方向归一（风控契约）──────────────────────────────────────────────
+#: ATR 周期（Wilder，与现网 ``strategies/20260909_h1_alphagate_v1._get_atr`` 一致）。
+_ATR_PERIOD = {{ atr_period }}
+
+#: 买入方向别名集合（``OrderType`` 枚举 + 字符串两种写法都要认）。
+_BUY_DIRECTIONS = frozenset({"BUY", "BUY_LIMIT", "BUY_STOP", "LONG", "1"})
+
+
+def _is_buy_direction(direction: Any) -> bool:
+    """判断 ``direction`` 是否为买入方向（**枚举 / 字符串 / 数值三种都兼容**）。
+
+    为什么必须归一化：平台 ``OrderType`` 是**普通 Enum**（``core/bridge.py:17``），
+    ``OrderType.BUY == "BUY"`` 是 ``False``。而引擎 ``main.py:1901`` 传进来的
+    正是 ``OrderType.BUY``，现网新一批策略却写成 ``if direction == "BUY"`` ——
+    于是 BUY 信号会落进 SELL 分支，**止损挂到入场价上方**（实盘一开仓即被扫）。
+
+    Args:
+        direction: ``OrderType`` 枚举 / ``"BUY"`` 之类字符串 / ``1`` 之类数值。
+
+    Returns:
+        ``True`` 表示买入方向。
+    """
+    name = getattr(direction, "name", None)
+    if isinstance(name, str):
+        return name.strip().upper() in _BUY_DIRECTIONS
+    value = getattr(direction, "value", direction)
+    if isinstance(value, str):
+        return value.strip().upper() in _BUY_DIRECTIONS
+    if isinstance(value, bool):
+        return bool(value)
+    if isinstance(value, (int, float)):
+        return float(value) > 0.0
+    return False
+
+
+def _atr_from_arrays(
+    high: Any,
+    low: Any,
+    close: Any,
+    period: int = _ATR_PERIOD,
+) -> float:
+    """由**已收盘** K 线算 ATR（Wilder 口径：最近 ``period`` 根真实波幅的均值）。
+
+    Args:
+        high: 最高价序列（``[T]``，时间升序，末位为最新）。
+        low: 最低价序列。
+        close: 收盘价序列。
+        period: ATR 周期。
+
+    Returns:
+        ATR（价格单位）；数据不足 / 非有限 / 非正时返回 ``0.0``，
+        由调用方决定兜底（**绝不用一个假的正数蒙混过去**）。
+    """
+    n = int(min(len(high), len(low), len(close)))
+    if period < 1 or n < period + 1:
+        return 0.0
+    h = np.asarray(high[n - period - 1 :], dtype=np.float64)
+    l = np.asarray(low[n - period - 1 :], dtype=np.float64)
+    c = np.asarray(close[n - period - 1 :], dtype=np.float64)
+    prev_close = c[:-1]
+    span = h[1:] - l[1:]
+    up = np.abs(h[1:] - prev_close)
+    down = np.abs(l[1:] - prev_close)
+    true_range = np.maximum(np.maximum(span, up), down)
+    atr = float(true_range.mean())
+    if not math.isfinite(atr) or atr <= 0.0:
+        return 0.0
+    return atr
+
+
 class {{ class_name }}({{ base_classes | join(", ") }}):
     """{{ name }} —— 妙算导出的单因子策略。
 
@@ -331,10 +406,119 @@ class {{ class_name }}({{ base_classes | join(", ") }}):
     #: 交易标的（按需改写 / 由外部注入）。
     SYMBOL = "{{ symbol }}"
 
+    # ── ★ 风控参数（类属性，便于 tune / 人工复核）─────────────────────────
+    #: 硬止损距离 = ``SL_ATR_MULT × ATR``。默认 2.0 与平台自身兜底同比例。
+    SL_ATR_MULT = {{ sl_atr_mult }}
+    #: 止盈距离 = ``TP_ATR_MULT × ATR``；``0`` 表示**无固定止盈**（趋势跟踪）。
+    TP_ATR_MULT = {{ tp_atr_mult }}
+    #: 硬止损最小距离（价格单位）：ATR 极小时防止止损贴脸被噪音扫掉。
+    MIN_SL_POINTS = {{ min_sl_points }}
+    #: ATR 周期（与现网参考实现一致）。
+    ATR_PERIOD = {{ atr_period }}
+
     @property
     def required_bars(self) -> int:
         """策略启动所需的最少历史 K 线根数（预热 + 最长特征窗口余量）。"""
         return int(self.WARMUP_BARS) + 300
+
+    def _current_atr(self) -> float:
+        """用**已收盘** K 线算当前 ATR（bar1 语义：剔除正在形成的最后一根）。
+
+        不依赖 DataFactory 指标缓存（``get_indicator`` 在部分部署下为空），
+        直接从 ``self.candles`` 自算，因此与 ``generate_signal`` 用的是同一批
+        数据 —— 盘中和收盘后再算，得到的 ATR 完全一致。
+
+        Returns:
+            ATR（价格单位）；数据不足时 ``0.0``。
+        """
+        candles = getattr(self, "candles", None)
+        if not candles or len(candles) < 2:
+            return 0.0
+        arrays = _candles_to_arrays(candles[:-1])
+        if arrays is None:
+            return 0.0
+        _open, high, low, close, _volume = arrays
+        return _atr_from_arrays(high, low, close, int(self.ATR_PERIOD))
+
+    def get_dynamic_sl_tp(
+        self,
+        direction: Any,
+        entry_price: float,
+        atr_val: float | None = None,
+        position_type: str = "entry",
+    ) -> tuple[float | None, float | None]:
+        """按平台契约返回**绝对价格**形式的 (止损价, 止盈价)。
+
+        平台调用契约（**以引擎实际代码为准，不是文档**）：
+        ``main.py:1901/1903`` 与 ``main.py:1953`` 都只传 **2 个位置参数**
+        （``direction`` + ``entry_price``），因此第 3/4 个参数**必须有默认值**，
+        否则引擎一调用就 ``TypeError``，被 ``except`` 吞掉退化成固定点数 ——
+        现网 ``20260819_goodma_v1`` 就是这样，动态 SL/TP 实际从未生效。
+
+        返回值语义（读 ``main.py:1900-1956`` 与 ``athlete.py:110-115`` 确认）：
+        **绝对价格**，不是距离、不是点数。引擎把返回值直接传进
+        ``open_order(sl=…, tp=…)``；``athlete`` 侧 ``if not _sl or not _tp`` 与
+        ``_execute_order`` 侧 ``if sl is None or tp is None`` 都会把"没给"当作
+        回退信号。**注意**：``0.0`` 只对 athlete 算"没给"，对 ``_execute_order``
+        却算"给了"——会用 ``sl=0`` 挂单。所以入场价非法时这里统一返回
+        ``(None, None)``，**绝不返回 ``(0, 0)``**，让两条路径都走各自兜底。
+
+        ATR 取值优先级（**bar1 优先**，与因子口径一致）：
+        ``atr_val`` → 已收盘 K 线自算 :meth:`_current_atr` → 平台指标缓存
+        （``get_indicator("atr")``）→ 百分比距离兜底。把自算排在缓存前面，是因为
+        缓存 ATR 含**正在形成的最后一根**（EA / TA-Lib 均如此），而本策略的因子
+        只用已收盘 K 线；风控与因子同源，盘中/收盘后取值一致、不重绘。
+
+        Args:
+            direction: ``OrderType`` 枚举 / ``"BUY"`` 字符串 / 数值（见
+                :func:`_is_buy_direction`）。
+            entry_price: 入场价（买用 ask、卖用 bid，由引擎给定）。
+            atr_val: 调用方传入的 ATR（新式签名用法）；``None`` 时自算。
+            position_type: 平台预留位（``"entry"`` / 其他），本实现不使用。
+
+        Returns:
+            ``(sl_price, tp_price)``。买入方向 ``sl_price < entry < tp_price``，
+            卖出方向 ``tp_price < entry < sl_price``（``TP_ATR_MULT<=0`` 时无固定
+            止盈，``tp_price=0``）。**入场价非法**时返回 ``(None, None)``。
+        """
+        _ = position_type  # 平台预留参数，保留以免引擎按新签名调用时 TypeError
+        try:
+            price = float(entry_price)
+        except (TypeError, ValueError):
+            return None, None
+        if not math.isfinite(price) or price <= 0.0:
+            return None, None
+
+        atr = 0.0
+        if atr_val is not None:
+            try:
+                atr = float(atr_val)
+            except (TypeError, ValueError):
+                atr = 0.0
+        if atr <= 0.0 or not math.isfinite(atr):
+            # 优先自算（只吃已收盘 K 线，bar1 语义）。
+            atr = self._current_atr()
+        if atr <= 0.0 or not math.isfinite(atr):
+            # 自算不可得时退到平台指标缓存（EA / TA-Lib 提供，含最后一根）。
+            # 用 getattr 取，兼容未提供该便捷方法的基类（离线占位 / 其他平台）。
+            _get_indicator = getattr(self, "get_indicator", None)
+            cached = _get_indicator("atr") if callable(_get_indicator) else None
+            try:
+                atr = float(cached) if cached is not None else 0.0
+            except (TypeError, ValueError):
+                atr = 0.0
+        if atr <= 0.0 or not math.isfinite(atr):
+            # ATR 完全不可得：退化成百分比距离。宁可止损离得远，也不给 0
+            # （0 会被 athlete 判为"未提供"而改用硬编码 ATR=15）。
+            atr = price * 0.005  # 0.5% —— 与 ATR≈10 时的 2×ATR(≈0.46%) 同量级
+
+        stop_dist = max(atr * float(self.SL_ATR_MULT), float(self.MIN_SL_POINTS))
+        tp_mult = float(self.TP_ATR_MULT)
+        take_dist = max(atr * tp_mult, float(self.MIN_SL_POINTS)) if tp_mult > 0.0 else 0.0
+
+        if _is_buy_direction(direction):
+            return price - stop_dist, (price + take_dist if take_dist > 0.0 else 0.0)
+        return price + stop_dist, (price - take_dist if take_dist > 0.0 else 0.0)
 
     def generate_signal(self) -> tuple[Any, ...] | None:
         """按 AlgoForge 平台契约生成交易信号（**无参**；K 线从 ``self.candles`` 读）。
@@ -369,12 +553,16 @@ class {{ class_name }}({{ base_classes | join(", ") }}):
         if not self.LONG_SHORT and exposure < 0.0:
             return None
         score = int(round(min(abs(exposure), 1.0) * 100))
+        # 真实 ATR（同一批已收盘 K 线）：供 get_dynamic_sl_tp 与平台兜底共用，
+        # 避免 athlete.py:113 回退到硬编码的 15。缺失则记 None，由风控层兜底。
+        atr_value = _atr_from_arrays(*arrays[1:4], int(self.ATR_PERIOD))
         indicator_values: dict[str, Any] = {
             "symbol": self.SYMBOL,
             "magic": self.STRATEGY_MAGIC,
             "factor": round(value, 4),
             "exposure": round(exposure, 4),
             "bars": int(factor.size),
+            "atr": round(atr_value, 6) if atr_value > 0.0 else None,
         }
         if exposure > 0.0:
             return (OrderType.BUY, score, 0, [f"{self.STRATEGY_NAME}-LONG"], [], indicator_values)

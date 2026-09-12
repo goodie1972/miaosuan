@@ -24,6 +24,12 @@
 ``AF006``（WARNING）
     ``STRATEGY_CHANGELOG`` 为空——生成文件应当自述来源。
 
+``AF008``（ERROR，平台契约）
+    ``get_dynamic_sl_tp`` 必须能被**恰好 2 个位置参数**调用
+    （``direction`` + ``entry_price``）。引擎 ``main.py:1901/1953`` 只传 2 个位置
+    参数；若第 3/4 个参数**没有默认值**，引擎一调用就 ``TypeError``，被 ``except``
+    吞掉后静默退化成固定点数——动态 SL/TP 形同虚设（现网 ``goodma`` 即如此）。
+
 检查器是**纯静态**的：只依赖 :mod:`ast`，不 import 被检查文件，因此可以在
 导出流水线上无条件执行，也不会被被检查代码的副作用影响。
 """
@@ -110,6 +116,7 @@ def lint_source(source: str) -> list[LintIssue]:
     issues: list[LintIssue] = []
     issues.extend(_check_required_constants(tree))
     issues.extend(_check_signal_contract(tree))
+    issues.extend(_check_sl_tp_contract(tree))
     issues.extend(_check_repaint(tree))
     issues.extend(_check_vocab_version(tree))
     issues.extend(_check_nondeterminism(tree))
@@ -235,6 +242,60 @@ def _check_signal_contract(tree: ast.Module) -> list[LintIssue]:
                         f"generate_signal 不得声明额外参数（发现 {extra}）："
                         "AlgoForge 基类 on_tick 以无参方式调用它，"
                         "K 线应从 self.candles 读取，不能走形参"
+                    ),
+                    line=item.lineno,
+                )
+            )
+    return issues
+
+
+def _required_positional(func: ast.FunctionDef) -> tuple[list[str], list[str]]:
+    """列出方法「必填位置参数」名与「无默认值的 kw-only」名（均不含 ``self``）。
+
+    引擎用 **2 个位置参数** 调 ``get_dynamic_sl_tp``，因此只有「必填位置参数个数
+    与顺序」才决定它会不会 ``TypeError``；带默认值的参数与 kw-only 参数都要单独
+    核对（kw-only 若没有默认值，引擎同样传不进去）。
+    """
+    pos = [*func.args.posonlyargs, *func.args.args]
+    rest = [a.arg for a in pos if a.arg != "self"]
+    n_required = max(0, len(rest) - len(func.args.defaults))
+    required = rest[:n_required]
+    kwonly_no_default = [
+        a.arg
+        for a, d in zip(func.args.kwonlyargs, func.args.kw_defaults, strict=True)
+        if d is None
+    ]
+    return required, kwonly_no_default
+
+
+def _check_sl_tp_contract(tree: ast.Module) -> list[LintIssue]:
+    """AF008：``get_dynamic_sl_tp`` 必须能被恰好 2 个位置参数调用。
+
+    只检查**类体内**的同名方法。要求其「必填位置参数」恰好是
+    ``["direction", "entry_price"]``（顺序不可交换——引擎按位置传参），
+    且不存在无默认值的 kw-only 参数。第 3/4 个参数（``atr_val`` / ``position_type``）
+    可以有，但**必须带默认值**，否则引擎的 2 参调用会 ``TypeError``。
+    """
+    issues: list[LintIssue] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        for item in node.body:
+            if not (isinstance(item, ast.FunctionDef) and item.name == "get_dynamic_sl_tp"):
+                continue
+            required, kwonly_no_default = _required_positional(item)
+            if required == ["direction", "entry_price"] and not kwonly_no_default:
+                continue
+            issues.append(
+                LintIssue(
+                    code="AF008",
+                    severity=LintSeverity.ERROR,
+                    message=(
+                        "get_dynamic_sl_tp 必须能被 2 个位置参数 (direction, entry_price) "
+                        f"调用，但必填位置参数为 {required}"
+                        + (f"、无默认值的 kw-only 参数为 {kwonly_no_default}" if kwonly_no_default else "")
+                        + "：引擎 main.py:1901/1953 只传 2 个位置参数，多出的必填参数会"
+                        " 触发 TypeError，被 except 吞掉后动态 SL/TP 静默失效"
                     ),
                     line=item.lineno,
                 )
