@@ -31,6 +31,11 @@ __all__ = [
     "CostConfig",
     "LoggingConfig",
     "AppConfig",
+    "DEFAULT_ALGOFORGE_URL",
+    "DEFAULT_ALGOFORGE_TIMEOUT",
+    "ENV_ALGOFORGE_URL",
+    "ENV_ALGOFORGE_TIMEOUT",
+    "algoforge_backend_config",
 ]
 
 # ── 子配置（均为 frozen dataclass，不可变、可安全共享）─────────────────────
@@ -263,6 +268,45 @@ class AppConfig:
         if lvl := source.get("MIAOSUAN_LOG_LEVEL"):
             overrides["logging"] = replace(base.logging, level=lvl.upper())
         return base.with_overrides(**overrides)
+
+
+# ── AlgoForge 后端（03 实时页「只读接入」）────────────────────────────────────
+#
+# 与 AppConfig.from_env 同属「唯一 env 边界」：环境变量**只在本模块读取**，
+# adapters / webui 通过调用 algoforge_backend_config() 注入配置，绝不自行读 env
+# （可执行断言见 tests/test_dependency_direction_adapters.py）。
+
+#: 03 实时页默认后端地址（AlgoForge dashboard）。
+DEFAULT_ALGOFORGE_URL: str = "http://127.0.0.1:1783"
+
+#: 03 实时页默认请求超时（秒）。**必须短**：后端卡住不能把页面拖死。
+DEFAULT_ALGOFORGE_TIMEOUT: float = 3.0
+
+#: 环境变量名：实时页后端地址 / 超时。
+ENV_ALGOFORGE_URL: str = "MIAOSUAN_ALGOFORGE_URL"
+ENV_ALGOFORGE_TIMEOUT: str = "MIAOSUAN_ALGOFORGE_TIMEOUT"
+
+
+def algoforge_backend_config(env: Mapping[str, str] | None = None) -> tuple[str, float]:
+    """读取 03 实时页后端配置（环境变量优先，缺省用模块默认值）。
+
+    Args:
+        env: 覆盖用的环境映射（默认读 ``os.environ``，便于测试注入）。
+
+    Returns:
+        ``(base_url, timeout)``；超时非法或非正数时回落到
+        :data:`DEFAULT_ALGOFORGE_TIMEOUT`。
+    """
+    source = os.environ if env is None else env
+    base_url = source.get(ENV_ALGOFORGE_URL, "") or DEFAULT_ALGOFORGE_URL
+    raw_timeout = source.get(ENV_ALGOFORGE_TIMEOUT, "")
+    try:
+        timeout = float(raw_timeout) if raw_timeout else DEFAULT_ALGOFORGE_TIMEOUT
+    except ValueError:
+        timeout = DEFAULT_ALGOFORGE_TIMEOUT
+    if timeout <= 0.0:
+        timeout = DEFAULT_ALGOFORGE_TIMEOUT
+    return base_url, timeout
 
 
 # ── 内部工具 ───────────────────────────────────────────────────────────────

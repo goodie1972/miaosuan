@@ -226,6 +226,21 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
   padding: 40px 24px; text-align: center; color: var(--ink-2);
 }
 .placeholder h3 { color: var(--ink); margin: 0 0 8px; }
+/* ── 实时页：状态横幅 + 报价 + 指标格 ─────────────────────────────── */
+.banner {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  border: 1px solid var(--line); border-radius: var(--r-ctrl);
+  padding: 12px 14px; font-size: var(--fs-small); background: var(--surface);
+}
+.banner.ok { border-color: var(--up); background: rgba(14, 203, 129, .12); }
+.banner.warn { border-color: var(--warn); background: rgba(240, 160, 32, .14); }
+.banner.err { border-color: var(--down); background: rgba(246, 70, 93, .14); }
+.banner .bt { font-weight: 700; }
+.banner .bx { font-family: var(--mono); font-size: var(--fs-tiny); color: var(--ink-2); word-break: break-all; }
+.quote { display: flex; gap: 28px; flex-wrap: wrap; align-items: baseline; }
+.quote .q { display: flex; flex-direction: column; gap: 3px; }
+.quote .q b { font-family: var(--mono); font-size: 24px; font-weight: 700; }
+.quote .q span { font-size: var(--fs-tiny); color: var(--ink-2); }
 </style>
 </head>
 <body>
@@ -452,15 +467,47 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
     </section>
   </div>
 
-  <!-- ══ 03 实时（占位）══════════════════════════════════════════════ -->
+  <!-- ══ 03 实时（AlgoForge 后端**只读**接入）════════════════════════ -->
   <div class="view" id="view-live">
     <section class="card">
-      <div class="placeholder">
-        <h3>待接入 · 计划中</h3>
-        <p>实时页需要连接 AlgoForge 后端（HTTP 轮询 + WebSocket 推送）以拿到真实持仓、
-        订单与账户快照。妙算目前只做「挖掘 → 导出」，不直连交易，所以本页暂不提供任何数据。</p>
-        <p class="tiny">宁可空着也不放占位假数据 —— 避免误判为实盘状态。</p>
+      <div class="banner warn" id="rtBanner">
+        <span class="bt" id="rtBannerTitle">正在连接后端…</span>
+        <span class="bx" id="rtBannerMsg">首次刷新中</span>
       </div>
+      <div class="tiny muted" style="margin-top:8px">
+        <b>只读接入</b>：仅对后端发 <span class="mono">GET</span> 白名单（引擎状态 / 报价 / K 线 / 信号），
+        <b>绝不下单、绝不平仓、绝不启停引擎</b>；没有写操作。后端地址
+        <span class="mono" id="rtBackend">—</span>。
+        <label class="tiny muted" style="margin-left:12px; cursor:pointer">
+          <input type="checkbox" id="rtPoll" checked> 每 2 秒自动刷新
+        </label>
+      </div>
+    </section>
+
+    <section class="grid grid2">
+      <section class="card">
+        <h2>① 引擎状态 <span class="hint">— 只读</span></h2>
+        <div class="kv" id="rtEngine"></div>
+        <div class="empty" id="rtEngineEmpty">等待数据…</div>
+      </section>
+      <section class="card">
+        <h2>② 当前报价 <span class="hint">— 后端实时 tick</span></h2>
+        <div class="quote" id="rtQuote"></div>
+        <div class="empty" id="rtQuoteEmpty">等待数据…</div>
+      </section>
+    </section>
+
+    <section class="card">
+      <h2>③ K 线 <span class="hint">— 内联 SVG，零依赖</span></h2>
+      <div id="rtChart"></div>
+      <div class="tiny muted" style="margin-top:8px" id="rtChartCaption">
+        数据来源：<span class="mono">GET /api/market/candles</span>（真实 K 线，非模拟）。
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>④ 最近信号 <span class="hint">— 只读展示</span></h2>
+      <div id="rtSignals" class="empty">等待数据…</div>
     </section>
   </div>
 </main>
@@ -519,6 +566,8 @@ function setView(v) {
     var b = btns[i];
     if (b.getAttribute("data-view") === v) { b.className = "active"; } else { b.className = ""; }
   }
+  // 03 实时页只在可见时轮询后端（不可见则停，避免空转干扰平台）。
+  if (v === "live") { rtSetPolling($("rtPoll").checked); } else { rtSetPolling(false); }
 }
 
 /* ── 请求封装 ─────────────────────────────────────────────────────── */
@@ -1112,6 +1161,213 @@ function renderBacktest(r) {
     + (r.trades_truncated ? "（明细已截断）" : "") + "。</div>";
 }
 
+/* ── 03 实时：AlgoForge 后端**只读**接入 ─────────────────────────────
+   本页只对妙算后端发 GET（/api/realtime/*），妙算后端再只读转发到 AlgoForge。
+   后端不可达 / 超时 / 桥接离线三种情况都在顶部横幅**醒目提示**，并把数据区
+   显示为「不可用」，绝不显示 0 或空表让用户误读成真实行情。 */
+var RT = { timer: null, busy: false, everyMs: 2000 };
+
+function rtGet(path, params) {
+  var q = "", k;
+  if (params) {
+    var parts = [];
+    for (k in params) {
+      if (Object.prototype.hasOwnProperty.call(params, k)) {
+        parts.push(encodeURIComponent(k) + "=" + encodeURIComponent(params[k]));
+      }
+    }
+    if (parts.length) { q = "?" + parts.join("&"); }
+  }
+  return fetch(path + q, { method: "GET" }).then(function (r) {
+    return r.json().catch(function () { return null; }).then(function (body) {
+      if (!r.ok) { throw new Error((body && body.detail) ? body.detail : ("HTTP " + r.status)); }
+      return body;   // 信封：{ok, backend, reason, error, status, data}
+    });
+  });
+}
+
+function rtReasonText(reason) {
+  if (reason === "ok") { return "正常"; }
+  if (reason === "timeout") { return "请求超时"; }
+  if (reason === "unreachable") { return "后端不可达"; }
+  if (reason === "http_error") { return "后端返回错误"; }
+  if (reason === "bad_json") { return "响应非 JSON"; }
+  return "未知原因";
+}
+
+function rtBanner(kind, title, msg) {
+  $("rtBanner").className = "banner " + kind;   // ok | warn | err
+  $("rtBannerTitle").textContent = title;
+  $("rtBannerMsg").textContent = msg;
+}
+
+function rtKv(label, value, cls) {
+  return '<div><span class="tiny muted">' + esc(label) + '</span>'
+    + '<div class="mono ' + (cls || "") + '">' + esc(value) + "</div></div>";
+}
+
+function rtUptime(sec) {
+  var s = Math.max(0, Math.floor(Number(sec) || 0));
+  if (s >= 3600) { return Math.floor(s / 3600) + "h " + Math.floor((s % 3600) / 60) + "m"; }
+  if (s >= 60) { return Math.floor(s / 60) + "m " + (s % 60) + "s"; }
+  return s + "s";
+}
+
+function rtTime(t) {
+  if (t === undefined || t === null || t === "") { return "—"; }
+  if (typeof t === "number") {
+    return new Date(t > 1e12 ? t : t * 1000).toLocaleString();
+  }
+  return String(t).replace("T", " ").slice(0, 19);
+}
+
+function rtStatusText(s) {
+  var base = s.status ? String(s.status) : "—";
+  if (s.void_reason) { return base + "（" + s.void_reason + "）"; }
+  if (s.exit_reason) { return base + "（" + s.exit_reason + "）"; }
+  return base;
+}
+
+function renderRtEngine(env) {
+  var box = $("rtEngine"), empty = $("rtEngineEmpty");
+  var d = (env && env.ok && env.data && typeof env.data === "object") ? env.data : null;
+  if (!d) {
+    box.innerHTML = "";
+    empty.style.display = "block";
+    empty.textContent = "引擎状态不可用：" + (env ? rtReasonText(env.reason) + (env.error ? "（" + env.error + "）" : "") : "未获取");
+    return null;
+  }
+  empty.style.display = "none";
+  var bridge = d.bridge_connected === true;
+  box.innerHTML =
+      rtKv("运行状态", d.status === undefined ? "—" : d.status, String(d.status).toLowerCase() === "running" ? "up" : "down")
+    + rtKv("运行时长", d.uptime_seconds === undefined ? "—" : rtUptime(d.uptime_seconds))
+    + rtKv("桥接连接", d.bridge_connected === undefined ? "—" : (bridge ? "在线" : "离线"), bridge ? "up" : "down")
+    + rtKv("启动时刻", d.started_at || "—");
+  return { bridge: bridge };
+}
+
+function renderRtQuote(env) {
+  var box = $("rtQuote"), empty = $("rtQuoteEmpty");
+  var d = (env && env.ok && env.data && typeof env.data === "object") ? env.data : null;
+  if (!d || d.bid === undefined) {
+    box.innerHTML = "";
+    empty.style.display = "block";
+    empty.textContent = "报价不可用：" + (env ? rtReasonText(env.reason) + (env.error ? "（" + env.error + "）" : "") : "未获取");
+    return;
+  }
+  empty.style.display = "none";
+  function q(label, v) {
+    return '<div class="q"><span>' + esc(label) + "</span><b>" + esc(v === undefined || v === null ? "—" : v) + "</b></div>";
+  }
+  box.innerHTML = q("BID", d.bid) + q("ASK", d.ask) + q("SPREAD", d.spread) + q("品种", d.symbol || "—");
+}
+
+function renderRtChart(env) {
+  var data = (env && env.ok && Array.isArray(env.data)) ? env.data : [];
+  var closes = [];
+  for (var i = 0; i < data.length; i++) {
+    var v = data[i] && data[i].close;
+    closes.push(typeof v === "number" ? v : parseFloat(v));
+  }
+  var reason = env ? rtReasonText(env.reason) : "未获取";
+  renderSeries("rtChart", closes, {
+    label: "K 线收盘价",
+    color: "var(--gold)",
+    height: 200,
+    digits: 2,
+    emptyText: (env && env.ok)
+      ? "后端已连接，但未返回 K 线。"
+      : ("K 线不可用：" + reason + (env && env.error ? "（" + env.error + "）" : ""))
+  });
+  if (env && env.ok && closes.length) {
+    $("rtChartCaption").textContent =
+      "数据来源：GET /api/market/candles（真实 K 线 " + closes.length + " 根，非模拟）。";
+  }
+}
+
+function renderRtSignals(env) {
+  var box = $("rtSignals");
+  if (!env || !env.ok) {
+    box.className = "empty";
+    box.textContent = "信号不可用：" + (env ? rtReasonText(env.reason) + (env.error ? "（" + env.error + "）" : "") : "未获取");
+    return;
+  }
+  var rows = Array.isArray(env.data) ? env.data : [];
+  if (!rows.length) {
+    box.className = "empty";
+    box.textContent = "后端已连接，但暂无信号。";
+    return;
+  }
+  box.className = "";
+  var out = '<div class="tbl-wrap"><table><tr><th>时间</th><th>策略</th><th>Magic</th><th>方向</th>'
+    + "<th>多头分</th><th>空头分</th><th>状态</th><th>Ticket</th><th>入场价</th></tr>";
+  rows.slice(0, 50).forEach(function (s) {
+    function cell(v) { return v === undefined || v === null ? "—" : v; }
+    out += "<tr>"
+      + '<td class="mono">' + esc(rtTime(s.timestamp)) + "</td>"
+      + "<td>" + esc(cell(s.strategy)) + "</td>"
+      + '<td class="mono">' + esc(cell(s.magic)) + "</td>"
+      + "<td>" + esc(cell(s.signal)) + "</td>"
+      + '<td class="mono">' + esc(cell(s.score_long)) + "</td>"
+      + '<td class="mono">' + esc(cell(s.score_short)) + "</td>"
+      + "<td>" + esc(rtStatusText(s)) + "</td>"
+      + '<td class="mono">' + esc(cell(s.ticket)) + "</td>"
+      + '<td class="mono">' + esc(cell(s.price_entry)) + "</td>"
+      + "</tr>";
+  });
+  out += "</table></div><div class='tiny muted' style='margin-top:6px'>共 " + rows.length
+    + " 条，此处显示前 50 条。本页只读，不提供任何交易操作。</div>";
+  box.innerHTML = out;
+}
+
+function rtRefresh() {
+  if (RT.busy) { return Promise.resolve(); }
+  RT.busy = true;
+  return Promise.all([
+    rtGet("/api/realtime/status"),
+    rtGet("/api/realtime/price"),
+    rtGet("/api/realtime/candles", { symbol: "XAUUSD", timeframe: "H1", count: 120 }),
+    rtGet("/api/realtime/signals")
+  ]).then(function (res) {
+    RT.busy = false;
+    var st = res[0] || {}, pr = res[1] || {}, cd = res[2] || {}, sg = res[3] || {};
+    $("rtBackend").textContent = st.backend || pr.backend || "—";
+    var meta = renderRtEngine(st);
+    renderRtQuote(pr);
+    renderRtChart(cd);
+    renderRtSignals(sg);
+    if (!st.ok) {
+      rtBanner("err", "后端" + rtReasonText(st.reason),
+        (st.error || "") + "  ·  " + (st.backend || "—") + "  ·  数据区已置为不可用，不显示任何行情数字以免误读");
+    } else if (meta && !meta.bridge) {
+      rtBanner("warn", "桥接离线", "引擎在运行，但 MT4 桥接未连接（bridge_connected=false）—— 报价/信号可能过期");
+    } else {
+      rtBanner("ok", "已连接（只读）", (st.backend || "—") + "  ·  仅 GET 白名单，无任何写操作");
+    }
+  }).catch(function (err) {
+    RT.busy = false;
+    rtBanner("err", "后端不可达", String(err && err.message ? err.message : err) + " —— 本页只读，不显示任何行情数字");
+    $("rtEngine").innerHTML = "";
+    $("rtEngineEmpty").style.display = "block";
+    $("rtEngineEmpty").textContent = "后端不可达，无数据。";
+    $("rtQuote").innerHTML = "";
+    $("rtQuoteEmpty").style.display = "block";
+    $("rtQuoteEmpty").textContent = "后端不可达，无数据。";
+    $("rtChart").innerHTML = '<div class="empty">后端不可达，无数据。</div>';
+    $("rtSignals").className = "empty";
+    $("rtSignals").textContent = "后端不可达，无数据。";
+  });
+}
+
+function rtSetPolling(on) {
+  if (RT.timer) { clearInterval(RT.timer); RT.timer = null; }
+  if (on) {
+    rtRefresh();
+    RT.timer = setInterval(rtRefresh, RT.everyMs);   // HTTP 轮询（2s）
+  }
+}
+
 /* ── 绑定 ─────────────────────────────────────────────────────────── */
 function bind() {
   $("btnTheme").onclick = function () {
@@ -1130,6 +1386,9 @@ function bind() {
   $("btnCopy").onclick = copyFormula;
   $("btnVerify").onclick = runVerify;
   $("btnBacktest").onclick = runBacktest;
+  $("rtPoll").onchange = function () {
+    if (state.view === "live") { rtSetPolling($("rtPoll").checked); }
+  };
   $("btnScroll").onclick = function () {
     state.autoscroll = !state.autoscroll;
     $("btnScroll").textContent = state.autoscroll ? "暂停滚动" : "恢复滚动";
