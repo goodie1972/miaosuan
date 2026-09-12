@@ -66,11 +66,19 @@ PLATFORM_SPEC: PlatformSpec = PlatformSpec(
     module_header=(
         "import numpy as np",
         "from strategies.base import BaseStrategy",
-        "from core.bridge import MT4BridgeBase",
+        # OrderType：generate_signal 必须返回 OrderType 枚举（on_tick 读 .value）。
+        "from core.bridge import MT4BridgeBase, OrderType",
     ),
     stub_modules={
         "strategies.base": ("BaseStrategy",),
-        "core.bridge": ("MT4BridgeBase",),
+        "core.bridge": ("MT4BridgeBase", "OrderType"),
+    },
+    # OrderType 是枚举：占位必须造出真 Enum，否则离线环境里 OrderType.BUY 直接
+    # AttributeError，生成文件连 import 后的信号路径都跑不通。成员与真平台一致。
+    stub_enums={
+        "core.bridge": {
+            "OrderType": ("BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT", "BUY_STOP", "SELL_STOP"),
+        },
     },
     supports_short=True,
     base_classes=("BaseStrategy", "MT4BridgeBase"),

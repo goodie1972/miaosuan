@@ -165,7 +165,9 @@ def test_generate_signal_uses_only_closed_bars(tmp_path: Path, algoforge_stubs: 
         for i in range(len(flat["close"]))
     ]
     strategy = module.FidelityProbeStrategy()
-    base = strategy.generate_signal(candles)
+    # 平台契约：on_tick 先 refresh_data() 灌 self.candles，再无参调用 generate_signal()
+    strategy.candles = candles
+    base = strategy.generate_signal()
     # 末位换成价格离谱的「未收盘」K 线：已收盘集合不变 → 信号必须一字不差
     garbage = {
         "open": float(flat["open"][-1]) * 5.0,
@@ -174,7 +176,8 @@ def test_generate_signal_uses_only_closed_bars(tmp_path: Path, algoforge_stubs: 
         "close": float(flat["close"][-1]) * 5.0,
         "volume": float(flat["volume"][-1]) * 100.0,
     }
-    with_forming_bar = strategy.generate_signal(candles[:-1] + [garbage])
+    strategy.candles = candles[:-1] + [garbage]
+    with_forming_bar = strategy.generate_signal()
     assert base is not None
     assert with_forming_bar == base
 
@@ -195,7 +198,8 @@ def test_generate_signal_returns_none_when_neutral(tmp_path: Path, algoforge_stu
         }
         for i in range(len(flat["close"]))
     ]
-    assert strategy.generate_signal(candles) is None
+    strategy.candles = candles
+    assert strategy.generate_signal() is None
 
 
 def test_generate_signal_none_on_insufficient_history(tmp_path: Path, algoforge_stubs: None) -> None:
@@ -213,7 +217,59 @@ def test_generate_signal_none_on_insufficient_history(tmp_path: Path, algoforge_
         }
         for i in range(100)
     ]
-    assert strategy.generate_signal(candles) is None
+    strategy.candles = candles
+    assert strategy.generate_signal() is None
+
+
+def test_generate_signal_matches_algoforge_contract(
+    tmp_path: Path, algoforge_stubs: None
+) -> None:
+    """P0 回归：``generate_signal`` 必须**无参**，且返回 OrderType 六元组。
+
+    AlgoForge ``BaseStrategy.on_tick`` 先 ``refresh_data()`` 灌 ``self.candles``，
+    再**无参**调用 ``generate_signal()``，随后读 ``signal.value``。以前模板生成的是
+    ``generate_signal(self, candles) -> dict``，平台侧一调用就 TypeError，
+    导出策略根本加载不起来。
+    """
+    module, _path = _export_module(FORMULAS["am_best"], tmp_path, "contract")
+    strategy = module.FidelityProbeStrategy()
+
+    # ① 无参：除 self 外不得有任何形参
+    import inspect
+
+    params = [
+        name
+        for name in inspect.signature(strategy.generate_signal).parameters
+        if name != "self"
+    ]
+    assert params == [], f"generate_signal 不应有额外形参，实际 {params}"
+
+    # ② 灌 K 线后无参调用，返回六元组且首元是 OrderType 枚举（有 .value）
+    raw = _synthetic_raw(n=1200, seed=29)
+    flat = {key: np.asarray(value)[0] for key, value in raw.items()}
+    strategy.candles = [
+        {
+            "open": float(flat["open"][i]),
+            "high": float(flat["high"][i]),
+            "low": float(flat["low"][i]),
+            "close": float(flat["close"][i]),
+            "volume": float(flat["volume"][i]),
+        }
+        for i in range(len(flat["close"]))
+    ]
+    result = strategy.generate_signal()
+    assert result is not None
+    assert isinstance(result, tuple) and len(result) == 6, f"应返回六元组，实际 {result!r}"
+    signal, score_long, score_short, factors_long, factors_short, indicators = result
+    assert signal.value in {"BUY", "SELL"}, f"首元必须是 OrderType，实际 {signal!r}"
+    assert isinstance(score_long, int) and isinstance(score_short, int)
+    assert isinstance(factors_long, list) and isinstance(factors_short, list)
+    assert isinstance(indicators, dict)
+    # 多头信号时分数记在多头侧，空头侧为 0（与 AlgoForge 既有策略一致）
+    if signal.value == "BUY":
+        assert score_long > 0 and score_short == 0 and factors_long
+    else:
+        assert score_short > 0 and score_long == 0 and factors_short
 
 
 def test_param_space_matches_class_attributes(tmp_path: Path, algoforge_stubs: None) -> None:
