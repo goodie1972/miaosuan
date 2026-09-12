@@ -25,6 +25,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -68,6 +69,72 @@ def _die(message: str) -> None:
     raise typer.Exit(code=1)
 
 
+#: 代际历史 sidecar 的版本号（结构变更时递增，便于前端识别）。
+_HISTORY_VERSION = 1
+
+
+def _history_payload(result: Any, *, spec_out: str, budget: str) -> dict[str, Any]:
+    """把逐代统计快照整理成可机器解析的 dict。
+
+    逐代历史只写 sidecar 文件而**不打进 stdout**：stdout 已经承载给人看的
+    挖掘结论（``[i] 候选`` 那几行），塞进几十行 ``GEN n ...`` 会把真正要人
+    看的结果淹掉，且现有测试对 stdout 有断言。sidecar 是纯新增、机器读、
+    不污染可读性。
+
+    Args:
+        result: :class:`~miaosuan.search.mine.MineResult`（结构化访问，
+            不依赖具体类型，测试可传替身）。
+        spec_out: 本次 ``--out`` 的 spec 路径，写进 sidecar 便于追溯。
+        budget: 预算档位。
+
+    Returns:
+        ``{"version", "spec", "budget", "stop_reason", "generations",
+        "n_evaluations", "points"}``；``points`` 每项为
+        ``{"generation", "best", "mean", "diversity", "n_evaluations"}``。
+        历史为空时 ``points`` 为空列表（前端据此优雅降级，不画空图）。
+    """
+    points: list[dict[str, Any]] = []
+    for snap in getattr(result, "history", None) or ():
+        points.append(
+            {
+                "generation": int(getattr(snap, "generation", 0)),
+                "best": float(getattr(snap, "best_fitness", 0.0)),
+                "mean": float(getattr(snap, "mean_fitness", 0.0)),
+                "diversity": float(getattr(snap, "diversity", 0.0)),
+                "n_evaluations": int(getattr(snap, "n_evaluations", 0)),
+            }
+        )
+    return {
+        "version": _HISTORY_VERSION,
+        "spec": str(spec_out),
+        "budget": budget,
+        "stop_reason": str(getattr(result, "stop_reason", "")),
+        "generations": int(getattr(result, "generations", 0)),
+        "n_evaluations": int(getattr(result, "n_evaluations", 0)),
+        "points": points,
+    }
+
+
+def _write_history(path: Path, result: Any, *, spec_out: str, budget: str) -> int:
+    """写代际历史 sidecar（JSON），返回写入的代数。
+
+    Args:
+        path: 目标文件路径；父目录不存在时自动创建。
+        result: 同 :func:`_history_payload`。
+        spec_out: 同 :func:`_history_payload`。
+        budget: 同 :func:`_history_payload`。
+
+    Returns:
+        ``points`` 的条数（即真实代数）；为 0 表示本次没有可画的历史。
+    """
+    payload = _history_payload(result, spec_out=spec_out, budget=budget)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    return len(payload["points"])
+
+
 # ── mine ────────────────────────────────────────────────────────────────────
 @app.command()
 def mine(
@@ -80,6 +147,11 @@ def mine(
     top_k: int = typer.Option(5, "--top-k", help="汇总候选数"),
     n_folds: int = typer.Option(5, "--n-folds", help="Walk-Forward 折数"),
     out: str = typer.Option("artifacts/spec.json", "--out", help="StrategySpec 输出路径"),
+    history_out: str = typer.Option(
+        "",
+        "--history-out",
+        help="逐代历史 sidecar 路径（缺省由 --out 派生：<stem>.history.json）",
+    ),
 ) -> None:
     """挖掘因子：数据 → 切分（封印 hold-out）→ 搜索 → 门禁 → Spec JSON。"""
     if budget not in _BUDGETS:
@@ -117,6 +189,8 @@ def mine(
     spec = outcome.spec
 
     write_spec(out, spec)
+    history_path = Path(history_out) if history_out else Path(out).with_suffix(".history.json")
+    n_points = _write_history(history_path, result, spec_out=out, budget=budget)
     _echo(f"市场画像：{outcome.profile.name}  预算档位={budget}")
     _echo("")
     _echo(f"停止原因：{result.stop_reason}  代数={result.generations}  评估={result.n_evaluations}")
@@ -133,6 +207,10 @@ def mine(
         )
     _echo("")
     _echo(f"spec 已写入：{out}")
+    if n_points:
+        _echo(f"逐代历史：{n_points} 代 → {history_path}")
+    else:
+        _echo("逐代历史：本次未产出（0 代）—— 训练曲线不显示")
     payload_vocab = (
         spec.payload.vocab_version if isinstance(spec.payload, FactorPayload) else "-"
     )

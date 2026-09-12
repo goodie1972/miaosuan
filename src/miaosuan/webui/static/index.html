@@ -302,12 +302,14 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
     </section>
 
     <section class="card">
-      <h2>④ Top-5 候选分数 <span class="hint">— 真实数据，非模拟</span></h2>
-      <div id="chart"></div>
+      <h2>④ 训练曲线与候选分数 <span class="hint">— 真实数据，非模拟</span></h2>
+      <div id="curve"></div>
+      <div class="tiny muted" style="margin-top:8px" id="curveNote"></div>
+      <div id="chart" style="margin-top:10px"></div>
       <div class="tiny muted" style="margin-top:8px">
         数据来源与口径：<b>CLI 子进程输出的 Top-5 候选行</b>（<span class="mono">[i] 公式 val=… dsr=… verdict=…</span>）。
         <b>val_score = 验证集得分</b>（口径与 spec 的 evidence.val_score 一致），DSR = 去膨胀夏普。
-        妙算目前<b>不输出逐代分数历史</b>，因此这里画的是候选间的真实对比，而不是编造的学习曲线。
+        两张图都是真实数据：<b>不做插值、不做平滑</b>；逐代曲线缺哪代就是哪代没产出。
       </div>
     </section>
 
@@ -577,6 +579,84 @@ function parseLog(lines) {
   return { stats: stats, candidates: cands };
 }
 
+/* ── 训练曲线（逐代最优/平均，内联 SVG 手绘，零依赖）────────────────── */
+/* 数据源：CLI 写的 sidecar artifacts/<spec stem>.history.json（逐代 GAStats）。
+   不插值、不平滑：缺哪代就是哪代没产出，宁可断线也不脑补。            */
+function renderCurve(points) {
+  var box = $("curve");
+  var note = $("curveNote");
+  if (!points || !points.length) {
+    // 优雅降级：历史为空（本次未产出 / 还没跑）就明确说清楚，绝不画空图或报错。
+    box.innerHTML = '<div class="empty">暂无逐代历史 —— 完成一次挖掘后，这里显示真实的训练曲线'
+      + '（数据来源：CLI 写出的 <span class="mono">.history.json</span> sidecar）。</div>';
+    note.textContent = "";
+    return;
+  }
+  var W = 640, H = 230, padL = 58, padR = 16, padT = 16, padB = 34;
+  var innerW = W - padL - padR, innerH = H - padT - padB;
+  var lo = Infinity, hi = -Infinity, gLo = Infinity, gHi = -Infinity;
+  points.forEach(function (p) {
+    if (p.best < lo) { lo = p.best; }
+    if (p.mean < lo) { lo = p.mean; }
+    if (p.best > hi) { hi = p.best; }
+    if (p.mean > hi) { hi = p.mean; }
+    if (p.generation < gLo) { gLo = p.generation; }
+    if (p.generation > gHi) { gHi = p.generation; }
+  });
+  if (!isFinite(lo) || !isFinite(hi)) { lo = 0; hi = 1; }
+  if (hi - lo < 1e-9) { hi = lo + 1; }          // 全平：避免除以 0
+  var pad = (hi - lo) * 0.08;
+  lo -= pad; hi += pad;
+  if (gHi === gLo) { gHi = gLo + 1; }            // 只有一代：避免除以 0
+
+  function xOf(g) { return padL + (g - gLo) / (gHi - gLo) * innerW; }
+  function yOf(v) { return padT + (hi - v) / (hi - lo) * innerH; }
+
+  function pathOf(key, color) {
+    var d = "";
+    points.forEach(function (p, k) {
+      d += (k ? " L" : "M") + xOf(p.generation).toFixed(2) + " " + yOf(p[key]).toFixed(2);
+    });
+    return '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="2"'
+      + ' stroke-linejoin="round" stroke-linecap="round" style="color:' + color + '"></path>';
+  }
+
+  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '"'
+    + ' role="img" aria-label="逐代最优分与平均分曲线">';
+  var mono = 'font-family:var(--mono);font-size:10px';
+  // 网格 + Y 轴刻度（4 档）
+  for (var i = 0; i <= 4; i++) {
+    var v = lo + (hi - lo) * i / 4, y = yOf(v);
+    svg += '<line x1="' + padL + '" y1="' + y.toFixed(2) + '" x2="' + (W - padR) + '" y2="' + y.toFixed(2)
+      + '" style="stroke:var(--line);stroke-width:1"></line>';
+    svg += '<text x="' + (padL - 6) + '" y="' + (y + 3).toFixed(2) + '" text-anchor="end"'
+      + ' style="fill:var(--ink-2);' + mono + '">' + v.toFixed(3) + "</text>";
+  }
+  // X 轴刻度（首 / 中 / 末代）
+  [gLo, Math.round((gLo + gHi) / 2), gHi].forEach(function (g) {
+    svg += '<text x="' + xOf(g).toFixed(2) + '" y="' + (H - padB + 16) + '" text-anchor="middle"'
+      + ' style="fill:var(--ink-2);' + mono + '">gen ' + g + "</text>";
+  });
+  svg += pathOf("mean", "var(--info)");
+  svg += pathOf("best", "var(--gold)");
+  // 末代打点，便于读终值
+  var last = points[points.length - 1];
+  svg += '<circle cx="' + xOf(last.generation).toFixed(2) + '" cy="' + yOf(last.best).toFixed(2)
+    + '" r="3" style="fill:var(--gold)"></circle>';
+  svg += '<circle cx="' + xOf(last.generation).toFixed(2) + '" cy="' + yOf(last.mean).toFixed(2)
+    + '" r="3" style="fill:var(--info)"></circle>';
+  svg += "</svg>";
+  box.innerHTML = svg;
+
+  var legend = '<span style="color:var(--gold)">━ 最优分</span> &nbsp;'
+    + '<span style="color:var(--info)">━ 平均分</span> &nbsp; '
+    + points.length + " 代 &nbsp;·&nbsp; 终值 最优 " + last.best.toFixed(4)
+    + " / 平均 " + last.mean.toFixed(4);
+  note.innerHTML = "训练曲线口径：" + legend
+    + "。<b>适配度 = GA 搜索适应度</b>（非绩效指标，不能直接当收益/夏普读）；"
+    + "横轴为真实代数，纵轴为该代适应度，<b>未做插值与平滑</b>。";
+}
+
 /* ── Top-5 候选柱状图（内联 SVG 手绘，零依赖）─────────────────────── */
 function verdictColor(v) {
   if (v === "DEPLOYABLE" || v === "PASS") { return "var(--up)"; }
@@ -684,6 +764,17 @@ function fillProgress(st, running) {
 }
 
 function finishJob(s) {
+  // 训练曲线：读 CLI 落盘的逐代历史 sidecar（机器可读，不污染 stdout 日志）。
+  if (s.returncode === 0 && s.history_out) {
+    jfetch("/api/history?name=" + encodeURIComponent(s.history_out)).then(function (h) {
+      renderCurve(h.points || []);
+    }).catch(function (e) {
+      dbg("历史读取失败：" + e.message);
+      renderCurve([]);   // 读取失败同样降级为空状态，不抛错到页面
+    });
+  } else {
+    renderCurve([]);
+  }
   if (s.returncode === 0 && s.spec_out) {
     jfetch("/api/spec/" + encodeURIComponent(s.spec_out)).then(function (spec) {
       state.spec = s.spec_out;
@@ -842,6 +933,7 @@ function boot() {
   loadMeta();
   loadData();
   renderChart([]);
+  renderCurve([]);  // 首屏无历史 → 走空状态，不画空图
   refreshLists();   // ⑧⑨ 两张表首屏就要有内容，否则一直停在"加载中…"
   startPolling();
 }

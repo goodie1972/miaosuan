@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from typer.testing import CliRunner
 
-from miaosuan.cli import _extract_tokens, app
+from miaosuan.cli import _extract_tokens, _history_payload, _write_history, app
 from miaosuan.core.vocab import VOCAB_VERSION
 from miaosuan.ir.codec import write_spec
 from miaosuan.ir.schema import (
@@ -53,6 +55,87 @@ def spec_file(tmp_path: Path) -> Path:
     target = tmp_path / "spec.json"
     write_spec(target, _spec())
     return target
+
+
+def _ga_history(n: int) -> list[object]:
+    """造 n 代真实 :class:`GAStats`（用真类型，避免替身掩盖字段名写错）。"""
+    from miaosuan.search.ga import GAStats
+
+    return [
+        GAStats(
+            generation=g,
+            best_fitness=1.0 + g,
+            mean_fitness=0.5 + g * 0.5,
+            diversity=0.4 - g * 0.05,
+            population_size=100,
+            n_evaluations=(g + 1) * 10,
+            n_immigrants=0,
+            n_diversity_rejects=0,
+        )
+        for g in range(n)
+    ]
+
+
+def _fake_result(n_generations: int) -> SimpleNamespace:
+    """只带 :func:`_history_payload` 所需字段的结果替身。"""
+    return SimpleNamespace(
+        history=_ga_history(n_generations),
+        stop_reason="MAX_GENERATIONS",
+        generations=n_generations,
+        n_evaluations=n_generations * 10,
+    )
+
+
+def test_history_payload_carries_real_generations() -> None:
+    """逐代历史必须能被序列化出**非空**的真实序列（训练曲线的数据源）。
+
+    回归防线：UI 的训练曲线只认这个结构。字段名一旦被改（如 best_fitness →
+    best），前端拿到的是一堆 0，画出来的曲线看着"正常"但全是假的 —— 所以这里
+    用真正的 :class:`GAStats` 实例来验，而不是字典替身。
+    """
+    payload = _history_payload(_fake_result(4), spec_out="artifacts/spec.json", budget="quick")
+
+    assert payload["version"] >= 1
+    assert payload["spec"] == "artifacts/spec.json"
+    assert payload["budget"] == "quick"
+    assert payload["generations"] == 4
+    assert len(payload["points"]) == 4
+    first, last = payload["points"][0], payload["points"][-1]
+    assert first["generation"] == 0 and last["generation"] == 3
+    assert last["best"] == 4.0 and last["mean"] == 2.0
+    assert last["n_evaluations"] == 40
+    # 多样性必须跟着走（图注里要报收敛情况）
+    assert abs(last["diversity"] - 0.25) < 1e-9
+
+
+def test_history_payload_degrades_to_empty_points() -> None:
+    """无历史时 ``points`` 必须是空列表 —— 前端据此走空状态，不画空图。
+
+    两种情况都要覆盖：history 是空列表；以及结果对象根本没有 history 字段
+    （老版本 / 部分失败路径）。两者都不能抛异常。
+    """
+    empty = _history_payload(_fake_result(0), spec_out="s.json", budget="quick")
+    assert empty["points"] == []
+
+    no_attr = _history_payload(
+        SimpleNamespace(stop_reason="WALL_CLOCK", generations=0, n_evaluations=0),
+        spec_out="s.json",
+        budget="quick",
+    )
+    assert no_attr["points"] == []
+    assert no_attr["stop_reason"] == "WALL_CLOCK"
+
+
+def test_write_history_creates_sidecar_json(tmp_path: Path) -> None:
+    """sidecar 必须落成**可解析**的 JSON，且路径按 ``<out stem>.history.json`` 派生。"""
+    target = tmp_path / "nested" / "spec.history.json"
+    n = _write_history(target, _fake_result(3), spec_out="artifacts/spec.json", budget="standard")
+
+    assert n == 3
+    assert target.is_file()  # 父目录不存在时要自动创建
+    data = json.loads(target.read_text(encoding="utf-8"))
+    assert data["version"] == 1
+    assert [p["generation"] for p in data["points"]] == [0, 1, 2]
 
 
 def test_help_lists_all_subcommands() -> None:
