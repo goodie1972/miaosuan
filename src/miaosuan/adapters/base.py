@@ -21,7 +21,7 @@ import types
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from enum import StrEnum
+from enum import Enum, StrEnum
 from typing import Any
 
 from ..ir.schema import StrategySpec
@@ -136,6 +136,9 @@ class PlatformSpec:
         stub_modules: ``{模块名: (导出符号, ...)}`` —— 本地无该平台 SDK 时，
             由 :func:`install_stub_modules` 数据驱动地注入占位模块，
             使生成文件可在离线环境中被 import / exec（数值保真度回归依赖此能力）。
+        stub_enums: ``{模块名: {符号名: (成员, ...)}}`` —— 这些占位符号是**枚举**，
+            必须造出真 :class:`enum.Enum`（成员值取成员名，与真平台一致），
+            否则 ``OrderType.BUY`` 之类的访问会直接 AttributeError。
         supports_short: 平台是否支持做空。
         base_classes: 生成策略类继承的基类（按给出顺序）。
         default_symbol: 默认交易标的示例值。
@@ -145,6 +148,7 @@ class PlatformSpec:
     file_suffix: str = ".py"
     module_header: tuple[str, ...] = ()
     stub_modules: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    stub_enums: Mapping[str, Mapping[str, tuple[str, ...]]] = field(default_factory=dict)
     supports_short: bool = False
     base_classes: tuple[str, ...] = ()
     default_symbol: str = "XAUUSD"
@@ -156,6 +160,10 @@ class PlatformSpec:
             "file_suffix": self.file_suffix,
             "module_header": list(self.module_header),
             "stub_modules": {k: list(v) for k, v in self.stub_modules.items()},
+            "stub_enums": {
+                k: {sym: list(members) for sym, members in enums.items()}
+                for k, enums in self.stub_enums.items()
+            },
             "supports_short": self.supports_short,
             "base_classes": list(self.base_classes),
             "default_symbol": self.default_symbol,
@@ -245,6 +253,22 @@ class TargetPort(ABC):
         )
 
 
+def _make_stub(symbol: str, members: tuple[str, ...]) -> Any:
+    """造一个占位符号：有成员清单时造真 Enum，否则造空类。
+
+    Args:
+        symbol: 占位符号名。
+        members: 枚举成员名；空元组表示这不是枚举，造普通空类。
+
+    Returns:
+        占位类型。枚举占位与平台侧同构（成员值取成员名），因此
+        ``OrderType.BUY.value == "BUY"`` 之类的访问在离线环境同样成立。
+    """
+    if members:
+        return Enum(symbol, {name: name for name in members})
+    return type(symbol, (), {"__stub__": True})
+
+
 def install_stub_modules(platform: PlatformSpec) -> tuple[str, ...]:
     """按 :attr:`PlatformSpec.stub_modules` 注入占位模块（数据驱动）。
 
@@ -270,8 +294,9 @@ def install_stub_modules(platform: PlatformSpec) -> tuple[str, ...]:
             if depth < len(parts):
                 module.__path__ = []
             else:
+                enums = platform.stub_enums.get(dotted, {})
                 for symbol in exports:
-                    setattr(module, symbol, type(symbol, (), {"__stub__": True}))
+                    setattr(module, symbol, _make_stub(symbol, enums.get(symbol, ())))
             sys.modules[name] = module
             created.append(name)
             if depth > 1:

@@ -16,6 +16,11 @@
 ``AF004``（WARNING，R1）
     公式含 GATE 但死区保护未启用（``GATE_DEADBAND <= 0``）。
 
+``AF005``（ERROR，平台契约）
+    ``generate_signal`` 必须是**无参**方法。AlgoForge 基类 ``on_tick`` 先
+    ``refresh_data()`` 灌好 ``self.candles``，再无参调用它；声明成
+    ``generate_signal(self, candles)`` 会让策略在平台侧一调用就 ``TypeError``。
+
 ``AF006``（WARNING）
     ``STRATEGY_CHANGELOG`` 为空——生成文件应当自述来源。
 
@@ -104,6 +109,7 @@ def lint_source(source: str) -> list[LintIssue]:
 
     issues: list[LintIssue] = []
     issues.extend(_check_required_constants(tree))
+    issues.extend(_check_signal_contract(tree))
     issues.extend(_check_repaint(tree))
     issues.extend(_check_vocab_version(tree))
     issues.extend(_check_nondeterminism(tree))
@@ -192,6 +198,48 @@ def _is_dynamic_last_index(slice_node: ast.AST) -> bool:
         and slice_node.lower is not None
         and _is_negative_one(slice_node.lower)
     )
+
+
+def _extra_params(func: ast.FunctionDef) -> list[str]:
+    """列出方法除 ``self`` 之外的所有形参名（含 kw-only / *args / **kwargs）。"""
+    names = [a.arg for a in (*func.args.posonlyargs, *func.args.args) if a.arg != "self"]
+    names.extend(a.arg for a in func.args.kwonlyargs)
+    if func.args.vararg is not None:
+        names.append(func.args.vararg.arg)
+    if func.args.kwarg is not None:
+        names.append(func.args.kwarg.arg)
+    return names
+
+
+def _check_signal_contract(tree: ast.Module) -> list[LintIssue]:
+    """AF005：``generate_signal`` 必须是**无参**方法（AlgoForge 平台契约）。
+
+    只检查**类体内**的同名方法：平台契约约束的是策略类的方法，模块级同名函数
+    不是策略入口，不应被这条规则拦下（避免误伤 fixture / 辅助函数）。
+    """
+    issues: list[LintIssue] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        for item in node.body:
+            if not (isinstance(item, ast.FunctionDef) and item.name == "generate_signal"):
+                continue
+            extra = _extra_params(item)
+            if not extra:
+                continue
+            issues.append(
+                LintIssue(
+                    code="AF005",
+                    severity=LintSeverity.ERROR,
+                    message=(
+                        f"generate_signal 不得声明额外参数（发现 {extra}）："
+                        "AlgoForge 基类 on_tick 以无参方式调用它，"
+                        "K 线应从 self.candles 读取，不能走形参"
+                    ),
+                    line=item.lineno,
+                )
+            )
+    return issues
 
 
 def _check_repaint(tree: ast.Module) -> list[LintIssue]:

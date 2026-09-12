@@ -1,4 +1,4 @@
-"""M16：repaint lint 规则（AF001 / AF002 / AF003 / AF004）。"""
+"""M16：repaint / 契约 lint 规则（AF001 ~ AF007）。"""
 
 from __future__ import annotations
 
@@ -107,6 +107,46 @@ def test_af004_ignores_formulas_without_gate_token() -> None:
         'STRATEGY_VERSION = "1"\nSTRATEGY_CHANGELOG = ("v1",)\n'
     )
     assert _only(source, "AF004") == []
+
+
+def test_af005_flags_generate_signal_with_candles_arg() -> None:
+    """P0 回归：``generate_signal(self, candles)`` 必须被拦成 ERROR。
+
+    AlgoForge 基类 ``on_tick`` 以**无参**方式调用它，带形参会在平台侧
+    直接 TypeError，导出策略加载不起来。
+    """
+    source = (
+        "class S:\n"
+        "    def generate_signal(self, candles):\n"
+        "        return candles[:-1]\n"
+    )
+    issues = _only(source, "AF005")
+    assert issues, "带 candles 形参的 generate_signal 必须报错"
+    assert lint_source(source)[0].severity == LintSeverity.ERROR
+
+
+def test_af005_also_catches_keyword_and_varargs() -> None:
+    """kw-only / *args / **kwargs 同样违反契约（平台不会传任何参数）。"""
+    assert _only("class S:\n    def generate_signal(self, *, candles):\n        pass\n", "AF005")
+    assert _only("class S:\n    def generate_signal(self, **kw):\n        pass\n", "AF005")
+    assert _only("class S:\n    def generate_signal(self, *args):\n        pass\n", "AF005")
+
+
+def test_af005_accepts_no_arg_method() -> None:
+    """无参写法（K 线从 self.candles 读）不应报错。"""
+    source = (
+        "class S:\n"
+        "    def generate_signal(self):\n"
+        "        return self.candles[:-1]\n"
+    )
+    assert _only(source, "AF005") == []
+    # 顺带确认 bar1 语义没被 AF001 误伤
+    assert _only(source, "AF001") == []
+
+
+def test_af005_ignores_module_level_function() -> None:
+    """模块级同名函数不是策略入口，不应被这条规则拦下（避免误伤辅助函数）。"""
+    assert _only("def generate_signal(candles):\n    return candles[:-1]\n", "AF005") == []
 
 
 def test_issues_sorted_by_severity_then_code() -> None:

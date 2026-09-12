@@ -10,7 +10,7 @@
 * 因子：``StackVM`` 求值 + 滚动 {{ roll_window }} 期 z-score（clip 到 ±3，前 {{ warmup_bars }}
   根输出 0）——与 ``miaosuan.core.vm.StackVM`` **逐位同源**（内核源码由 core 原样导出）。
 * 仓位：``exposure = tanh(factor)``；``|exposure| < {{ neutral_band }}`` 视为中性、**不出信号**。
-* bar1 语义（不重绘）：``generate_signal`` **只用已收盘 K 线**（``candles[:-1]``），
+* bar1 语义（不重绘）：``generate_signal`` **只用已收盘 K 线**（``self.candles[:-1]``），
   最后一根未收盘 K 线不参与任何计算，因此不存在未来函数。
 {% if has_gate %}
 * R1 保护：公式含 GATE 算子。GATE 在条件穿越 0 时会 O(1) 跳变，float32 归约误差
@@ -328,18 +328,25 @@ class {{ class_name }}({{ base_classes | join(", ") }}):
         """策略启动所需的最少历史 K 线根数（预热 + 最长特征窗口余量）。"""
         return int(self.WARMUP_BARS) + 300
 
-    def generate_signal(self, candles: Any) -> dict[str, Any] | None:
-        """根据已收盘 K 线生成信号。
+    def generate_signal(self) -> tuple[Any, ...] | None:
+        """按 AlgoForge 平台契约生成交易信号（**无参**；K 线从 ``self.candles`` 读）。
 
-        bar1 语义（不重绘）：``candles[-1]`` 是**正在形成**的 K 线，本方法用
-        ``candles[:-1]`` 把它剔除，只用已收盘数据计算，因此不存在未来函数。
+        平台契约（``strategies.base.BaseStrategy``）：
 
-        Args:
-            candles: 平台 K 线序列（最后一根允许是未收盘 K 线）。
+        * 基类 ``on_tick`` 先 ``refresh_data()`` 把 K 线灌进 ``self.candles``，
+          再以**无参**方式调用本方法。因此这里**不能**声明 ``candles`` 形参 ——
+          否则 AlgoForge 一调用就 ``TypeError``，导出策略根本加载不起来。
+        * 返回 ``None``（无信号）或六元组
+          ``(signal, score_long, score_short, factors_long, factors_short, indicator_values)``；
+          ``signal`` 必须是 ``OrderType`` 枚举（``on_tick`` 会读 ``signal.value``）。
+
+        bar1 语义（不重绘）：``self.candles[-1]`` 是**正在形成**的 K 线，本方法用
+        ``self.candles[:-1]`` 把它剔除，只用已收盘数据计算，因此不存在未来函数。
 
         Returns:
-            信号字典；数据不足 / 因子中性 / 未过预热期时返回 ``None``。
+            六元组；数据不足 / 因子中性 / 未过预热期时返回 ``None``。
         """
+        candles = getattr(self, "candles", None)
         closed = candles[:-1] if candles is not None and len(candles) > 1 else candles
         arrays = _candles_to_arrays(closed)
         if arrays is None:
@@ -353,10 +360,14 @@ class {{ class_name }}({{ base_classes | join(", ") }}):
             return None
         if not self.LONG_SHORT and exposure < 0.0:
             return None
-        return {
+        score = int(round(min(abs(exposure), 1.0) * 100))
+        indicator_values: dict[str, Any] = {
             "symbol": self.SYMBOL,
             "magic": self.STRATEGY_MAGIC,
-            "side": "BUY" if exposure > 0.0 else "SELL",
-            "exposure": abs(exposure),
-            "factor": value,
+            "factor": round(value, 4),
+            "exposure": round(exposure, 4),
+            "bars": int(factor.size),
         }
+        if exposure > 0.0:
+            return (OrderType.BUY, score, 0, [f"{self.STRATEGY_NAME}-LONG"], [], indicator_values)
+        return (OrderType.SELL, 0, score, [], [f"{self.STRATEGY_NAME}-SHORT"], indicator_values)
