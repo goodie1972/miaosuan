@@ -52,6 +52,9 @@ __all__ = [
 #: 滚动夏普默认窗口：一年的 1/12（≈1 个月）。H1 外汇下约 520 根 bar。
 DEFAULT_ROLLING_WINDOW_DIVISOR = 12
 
+#: 分块 sliding_window_view 时单块允许的最大元素数（控内存峰值，约 32MB）。
+_SHARPE_BLOCK_ELEMENTS: int = 4_000_000
+
 
 @dataclass(frozen=True)
 class Trade:
@@ -192,7 +195,17 @@ def compute_rolling_sharpe(
     window: int,
     periods_per_year: int,
 ) -> np.ndarray:
-    """滚动夏普（滑窗用前缀和，O(T) 而非 O(T·W)）。
+    """滚动夏普（**逐窗**方差，ddof=1；分块 ``sliding_window_view`` 控内存）。
+
+    为什么不再用"前缀和 + ``E[x²] − E[x]²``"
+    --------------------------------------
+    旧实现先对**整段**去全局均值，再用 ``E[x²] − E[x]²`` 求窗内方差。当窗口正好落在
+    一段常数区间上时，两个 O(1) 量相减发生**灾难性抵消**：残余 std ≈ 3e-10 远大于真值
+    0，Sharpe 被放大到 ~2e9（实测拼接常数段 ``[0.005×1000, 0.001×1000]``、``window=520``
+    时 max|S| ≈ 2.3e9，峰值恰在 ptp=0 的常数窗口上）。
+
+    改为**在每个窗口内部**各自求均值与 ``var(ddof=1)``：常数窗口得到精确 0，不再爆炸。
+    ``ddof`` 取 1 与 :func:`miaosuan.report.metrics.sharpe` 对齐（口径一致）。
 
     Args:
         portfolio_pnl: ``[T]`` 逐 bar 净收益。
@@ -201,27 +214,29 @@ def compute_rolling_sharpe(
 
     Returns:
         ``[T]`` 滚动夏普；前 ``window - 1`` 个位置为 ``nan``（窗口未满），
-        窗口内标准差为 0 时该点记 ``0.0``（避免除零产生 inf）。
+        窗口内标准差过小（``< 1e-12``）时该点记 ``0.0``（避免除零产生 inf）。
     """
     arr = np.asarray(portfolio_pnl, dtype=np.float64)
     n = arr.size
     out = np.full(n, np.nan, dtype=np.float64)
     if n < window or window < 2:
         return out
-    # 先减去全局均值再累加：直接用 E[x²]−E[x]² 会在"窗口内近似常数"时发生
-    # 灾难性抵消（实测常数序列残余 std ≈ 3e-10，Sharpe 被放大到 3.4e9）。
-    # 中心化后 y 的量级围绕 0，抵消误差随之消失。
-    center = float(arr.mean()) if arr.size else 0.0
-    centered = arr - center
-    csum = np.cumsum(np.insert(centered, 0, 0.0))
-    csum_sq = np.cumsum(np.insert(centered * centered, 0, 0.0))
-    s1 = csum[window:] - csum[:-window]
-    s2 = csum_sq[window:] - csum_sq[:-window]
-    mean = center + s1 / window
-    var = np.maximum(s2 / window - (s1 / window) ** 2, 0.0)
-    std = np.sqrt(var)
+    # sliding_window_view 是**视图**（不复制）；对每个窗口独立求 mean / std(ddof=1)。
+    slide = np.lib.stride_tricks.sliding_window_view(arr, window)
+    n_win = slide.shape[0]
+    sharpe = np.empty(n_win, dtype=np.float64)
     scale = math.sqrt(float(periods_per_year))
-    sharpe = np.where(std > 1e-12, mean / np.where(std > 1e-12, std, 1.0) * scale, 0.0)
+    # 分块处理：避免一次性物化 (n_win, window) 的临时大数组。
+    block = max(1, _SHARPE_BLOCK_ELEMENTS // window)
+    for start in range(0, n_win, block):
+        stop = min(start + block, n_win)
+        chunk = slide[start:stop]
+        mean = chunk.mean(axis=1)
+        std = chunk.std(axis=1, ddof=1)
+        active = std > 1e-12
+        sharpe[start:stop] = np.where(
+            active, mean / np.where(active, std, 1.0) * scale, 0.0
+        )
     out[window - 1 :] = sharpe
     return out
 
