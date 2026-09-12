@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import urllib.error
 import urllib.parse
 from typing import Any
 
@@ -351,6 +352,189 @@ def test_index_html_is_single_file_zero_cdn_dual_theme() -> None:
     # 回测页已实装（不再是占位）：有运行入口、走 /api/backtest，且带口径警告
     assert '/api/backtest' in html
     assert "运行回测" in html
-    assert "待接入 · 计划中" in html  # 03 实时仍是占位，这个断言防止它被误删说明
+    # 03 实时页已实装（不再是占位）：只读接入 AlgoForge 后端，占位说明已移除
+    assert "待接入 · 计划中" not in html
+    assert "只读接入" in html
+    assert "绝不下单" in html            # 红线声明必须留在页面上
+    assert "后端不可达" in html          # 离线降级文案（不显示 0 / 空表）
+    for ep in ("/api/realtime/status", "/api/realtime/price",
+               "/api/realtime/candles", "/api/realtime/signals"):
+        assert ep in html
+    # 红线：实时页绝不含任何写操作入口（下单 / 平仓 / 启停引擎）
+    for forbidden in ("/api/order", "/api/orders", "/api/trade",
+                      "/api/close", "/api/engine/start", "/api/engine/stop"):
+        assert forbidden not in html
     # 口径铁律：val_score 是搜索适应度，不得当绩效展示
     assert "不是绩效指标" in html or "不是绩效" in html
+
+
+# ── 03 实时页：只读代理端点 ────────────────────────────────────────────────
+#
+# 红线（用户明确要求，且其 MT4 正在跑实盘）：**只读，绝不下单**。
+# 这里在**端点层**把红线钉死：写方法一律 405、离线降级醒目（ok=false 且 data
+# 为 None，绝不伪造 0），只读白名单越界在客户端层还会直接抛异常（见
+# ``tests/test_algoforge_realtime.py``）。
+
+
+class _FakeResp:
+    """``urlopen`` 返回体替身：支持 ``with`` + ``.status`` + ``.read()``。"""
+
+    def __init__(self, payload: Any, status: int = 200) -> None:
+        self.status = status
+        self._raw = json.dumps(payload).encode("utf-8")
+
+    def read(self) -> bytes:
+        return self._raw
+
+    def __enter__(self) -> _FakeResp:
+        return self
+
+    def __exit__(self, *exc: Any) -> bool:
+        return False
+
+
+def _install_realtime(monkeypatch: pytest.MonkeyPatch, handler: Any) -> list[str]:
+    """把 ``server._realtime_client`` 换成 ``_open`` 被替换的只读客户端。
+
+    这样端点走的是**真实**路由 / ``safe_call`` / ``_outcome_payload`` 逻辑，只把
+    最底层的一次 socket 换成内存桩（避免真连后端、避免 3s 超时拖慢测试）。
+
+    Args:
+        monkeypatch: pytest 的 monkeypatch fixture。
+        handler: 接收 ``urllib.request.Request``，返回响应或抛异常。
+
+    Returns:
+        记录每次请求完整 URL 的列表（用于断言查询参数是否透传）。
+    """
+    from miaosuan.adapters.algoforge.realtime import AlgoforgeReadOnlyClient
+
+    seen: list[str] = []
+    client = AlgoforgeReadOnlyClient(base_url="http://127.0.0.1:1783", timeout=2.0)
+
+    def _open(request: Any) -> Any:
+        seen.append(request.full_url)
+        return handler(request)
+
+    monkeypatch.setattr(client, "_open", _open)
+    monkeypatch.setattr(server, "_realtime_client", lambda: client)
+    return seen
+
+
+def test_realtime_status_degrades_loudly_when_backend_down(
+    app: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """后端不可达 → 200 + ok=false + 原因码，``data`` 为 ``None``（**绝不伪造 0**）。"""
+    def _boom(request: Any) -> Any:
+        raise urllib.error.URLError(ConnectionRefusedError("refused"))
+
+    _install_realtime(monkeypatch, _boom)
+    status, data = _call(app, "GET", "/api/realtime/status")
+    assert status == 200
+    assert data["ok"] is False
+    assert data["reason"] == "unreachable"
+    assert data["data"] is None          # 关键：不是 0、不是空字典
+    assert data["error"]                 # 有可读原因
+    assert data["backend"] == "http://127.0.0.1:1783"
+
+
+def test_realtime_reflects_timeout_reason(
+    app: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """超时与不可达要能被前端区分（reason 码不同），都走 ok=false 降级。"""
+    def _timeout(request: Any) -> Any:
+        raise urllib.error.URLError(TimeoutError("timed out"))
+
+    _install_realtime(monkeypatch, _timeout)
+    status, data = _call(app, "GET", "/api/realtime/status")
+    assert status == 200
+    assert data["ok"] is False
+    assert data["reason"] == "timeout"
+
+
+def test_realtime_http_error_is_reported_not_swallowed(
+    app: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """后端返回非 2xx → ok=false + http_error + 状态码（不静默成"正常"）。"""
+    def _err(request: Any) -> Any:
+        raise urllib.error.HTTPError(
+            request.full_url, 503, "Service Unavailable", {}, None
+        )
+
+    _install_realtime(monkeypatch, _err)
+    status, data = _call(app, "GET", "/api/realtime/status")
+    assert status == 200
+    assert data["ok"] is False
+    assert data["reason"] == "http_error"
+    assert data["status"] == 503
+
+
+def test_realtime_price_returns_real_quote(
+    app: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """后端在线 → 原样回传报价（不加工、不伪造）。"""
+    quote = {"symbol": "XAUUSD", "bid": 2031.45, "ask": 2031.75, "spread": 30}
+    _install_realtime(monkeypatch, lambda request: _FakeResp(quote))
+    status, data = _call(app, "GET", "/api/realtime/price")
+    assert status == 200
+    assert data["ok"] is True
+    assert data["reason"] == "ok"
+    assert data["data"] == quote
+    assert data["data"]["bid"] == 2031.45  # 真实数字原样透传
+
+
+def test_realtime_candles_forwards_symbol_timeframe_count(
+    app: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """K 线端点必须把 symbol/timeframe/count 透传给只读客户端。"""
+    bars = [{"close": 2031.0}, {"close": 2032.0}]
+    seen = _install_realtime(monkeypatch, lambda request: _FakeResp(bars))
+    status, data = _call(
+        app, "GET", "/api/realtime/candles?symbol=EURUSD&timeframe=M15&count=50"
+    )
+    assert status == 200
+    assert data["ok"] is True
+    assert len(seen) == 1
+    q = urllib.parse.parse_qs(urllib.parse.urlparse(seen[0]).query)
+    assert q["symbol"] == ["EURUSD"]
+    assert q["timeframe"] == ["M15"]
+    assert q["count"] == ["50"]
+
+
+def test_realtime_latest_requires_strategy_and_sends_no_request(
+    app: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """缺 ``strategy`` → 400，且**一个请求都不发**（校验先于网络）。"""
+    seen = _install_realtime(monkeypatch, lambda request: _FakeResp({}))
+    status, data = _call(app, "GET", "/api/realtime/latest")
+    assert status == 400
+    assert "strategy" in data["detail"]
+    assert seen == []
+
+
+def test_realtime_latest_forwards_strategy(
+    app: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """带 ``strategy`` → 透传并回传。"""
+    seen = _install_realtime(monkeypatch, lambda request: _FakeResp({"signal": "BUY"}))
+    status, data = _call(app, "GET", "/api/realtime/latest?strategy=ExpForge_x")
+    assert status == 200
+    assert data["ok"] is True
+    q = urllib.parse.parse_qs(urllib.parse.urlparse(seen[0]).query)
+    assert q["strategy"] == ["ExpForge_x"]
+
+
+def test_realtime_endpoints_reject_non_get(app: Any) -> None:
+    """写方法一律 405：实时页**不存在**任何可写的后端入口（红线可证明）。"""
+    for verb in ("POST", "PUT", "DELETE", "PATCH"):
+        status, _ = _call(app, verb, "/api/realtime/status", {})
+        assert status == 405, f"{verb} 竟然被放行"
+
+
+def test_realtime_client_base_url_is_configurable(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """后端地址可配置（环境变量优先），默认 ``http://127.0.0.1:1783``。"""
+    monkeypatch.delenv("MIAOSUAN_ALGOFORGE_URL", raising=False)
+    assert server._realtime_client().base_url == "http://127.0.0.1:1783"
+    monkeypatch.setenv("MIAOSUAN_ALGOFORGE_URL", "http://10.0.0.9:8080/")
+    assert server._realtime_client().base_url == "http://10.0.0.9:8080"

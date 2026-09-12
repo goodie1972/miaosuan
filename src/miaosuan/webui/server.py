@@ -30,6 +30,12 @@ from pydantic import BaseModel
 
 from ..adapters.algoforge.generator import readable_formula
 from ..adapters.algoforge.lint import lint_source
+from ..adapters.algoforge.realtime import (
+    AlgoforgeReadOnlyClient,
+    RealtimeOutcome,
+    env_config,
+    safe_call,
+)
 from ..core.vocab import FORMULA_VOCAB, VOCAB_VERSION
 from ..data.loader import load
 from ..ir.provenance import MIAOSUAN_VERSION
@@ -157,6 +163,30 @@ def _validate_market_choice(symbol: str, market: str) -> None:
             f"或显式选择市场画像（{_PROFILE_HINT}）"
         ),
     )
+
+
+# ── 实时页：AlgoForge 后端**只读**代理 ───────────────────────────────────────
+
+def _realtime_client() -> AlgoforgeReadOnlyClient:
+    """构造只读客户端（地址/超时每次读环境变量，便于运维改配置）。
+
+    默认 ``http://127.0.0.1:1783``（AlgoForge dashboard），超时 3 秒。
+    **只读**白名单在客户端层强制（见 :mod:`miaosuan.adapters.algoforge.realtime`）。
+    """
+    base_url, timeout = env_config()
+    return AlgoforgeReadOnlyClient(base_url=base_url, timeout=timeout)
+
+
+def _outcome_payload(outcome: RealtimeOutcome, base_url: str) -> dict[str, Any]:
+    """把只读结果包装成前端信封（失败时带原因，**不含任何伪造的 0/空值**）。"""
+    return {
+        "ok": outcome.ok,
+        "backend": base_url,
+        "reason": outcome.reason,
+        "error": outcome.error,
+        "status": outcome.status,
+        "data": outcome.data,
+    }
 
 
 # ── 挖掘任务（单飞 + 增量日志）───────────────────────────────────────────────
@@ -591,5 +621,42 @@ def create_app() -> FastAPI:
             args += ["--data", req.data]
         code, output = _run_sync(args)
         return {"returncode": code, "output": output}
+
+    # ── 实时页：只读代理（**只暴露 GET**；写接口一律不存在）──────────────────
+    @app.get("/api/realtime/status")
+    def realtime_status() -> dict[str, Any]:
+        """引擎运行状态（只读）。"""
+        client = _realtime_client()
+        return _outcome_payload(safe_call(client.engine_status), client.base_url)
+
+    @app.get("/api/realtime/price")
+    def realtime_price() -> dict[str, Any]:
+        """当前报价 bid/ask/spread（只读）。"""
+        client = _realtime_client()
+        return _outcome_payload(safe_call(client.market_price), client.base_url)
+
+    @app.get("/api/realtime/candles")
+    def realtime_candles(
+        symbol: str = "XAUUSD", timeframe: str = "H1", count: int = 120
+    ) -> dict[str, Any]:
+        """K 线序列（只读）；``count`` 由客户端钳制到 ``[1, 2000]``。"""
+        client = _realtime_client()
+        return _outcome_payload(
+            safe_call(client.market_candles, symbol, timeframe, count), client.base_url
+        )
+
+    @app.get("/api/realtime/signals")
+    def realtime_signals() -> dict[str, Any]:
+        """最近信号列表（只读）。"""
+        client = _realtime_client()
+        return _outcome_payload(safe_call(client.signals), client.base_url)
+
+    @app.get("/api/realtime/latest")
+    def realtime_latest(strategy: str = "") -> dict[str, Any]:
+        """指定策略的最新信号（只读）；缺 ``strategy`` 返回 400。"""
+        if not strategy.strip():
+            raise HTTPException(status_code=400, detail="必须指定策略名（strategy）")
+        client = _realtime_client()
+        return _outcome_payload(safe_call(client.signals_latest, strategy), client.base_url)
 
     return app
