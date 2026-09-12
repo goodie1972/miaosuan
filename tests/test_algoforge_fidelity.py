@@ -462,6 +462,30 @@ def test_get_dynamic_sl_tp_no_fixed_tp_when_multiplier_zero(
     assert sl < 4000.0
 
 
+def test_get_dynamic_sl_tp_tp_floor_preserves_ratio(
+    tmp_path: Path, algoforge_stubs: None
+) -> None:
+    """C1 回归：ATR 极小时，止盈地板必须**独立**于止损地板（不能压成 1:1）。
+
+    旧实现把 ``MIN_SL_POINTS`` 复用作止盈地板 —— ATR→0 时两侧地板相同，
+    设计的 ``TP:SL = TP_ATR_MULT:SL_ATR_MULT``（默认 2:1）会被压成 1:1。
+    """
+    module, _path = _export_module(FORMULAS["am_best"], tmp_path, "sltpratio")
+    strategy = module.FidelityProbeStrategy()
+    entry = 4000.0
+
+    # 传入极小 ATR 触发两侧地板（atr_val 优先级最高，无需 K 线）
+    sl, tp = strategy.get_dynamic_sl_tp(module.OrderType.BUY, entry, 0.001)
+    sl_dist = entry - sl
+    tp_dist = tp - entry
+    assert sl_dist == pytest.approx(strategy.MIN_SL_POINTS)
+    assert tp_dist == pytest.approx(strategy.MIN_TP_POINTS)
+    assert tp_dist > sl_dist, "止盈地板不得等于止损地板（否则盈亏比被压成 1:1）"
+    assert tp_dist / sl_dist == pytest.approx(
+        strategy.TP_ATR_MULT / strategy.SL_ATR_MULT
+    )
+
+
 def test_get_dynamic_sl_tp_returns_none_on_invalid_entry(
     tmp_path: Path, algoforge_stubs: None
 ) -> None:

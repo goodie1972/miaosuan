@@ -413,6 +413,11 @@ class {{ class_name }}({{ base_classes | join(", ") }}):
     TP_ATR_MULT = {{ tp_atr_mult }}
     #: 硬止损最小距离（价格单位）：ATR 极小时防止止损贴脸被噪音扫掉。
     MIN_SL_POINTS = {{ min_sl_points }}
+    #: 止盈最小距离（价格单位）：ATR 极小时防止止盈贴脸。
+    #: **不复用 MIN_SL_POINTS**：否则 ATR→0 时两者地板相同，会把
+    #: ``TP/SL = TP_ATR_MULT:SL_ATR_MULT`` 的盈亏比压成 1:1。
+    #: 默认 = ``MIN_SL_POINTS × TP_ATR_MULT / SL_ATR_MULT``，维持同一比例。
+    MIN_TP_POINTS = {{ min_tp_points }}
     #: ATR 周期（与现网参考实现一致）。
     ATR_PERIOD = {{ atr_period }}
 
@@ -469,6 +474,12 @@ class {{ class_name }}({{ base_classes | join(", ") }}):
         缓存 ATR 含**正在形成的最后一根**（EA / TA-Lib 均如此），而本策略的因子
         只用已收盘 K 线；风控与因子同源，盘中/收盘后取值一致、不重绘。
 
+        方向归一（见 :func:`_is_buy_direction`）：**非买入**方向一律走卖出分支
+        （``sl = price + stop_dist`` / ``tp = price - take_dist``）。引擎只会传
+        ``OrderType`` 枚举（``BUY`` / ``SELL``），该兜底分支在正常调用下不可达；
+        这里**刻意保持"非买即卖"的行为不变**，仅作说明 —— 这样将来平台新增枚举值
+        也不会被误判成买入，最坏是当成卖出（方向确定，不会两头乱挂）。
+
         Args:
             direction: ``OrderType`` 枚举 / ``"BUY"`` 字符串 / 数值（见
                 :func:`_is_buy_direction`）。
@@ -514,7 +525,9 @@ class {{ class_name }}({{ base_classes | join(", ") }}):
 
         stop_dist = max(atr * float(self.SL_ATR_MULT), float(self.MIN_SL_POINTS))
         tp_mult = float(self.TP_ATR_MULT)
-        take_dist = max(atr * tp_mult, float(self.MIN_SL_POINTS)) if tp_mult > 0.0 else 0.0
+        # 止盈地板用**独立的** MIN_TP_POINTS（不是 MIN_SL_POINTS），否则 ATR 极小时
+        # 止损/止盈贴脸同距，2:1 盈亏比被压成 1:1。
+        take_dist = max(atr * tp_mult, float(self.MIN_TP_POINTS)) if tp_mult > 0.0 else 0.0
 
         if _is_buy_direction(direction):
             return price - stop_dist, (price + take_dist if take_dist > 0.0 else 0.0)

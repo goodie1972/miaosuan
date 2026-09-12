@@ -30,6 +30,7 @@ __all__ = [
     "AlgoforgePort",
     "DEFAULT_TEMPLATE",
     "MIN_SL_POINTS",
+    "MIN_TP_POINTS",
     "SL_ATR_MULT",
     "TP_ATR_MULT",
     "build_param_space",
@@ -55,6 +56,14 @@ TP_ATR_MULT: float = 4.0
 #: 硬止损最小距离（价格单位）：ATR 极小时防止止损贴脸被噪音扫掉。
 #: 取自现网参考实现 ``strategies/20260909_h1_alphagate_v1.MIN_SL_POINTS``。
 MIN_SL_POINTS: float = 3.0
+
+#: 止盈最小距离（价格单位）：ATR 极小时防止止盈贴脸。
+#: **不能复用** :data:`MIN_SL_POINTS` —— 否则 ATR→0 时止损与止盈地板相同，
+#: 会把设计的 ``TP/SL = 2:1`` 盈亏比压成 ``1:1``。按同一比例推导：
+#: ``MIN_SL_POINTS × TP_ATR_MULT / SL_ATR_MULT``（默认 3×4/2 = 6.0，维持 2:1）。
+MIN_TP_POINTS: float = (
+    MIN_SL_POINTS * TP_ATR_MULT / SL_ATR_MULT if SL_ATR_MULT > 0.0 else MIN_SL_POINTS
+)
 
 #: ATR 周期。14 与现网 ``alphagate._get_atr`` / TA-Lib ``ATR`` 默认一致。
 ATR_PERIOD: int = 14
@@ -300,6 +309,7 @@ class AlgoforgePort(TargetPort):
             sl_atr_mult=SL_ATR_MULT,
             tp_atr_mult=TP_ATR_MULT,
             min_sl_points=MIN_SL_POINTS,
+            min_tp_points=MIN_TP_POINTS,
             atr_period=ATR_PERIOD,
             param_space=[p.to_dict() for p in param_space],
             evidence={
