@@ -65,8 +65,20 @@ def test_filename_follows_algoforge_convention() -> None:
 
 def test_magic_is_six_digits_and_66_prefixed() -> None:
     result = _port().compile(_spec())
-    assert result.magic == "661801"
-    assert f'STRATEGY_MAGIC = "{result.magic}"' in result.source
+    assert result.magic == 661801
+    assert isinstance(result.magic, int)
+
+
+def test_magic_is_rendered_as_bare_int_not_string() -> None:
+    """STRATEGY_MAGIC 必须是**裸 int**，不能带引号。
+
+    平台侧是 ``magic: int``（core/bridge.py:40）；写成字符串会让
+    ``p.magic == magic`` 永不相等 → 接管不到旧仓、产生孤儿单。
+    """
+    source = _port().compile(_spec()).source
+    assert "STRATEGY_MAGIC = 661801" in source
+    assert 'STRATEGY_MAGIC = "' not in source
+    assert "STRATEGY_MAGIC = '" not in source
 
 
 def test_required_constants_present() -> None:

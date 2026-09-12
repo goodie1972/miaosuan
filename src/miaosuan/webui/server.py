@@ -115,7 +115,9 @@ def _strategy_magic(source: str) -> str:
         source: 策略 ``.py`` 源码全文。
 
     Returns:
-        六位 magic 字符串；非导出产物（未声明该常量）返回 ``""``。
+        六位 magic 的**文本形式**（供表格展示）。源码里该常量是裸 int
+        （``STRATEGY_MAGIC = 661801``），这里保留字符串只是为了显示与比较；
+        非导出产物（未声明该常量）返回 ``""``。
     """
     for line in source.splitlines():
         if line.startswith("STRATEGY_MAGIC"):

@@ -186,7 +186,7 @@ class ExportResult:
         platform: 平台名。
         filename: 建议文件名（``YYYYMMDD_名称_vN.py``）。
         source: 渲染出的源码全文。
-        magic: 分配到的策略 magic。
+        magic: 分配到的策略 magic（``int``，与 AlgoForge 侧 ``magic: int`` 一致）。
         param_space: 可调参数空间（顺序稳定）。
         issues: 静态检查结果。
         ok: 是否无 ``ERROR`` 级问题。
@@ -195,7 +195,7 @@ class ExportResult:
     platform: str
     filename: str
     source: str
-    magic: str | None = None
+    magic: int | None = None
     param_space: tuple[ParamSpace, ...] = ()
     issues: tuple[LintIssue, ...] = ()
 
@@ -255,10 +255,28 @@ class TargetPort(ABC):
             platform=self.platform.name,
             filename=str(ctx["filename"]),
             source=source,
-            magic=str(ctx.get("magic", "")) or None,
+            magic=_as_int_or_none(ctx.get("magic")),
             param_space=space,
             issues=issues,
         )
+
+
+def _as_int_or_none(value: Any) -> int | None:
+    """把上下文里的 magic 归一成 ``int``；缺失或非数字返回 ``None``。
+
+    Args:
+        value: 原始值（``int`` / 数字字符串 / ``None`` / ``""``）。
+
+    Returns:
+        整数 magic；无法解析时 ``None``。
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return None
 
 
 def _make_stub(

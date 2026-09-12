@@ -66,7 +66,8 @@ class _DummyPort(TargetPort):
     def extract(self, spec: StrategySpec) -> dict[str, Any]:
         return {
             "filename": f"{spec.name}.py",
-            "magic": "000000",
+            # 故意给字符串：验证平台无关层会归一成 int（老调用方可能仍在传字符串）
+            "magic": "661801",
             "param_space": (ParamSpace(name="P", default=1.0),),
         }
 
@@ -82,7 +83,8 @@ def test_target_port_compile_orchestrates() -> None:
     assert isinstance(result, ExportResult)
     assert result.ok
     assert result.filename == "demo.py"
-    assert result.magic == "000000"
+    assert result.magic == 661801
+    assert isinstance(result.magic, int)
     assert result.param_space[0].name == "P"
     assert len(result.warnings) == 1
     assert result.errors == ()
