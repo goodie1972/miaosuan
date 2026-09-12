@@ -250,8 +250,18 @@ def extract_trades(
     """把连续仓位切成"一次交易 = 一段同向持仓"，并累加段内净收益。
 
     方向判定沿用 :func:`~miaosuan.core.signal.target_to_direction` 的阈值语义：
-    ``|position| < threshold`` 视为空仓（0），否则取符号。**没有平滑、没有合并**
-    —— 仓位每翻一次方向（或回到空仓）就是新的一笔。
+    ``|position| < threshold`` 视为空仓（0），否则取符号。
+
+    区间划分（**无重叠、无遗漏**，保证 ``sum(t.pnl) == pnl.sum()``）
+    --------------------------------------------------------------
+    旧的实现只在"方向相同"的 bar 上累计 pnl，于是**归零那一根 bar** 的换手成本
+    既不属于旧单也不属于新单，直接掉进缝里：实测 ``pos=+1×6→0×3→−1×6``、
+    ``cost=3e-4`` 时 ``sum(trades)=−6e-4`` 而 ``total=−9e-4``，缺口正是归零 bar 的
+    成本。修正后的边界归属规则（与 lead 口径一致）：
+
+    * **平仓转空仓**：归零那一根 bar 属于**旧单**（其换手成本计入旧单，旧单右端含该 bar）；
+    * **直接翻转**（``+1 → −1``）：翻转那一根 bar 属于**新单**；
+    * 两笔之间方向为空的 bar（净收益恒为 0）并入**后一笔**，使区间首尾相接、无缝隙。
 
     Args:
         position: ``[T]`` 连续目标仓位。
@@ -259,7 +269,7 @@ def extract_trades(
         threshold: 中性带阈值（低于此值视为空仓）。
 
     Returns:
-        逐笔 :class:`Trade`（按时间升序）。
+        逐笔 :class:`Trade`（按时间升序、区间首尾相接）。
     """
     pos = np.asarray(position, dtype=np.float64).reshape(-1)
     net = np.asarray(pnl, dtype=np.float64).reshape(-1)
@@ -272,34 +282,34 @@ def extract_trades(
     direction[pos[:t] <= -threshold] = -1
 
     trades: list[Trade] = []
-    start = 0
-    current = int(direction[0])
-    for i in range(1, t):
+    prev_end = -1
+    i = 0
+    while i < t:
         d = int(direction[i])
-        if d == current:
+        if d == 0:
+            i += 1
             continue
-        if current != 0:
-            trades.append(
-                Trade(
-                    start=start,
-                    end=i - 1,
-                    direction=current,
-                    pnl=float(net[start:i].sum()),
-                    bars=int(i - start),
-                )
-            )
-        current = d
-        start = i
-    if current != 0:
+        j = i + 1
+        while j < t and int(direction[j]) == d:
+            j += 1
+        # j 是第一个与 d 不同的 bar（或 t）。若它是"转空仓"的归零 bar，则并入本笔
+        # （平仓成本）；若是直接翻转或序列结束，则本笔止于持仓段最后一根 bar，
+        # 翻转 bar 留给下一笔。
+        end = j if (j < t and int(direction[j]) == 0) else j - 1
+        # 首笔从首个持仓 bar 起；其后每笔从上一笔右端 +1 起，把两笔之间的空仓 bar
+        # （净收益恒为 0）并入后一笔 —— 区间连续、无重叠、无缝隙。
+        start = i if prev_end < 0 else prev_end + 1
         trades.append(
             Trade(
                 start=start,
-                end=t - 1,
-                direction=current,
-                pnl=float(net[start:t].sum()),
-                bars=int(t - start),
+                end=end,
+                direction=d,
+                pnl=float(net[start : end + 1].sum()),
+                bars=int(end - start + 1),
             )
         )
+        prev_end = end
+        i = end + 1
     return tuple(trades)
 
 

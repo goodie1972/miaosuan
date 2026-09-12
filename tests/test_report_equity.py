@@ -204,7 +204,10 @@ def test_extract_trades_splits_on_direction_flip() -> None:
     assert [t.direction for t in trades] == [1, -1, 1]
     assert trades[0].pnl == pytest.approx(0.2)
     assert trades[1].pnl == pytest.approx(-0.4)
-    assert trades[0].bars == 2
+    # 平仓转空仓：归零 bar（idx3）并入旧单 → 旧单区间 [1, 3]，bars=3
+    assert trades[0].start == 1 and trades[0].end == 3
+    assert trades[0].bars == 3
+    # 直接翻转：翻转 bar（idx6）归新单
     assert trades[2].start == 6 and trades[2].end == 6
 
 
@@ -216,7 +219,42 @@ def test_extract_trades_ignores_sub_threshold_wiggle() -> None:
     # 0.04 < 0.05（中性带）→ 该 bar 方向归零 → 一笔拆成两笔
     assert len(trades) == 2
     assert all(t.direction == 1 for t in trades)
-    assert trades[0].bars == 1 and trades[1].bars == 1
+    # 归零 bar 并回各自持仓段：第一段 [0,1]、第二段 [2,3]
+    assert trades[0].bars == 2 and trades[1].bars == 2
+    assert trades[1].start == 2
+
+
+def test_extract_trades_pnl_closes_exactly() -> None:
+    """交易明细必须闭合：``sum(t.pnl) == pnl.sum()``（回归 B2）。
+
+    lead 合成复现：``pos=+1×6→0×3→−1×6``、``cost=3e-4``。旧实现把"归零那一根 bar"
+    的换手成本丢在缝里，``sum(trades)=−6e-4`` 而 ``total=−9e-4``。修正后逐分闭合。
+    """
+    cost = 3e-4
+    pos = np.array([1.0] * 6 + [0.0] * 3 + [-1.0] * 6)
+    prev = np.roll(pos, 1)
+    prev[0] = 0.0
+    turnover = np.abs(pos - prev)
+    pnl = -turnover * cost                       # 收益分量置 0，只留换手成本
+
+    assert pnl.sum() == pytest.approx(-9e-4)
+    trades = extract_trades(pos, pnl, threshold=0.5)
+    assert abs(sum(tr.pnl for tr in trades) - pnl.sum()) < 1e-12
+    # 平仓 bar（idx6）的成本落在第一笔；其右端含该 bar
+    assert trades[0].start == 0 and trades[0].end == 6
+    # 区间首尾相接、无重叠无缝隙
+    for k in range(len(trades) - 1):
+        assert trades[k + 1].start == trades[k].end + 1
+
+
+def test_full_backtest_trade_pnl_closes() -> None:
+    """整段回测的交易明细必须闭合，且区间首尾相接（回归 B2）。"""
+    result = run_full_backtest(TOKENS, _panel(), FOREX_XAUUSD)
+    total = float(result.portfolio_pnl.sum())
+    summed = float(sum(tr.pnl for tr in result.trade_detail))
+    assert abs(summed - total) < 1e-12
+    for k in range(len(result.trade_detail) - 1):
+        assert result.trade_detail[k + 1].start == result.trade_detail[k].end + 1
 
 
 def test_summarize_trades_win_rate_and_profit_factor() -> None:
