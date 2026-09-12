@@ -54,8 +54,13 @@ html[data-theme="dark"] {
   --shadow: rgba(0, 0, 0, .5);
   --scroll: #3d4149;
 }
+/* 浅色：用户拍板**纯白底**。
+   层次靠两样东西撑住，不靠灰底：
+     ① 边框 --line #e0e4e8（卡片 / 表头 / 分隔线）
+     ② 三级表面 --surface #f0f2f5（表头、代码块、.kv 小块、按钮）
+   卡片刻意**不**用纯白（起点 #fbfcfd → 终点 #f0f2f5），否则白底白卡片会糊成一片。 */
 html[data-theme="light"] {
-  --bg: #f5f7fa;
+  --bg: #ffffff;
   --panel: #ffffff;
   --surface: #f0f2f5;
   --surface-2: #f8f9fb;
@@ -66,7 +71,7 @@ html[data-theme="light"] {
   --line-subtle: #d0d4d8;
   --code-bg: #f0f2f5;
   --input-bg: #f5f7fa;
-  --card-grad: linear-gradient(135deg, #ffffff 0%, #f8f9fb 100%);
+  --card-grad: linear-gradient(135deg, #fbfcfd 0%, #f0f2f5 100%);
   --shadow: rgba(0, 0, 0, .12);
   --scroll: #c0c4cc;
 }

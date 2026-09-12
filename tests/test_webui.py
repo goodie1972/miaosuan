@@ -276,6 +276,11 @@ def test_index_html_is_single_file_zero_cdn_dual_theme() -> None:
     assert "localStorage" in html
     # 涨绿跌红（Binance 口径），不要把方向写反
     assert "#0ecb81" in html and "#f6465d" in html
+    # 浅色底是用户拍板的**纯白**（曾为 #f5f7fa 灰底），层次靠边框 + 三级表面撑
+    assert "--bg: #ffffff" in html
+    assert "--bg: #f5f7fa" not in html
+    # 卡片不能刷成纯白，否则白底白卡片糊成一片（--input-bg 仍用 #f5f7fa 属正常）
+    assert "--card-grad: linear-gradient(135deg, #ffffff" not in html
     # 三步导航：挖掘 / 回测 / 实时
     for step in ("01", "02", "03"):
         assert step in html
