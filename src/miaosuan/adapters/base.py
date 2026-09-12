@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import sys
 import types
-from abc import ABC, abstractmethod
+from abc import ABC, ABCMeta, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum, StrEnum
@@ -139,6 +139,9 @@ class PlatformSpec:
         stub_enums: ``{模块名: {符号名: (成员, ...)}}`` —— 这些占位符号是**枚举**，
             必须造出真 :class:`enum.Enum`（成员值取成员名，与真平台一致），
             否则 ``OrderType.BUY`` 之类的访问会直接 AttributeError。
+        stub_abstracts: ``{模块名: {类名: (抽象方法, ...)}}`` —— 这些占位符号是
+            **抽象基类**，必须造出真 ABC 并声明对应抽象方法。否则桩会掩盖
+            「多继承把导出类变成抽象类、平台实例化不了」这类问题。
         supports_short: 平台是否支持做空。
         base_classes: 生成策略类继承的基类（按给出顺序）。
         default_symbol: 默认交易标的示例值。
@@ -149,6 +152,7 @@ class PlatformSpec:
     module_header: tuple[str, ...] = ()
     stub_modules: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     stub_enums: Mapping[str, Mapping[str, tuple[str, ...]]] = field(default_factory=dict)
+    stub_abstracts: Mapping[str, Mapping[str, tuple[str, ...]]] = field(default_factory=dict)
     supports_short: bool = False
     base_classes: tuple[str, ...] = ()
     default_symbol: str = "XAUUSD"
@@ -163,6 +167,10 @@ class PlatformSpec:
             "stub_enums": {
                 k: {sym: list(members) for sym, members in enums.items()}
                 for k, enums in self.stub_enums.items()
+            },
+            "stub_abstracts": {
+                k: {sym: list(methods) for sym, methods in abstracts.items()}
+                for k, abstracts in self.stub_abstracts.items()
             },
             "supports_short": self.supports_short,
             "base_classes": list(self.base_classes),
@@ -253,17 +261,34 @@ class TargetPort(ABC):
         )
 
 
-def _make_stub(symbol: str, members: tuple[str, ...]) -> Any:
-    """造一个占位符号：有成员清单时造真 Enum，否则造空类。
+def _make_stub(
+    symbol: str,
+    members: tuple[str, ...] = (),
+    abstracts: tuple[str, ...] = (),
+) -> Any:
+    """造一个占位符号：抽象基类 / 枚举 / 普通空类，按声明选择。
+
+    优先级：``abstracts`` > ``members`` > 空类。
 
     Args:
         symbol: 占位符号名。
-        members: 枚举成员名；空元组表示这不是枚举，造普通空类。
+        members: 枚举成员名；非空则造真 :class:`enum.Enum`（成员值取成员名）。
+        abstracts: 抽象方法名；非空则造真 ABC 并声明这些方法为
+            :func:`abc.abstractmethod`，使其 ``__abstractmethods__`` 与真平台一致。
 
     Returns:
-        占位类型。枚举占位与平台侧同构（成员值取成员名），因此
-        ``OrderType.BUY.value == "BUY"`` 之类的访问在离线环境同样成立。
+        占位类型。还原抽象面是关键：桩若不给抽象方法，就测不出「多继承把导出类
+        变成抽象类」这类只有真平台才暴露的问题。
     """
+    if abstracts:
+        namespace: dict[str, Any] = {"__stub__": True}
+        for name in abstracts:
+            def _unimplemented(self: Any, *args: Any, **kwargs: Any) -> Any:
+                raise NotImplementedError
+            _unimplemented.__name__ = name
+            _unimplemented.__qualname__ = f"{symbol}.{name}"
+            namespace[name] = abstractmethod(_unimplemented)
+        return ABCMeta(symbol, (), namespace)
     if members:
         return Enum(symbol, {name: name for name in members})
     return type(symbol, (), {"__stub__": True})
@@ -295,8 +320,17 @@ def install_stub_modules(platform: PlatformSpec) -> tuple[str, ...]:
                 module.__path__ = []
             else:
                 enums = platform.stub_enums.get(dotted, {})
+                abstracts = platform.stub_abstracts.get(dotted, {})
                 for symbol in exports:
-                    setattr(module, symbol, _make_stub(symbol, enums.get(symbol, ())))
+                    setattr(
+                        module,
+                        symbol,
+                        _make_stub(
+                            symbol,
+                            members=enums.get(symbol, ()),
+                            abstracts=abstracts.get(symbol, ()),
+                        ),
+                    )
             sys.modules[name] = module
             created.append(name)
             if depth > 1:

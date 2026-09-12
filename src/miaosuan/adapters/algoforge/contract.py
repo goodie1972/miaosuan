@@ -67,10 +67,15 @@ PLATFORM_SPEC: PlatformSpec = PlatformSpec(
         "import numpy as np",
         "from strategies.base import BaseStrategy",
         # OrderType：generate_signal 必须返回 OrderType 枚举（on_tick 读 .value）。
-        "from core.bridge import MT4BridgeBase, OrderType",
+        # 刻意**不**导入 MT4BridgeBase —— 它有 9 个抽象方法，多继承会把导出类
+        # 变成抽象类，平台实例化直接 TypeError（策略加载不起来）。
+        "from core.bridge import OrderType",
     ),
     stub_modules={
         "strategies.base": ("BaseStrategy",),
+        # MT4BridgeBase 保留在占位里（即便已不导入）：一旦有人把它加回
+        # base_classes，占位会如实提供 9 个抽象方法，回归测试的
+        # __abstractmethods__ 断言立刻失败，而不是等到实盘才发现。
         "core.bridge": ("MT4BridgeBase", "OrderType"),
     },
     # OrderType 是枚举：占位必须造出真 Enum，否则离线环境里 OrderType.BUY 直接
@@ -80,8 +85,30 @@ PLATFORM_SPEC: PlatformSpec = PlatformSpec(
             "OrderType": ("BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT", "BUY_STOP", "SELL_STOP"),
         },
     },
+    # 占位基类必须如实还原抽象面（成员名逐条取自 algoforge-dev 真源码）：
+    #   strategies/base.py:345  BaseStrategy  → generate_signal
+    #   core/bridge.py:68-120   MT4BridgeBase → 下列 9 个桥接方法
+    stub_abstracts={
+        "strategies.base": {"BaseStrategy": ("generate_signal",)},
+        "core.bridge": {
+            "MT4BridgeBase": (
+                "connect",
+                "disconnect",
+                "get_account_info",
+                "get_positions",
+                "get_candles",
+                "get_tick_price",
+                "open_order",
+                "close_order",
+                "modify_order",
+            ),
+        },
+    },
     supports_short=True,
-    base_classes=("BaseStrategy", "MT4BridgeBase"),
+    # 只继承 BaseStrategy：它自带 refresh_data()（灌 self.candles）与 on_tick()，
+    # 导出策略不需要 MT4BridgeBase 的任何能力；多继承它只会引入 9 个未实现的
+    # 抽象方法，把类变成抽象类。AlgoForge 现网 27 个策略也全是单继承 BaseStrategy。
+    base_classes=("BaseStrategy",),
     default_symbol="XAUUSD",
 )
 

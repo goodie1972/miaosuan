@@ -272,6 +272,65 @@ def test_generate_signal_matches_algoforge_contract(
         assert score_short > 0 and score_long == 0 and factors_short
 
 
+def _exported_strategy_class(module: ModuleType) -> type:
+    """取出生成文件里**本模块定义**的策略类。
+
+    不能用「有 generate_signal 属性」直接筛：import 进来的 ``BaseStrategy`` 也带
+    该方法，会选错对象（这是踩过的坑）。
+    """
+    for obj in vars(module).values():
+        if (
+            isinstance(obj, type)
+            and getattr(obj, "__module__", None) == module.__name__
+            and hasattr(obj, "generate_signal")
+        ):
+            return obj
+    raise AssertionError("生成文件里找不到策略类")
+
+
+def test_exported_class_is_concrete_not_abstract(tmp_path: Path, algoforge_stubs: None) -> None:
+    """P0 回归：导出类必须**可实例化**，不能残留未实现的抽象方法。
+
+    背景：模板曾写成 ``class X(BaseStrategy, MT4BridgeBase)``，而 MT4BridgeBase 有
+    9 个抽象方法（connect/disconnect/open_order/...）一个都没实现，导致导出类是
+    抽象类，AlgoForge 实例化时直接 TypeError，策略根本加载不起来。
+
+    这里的桩**如实还原**了两个基类的抽象面（见 ``contract.stub_abstracts``），
+    所以不需要依赖外部 AlgoForge 仓库也能在 CI 里抓到这类问题。
+    """
+    module, _path = _export_module(FORMULAS["am_best"], tmp_path, "concrete")
+    cls = _exported_strategy_class(module)
+
+    # ① 需要实现的抽象方法**恰好**只有 generate_signal（证明没拖进桥接基类）
+    required: set[str] = set()
+    for base in cls.__mro__[1:]:
+        required |= set(getattr(base, "__abstractmethods__", ()))
+    assert required == {"generate_signal"}, f"必须实现的抽象方法异常：{sorted(required)}"
+
+    # ② 全部实现 → 不再是抽象类
+    assert set(getattr(cls, "__abstractmethods__", ())) == set(), (
+        f"导出类仍是抽象类：{sorted(getattr(cls, '__abstractmethods__', ()))}"
+    )
+
+    # ③ 真的能实例化
+    strategy = cls()
+    assert isinstance(strategy, cls)
+
+    # ④ 兜底：源码里不应再出现 MT4BridgeBase
+    assert "MT4BridgeBase" not in _path.read_text(encoding="utf-8")
+
+
+def test_exported_class_inherits_only_base_strategy(
+    tmp_path: Path, algoforge_stubs: None
+) -> None:
+    """基类列表必须只有 BaseStrategy（与 AlgoForge 现网 27 个策略一致）。"""
+    module, _path = _export_module(FORMULAS["am_best"], tmp_path, "bases")
+    cls = _exported_strategy_class(module)
+    base_names = [base.__name__ for base in cls.__mro__[1:] if base.__name__ != "object"]
+    assert base_names[0] == "BaseStrategy"
+    assert "MT4BridgeBase" not in base_names
+
+
 def test_param_space_matches_class_attributes(tmp_path: Path, algoforge_stubs: None) -> None:
     module, _path = _export_module(FORMULAS["am_best"], tmp_path, "params")
     strategy = module.FidelityProbeStrategy()
