@@ -122,6 +122,7 @@ class AlgoforgePort(TargetPort):
     Args:
         ledger_path: magic 账本路径；``None`` 用默认路径。
         magic: 强制指定 magic（提供则**不访问账本**，便于测试与离线渲染）。
+            接受 ``int`` 或数字字符串，渲染前统一归一为 ``int``。
         date: 文件名日期 ``YYYYMMDD``；留空取当天 UTC。
         template_name: 模板文件名。
         gate_deadband: GATE 死区默认值（R1 保护开关，0 = 关闭）。
@@ -133,7 +134,7 @@ class AlgoforgePort(TargetPort):
         self,
         *,
         ledger_path: str | Path | None = None,
-        magic: str | None = None,
+        magic: int | str | None = None,
         date: str = "",
         template_name: str = DEFAULT_TEMPLATE,
         gate_deadband: float = 0.0,
@@ -185,7 +186,12 @@ class AlgoforgePort(TargetPort):
         if spec.payload.vocab_version:
             FORMULA_VOCAB.verify(spec.payload.vocab_version)
 
-        magic = self.magic or allocate_magic(spec.name or "unnamed", 1, ledger_path=self.ledger_path)
+        # magic 必须是 int（AlgoForge 侧 magic: int）；强制指定的可能是字符串（测试 / CLI），
+        # 这里统一归一，保证模板渲染出的是裸整数字面量而不是 "661801"。
+        raw_magic = self.magic or allocate_magic(
+            spec.name or "unnamed", 1, ledger_path=self.ledger_path
+        )
+        magic = int(raw_magic)
         version = 1
         param_space = build_param_space(
             neutral_band=spec.semantics.neutral_band,

@@ -58,7 +58,9 @@ from typing import Any
 VOCAB_VERSION = "{{ vocab_version }}"
 
 # ── 策略身份（AlgoForge 契约：四项必须齐全）────────────────────────────────
-STRATEGY_MAGIC = "{{ magic }}"
+# magic 必须是**裸 int**：平台侧是 magic: int（core/bridge.py:40），
+# 写成字符串会导致 p.magic == magic 永不相等 → 接管不到旧仓、产生孤儿单。
+STRATEGY_MAGIC = {{ magic }}
 STRATEGY_NAME = "{{ name }}"
 STRATEGY_VERSION = "{{ version }}"
 STRATEGY_CHANGELOG = (
