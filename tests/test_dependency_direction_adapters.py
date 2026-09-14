@@ -6,7 +6,7 @@
 2. ``AppConfig.from_env`` 与 ``os.environ`` **只在** ``cli.py`` 被调用 —— 这是
    「CLI 是唯一允许 IO/env 的层」这条铁律的可执行断言。
 
-注：``adapters/algoforge/magic_registry.py`` 允许做文件 IO —— magic 账本是
+注：``adapters/shenji/magic_registry.py`` 允许做文件 IO —— magic 账本是
 **持久化状态**（号段一旦分配不可复用），不是临时产物。
 """
 

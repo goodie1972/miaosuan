@@ -1,4 +1,4 @@
-"""AlgoForge 后端**只读**客户端（03 实时页）。
+"""神机 后端**只读**客户端（03 实时页）。
 
 红线（用户明确要求，且其 MT4 正在跑实盘）
 ----------------------------------------
@@ -13,7 +13,7 @@
 
 架构与依赖
 ----------
-妙算 WebUI 后端 → 本客户端 → AlgoForge dashboard 后端（默认
+妙算 WebUI 后端 → 本客户端 → 神机 dashboard 后端（默认
 ``http://127.0.0.1:1783``，见其 ``dashboard/backend/main.py:332``）。
 只用标准库 :mod:`urllib`（环境未安装 ``httpx``，不引入新依赖）。
 """
@@ -28,9 +28,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ...config import (
-    DEFAULT_ALGOFORGE_TIMEOUT,
-    DEFAULT_ALGOFORGE_URL,
-    algoforge_backend_config,
+    DEFAULT_SHENJI_TIMEOUT,
+    DEFAULT_SHENJI_URL,
+    shenji_backend_config,
 )
 
 __all__ = [
@@ -38,7 +38,7 @@ __all__ = [
     "ALLOWED_QUERY_KEYS",
     "DEFAULT_BASE_URL",
     "DEFAULT_TIMEOUT",
-    "AlgoforgeReadOnlyClient",
+    "ShenjiReadOnlyClient",
     "BackendUnreachable",
     "ReadOnlyViolation",
     "RealtimeOutcome",
@@ -46,12 +46,12 @@ __all__ = [
     "safe_call",
 ]
 
-#: 默认后端地址（AlgoForge dashboard；可用环境变量覆盖）。
-#: 见 :func:`miaosuan.config.algoforge_backend_config`（env 的唯一读取点）。
-DEFAULT_BASE_URL: str = DEFAULT_ALGOFORGE_URL
+#: 默认后端地址（神机 dashboard；可用环境变量覆盖）。
+#: 见 :func:`miaosuan.config.shenji_backend_config`（env 的唯一读取点）。
+DEFAULT_BASE_URL: str = DEFAULT_SHENJI_URL
 
 #: 默认超时（秒）。**必须短**：后端卡住不能把我们的页面拖死。
-DEFAULT_TIMEOUT: float = DEFAULT_ALGOFORGE_TIMEOUT
+DEFAULT_TIMEOUT: float = DEFAULT_SHENJI_TIMEOUT
 
 #: 只读白名单：**精确**路径（不含查询串）。
 #: 明确排除写接口（``/api/engine/start``、``/api/orders`` 等一律不在表内）。
@@ -115,14 +115,14 @@ class RealtimeOutcome:
 def env_config() -> tuple[str, float]:
     """从环境变量读后端地址与超时。
 
-    实际读取由 :func:`miaosuan.config.algoforge_backend_config` 完成（env 的
+    实际读取由 :func:`miaosuan.config.shenji_backend_config` 完成（env 的
     唯一读取点，见架构铁律 ``test_os_environ_only_in_config_and_cli``）；本函数
     只是适配层的一个稳定入口。
 
     Returns:
         ``(base_url, timeout)``。超时非法时回落到 :data:`DEFAULT_TIMEOUT`。
     """
-    return algoforge_backend_config()
+    return shenji_backend_config()
 
 
 def safe_call(func: Any, /, *args: Any, **kwargs: Any) -> RealtimeOutcome:
@@ -151,8 +151,8 @@ def safe_call(func: Any, /, *args: Any, **kwargs: Any) -> RealtimeOutcome:
 
 
 @dataclass
-class AlgoforgeReadOnlyClient:
-    """AlgoForge 后端只读客户端。
+class ShenjiReadOnlyClient:
+    """神机 后端只读客户端。
 
     Attributes:
         base_url: 后端根地址（末尾斜杠会被去掉）。

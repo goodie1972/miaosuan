@@ -185,7 +185,7 @@ def test_specs_lists_spec_without_spec_id_key(app: Any, tmp_path: Any) -> None:
     assert row["n_tokens"] == 3
 
 
-# ── T07：AlgoForge 双主题改造后的新契约 ──────────────────────────────────────
+# ── T07：神机 双主题改造后的新契约 ──────────────────────────────────────
 
 def test_meta_exposes_real_frozen_vocab(app: Any) -> None:
     """/api/meta 必须回报**真实**冻结词表，页头不能写死数字。
@@ -352,7 +352,7 @@ def test_index_html_is_single_file_zero_cdn_dual_theme() -> None:
     # 回测页已实装（不再是占位）：有运行入口、走 /api/backtest，且带口径警告
     assert '/api/backtest' in html
     assert "运行回测" in html
-    # 03 实时页已实装（不再是占位）：只读接入 AlgoForge 后端，占位说明已移除
+    # 03 实时页已实装（不再是占位）：只读接入 神机 后端，占位说明已移除
     assert "待接入 · 计划中" not in html
     assert "只读接入" in html
     assert "绝不下单" in html            # 红线声明必须留在页面上
@@ -386,7 +386,7 @@ def test_index_html_has_no_inline_onclick_filename_injection() -> None:
 # 红线（用户明确要求，且其 MT4 正在跑实盘）：**只读，绝不下单**。
 # 这里在**端点层**把红线钉死：写方法一律 405、离线降级醒目（ok=false 且 data
 # 为 None，绝不伪造 0），只读白名单越界在客户端层还会直接抛异常（见
-# ``tests/test_algoforge_realtime.py``）。
+# ``tests/test_shenji_realtime.py``）。
 
 
 class _FakeResp:
@@ -419,10 +419,10 @@ def _install_realtime(monkeypatch: pytest.MonkeyPatch, handler: Any) -> list[str
     Returns:
         记录每次请求完整 URL 的列表（用于断言查询参数是否透传）。
     """
-    from miaosuan.adapters.algoforge.realtime import AlgoforgeReadOnlyClient
+    from miaosuan.adapters.shenji.realtime import ShenjiReadOnlyClient
 
     seen: list[str] = []
-    client = AlgoforgeReadOnlyClient(base_url="http://127.0.0.1:1783", timeout=2.0)
+    client = ShenjiReadOnlyClient(base_url="http://127.0.0.1:1783", timeout=2.0)
 
     def _open(request: Any) -> Any:
         seen.append(request.full_url)
@@ -547,7 +547,7 @@ def test_realtime_client_base_url_is_configurable(
     monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """后端地址可配置（环境变量优先），默认 ``http://127.0.0.1:1783``。"""
-    monkeypatch.delenv("MIAOSUAN_ALGOFORGE_URL", raising=False)
+    monkeypatch.delenv("MIAOSUAN_SHENJI_URL", raising=False)
     assert server._realtime_client().base_url == "http://127.0.0.1:1783"
-    monkeypatch.setenv("MIAOSUAN_ALGOFORGE_URL", "http://10.0.0.9:8080/")
+    monkeypatch.setenv("MIAOSUAN_SHENJI_URL", "http://10.0.0.9:8080/")
     assert server._realtime_client().base_url == "http://10.0.0.9:8080"

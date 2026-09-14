@@ -137,7 +137,7 @@ def build_spec(
         name: 策略名（留空则按 周期/标的 自动生成）。
 
     Returns:
-        IR 规格（可直接交给 :class:`~miaosuan.adapters.algoforge.AlgoforgePort`）。
+        IR 规格（可直接交给 :class:`~miaosuan.adapters.shenji.ShenjiPort`）。
     """
     spec_name = name or f"{config.timeframe.lower()}_{config.symbol.lower()}_miaosuan"
     cost_sensitivity = {f"{float(k):g}": float(v) for k, v in candidate.sharpes.items()}

@@ -1,7 +1,7 @@
 """目标平台适配层（M16.5）。
 
 本包是**平台无关层**：只依赖 :mod:`miaosuan.ir`，不依赖 CLI、不依赖 ``tune``。
-每个具体平台（如 :mod:`miaosuan.adapters.algoforge`）提供一个 :class:`TargetPort`
+每个具体平台（如 :mod:`miaosuan.adapters.shenji`）提供一个 :class:`TargetPort`
 实现与一份 :class:`PlatformSpec` 描述。
 """
 

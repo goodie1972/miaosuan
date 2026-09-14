@@ -1,4 +1,4 @@
-"""AlgoForge 生成文件的静态检查（M16）。
+"""神机 生成文件的静态检查（M16）。
 
 重点规则：
 
@@ -17,7 +17,7 @@
     公式含 GATE 但死区保护未启用（``GATE_DEADBAND <= 0``）。
 
 ``AF005``（ERROR，平台契约）
-    ``generate_signal`` 必须是**无参**方法。AlgoForge 基类 ``on_tick`` 先
+    ``generate_signal`` 必须是**无参**方法。神机 基类 ``on_tick`` 先
     ``refresh_data()`` 灌好 ``self.candles``，再无参调用它；声明成
     ``generate_signal(self, candles)`` 会让策略在平台侧一调用就 ``TypeError``。
 
@@ -219,7 +219,7 @@ def _extra_params(func: ast.FunctionDef) -> list[str]:
 
 
 def _check_signal_contract(tree: ast.Module) -> list[LintIssue]:
-    """AF005：``generate_signal`` 必须是**无参**方法（AlgoForge 平台契约）。
+    """AF005：``generate_signal`` 必须是**无参**方法（神机 平台契约）。
 
     只检查**类体内**的同名方法：平台契约约束的是策略类的方法，模块级同名函数
     不是策略入口，不应被这条规则拦下（避免误伤 fixture / 辅助函数）。
@@ -240,7 +240,7 @@ def _check_signal_contract(tree: ast.Module) -> list[LintIssue]:
                     severity=LintSeverity.ERROR,
                     message=(
                         f"generate_signal 不得声明额外参数（发现 {extra}）："
-                        "AlgoForge 基类 on_tick 以无参方式调用它，"
+                        "神机 基类 on_tick 以无参方式调用它，"
                         "K 线应从 self.candles 读取，不能走形参"
                     ),
                     line=item.lineno,
@@ -390,7 +390,7 @@ def _check_required_constants(tree: ast.Module) -> list[LintIssue]:
                 LintIssue(
                     code="AF002",
                     severity=LintSeverity.ERROR,
-                    message=f"缺少 AlgoForge 契约常量 {name}",
+                    message=f"缺少 神机 契约常量 {name}",
                     line=None,
                 )
             )

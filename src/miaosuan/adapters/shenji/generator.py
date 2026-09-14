@@ -1,4 +1,4 @@
-"""AlgoForge 导出器（M15）：``StrategySpec`` → AlgoForge 策略 ``.py``。
+"""神机 导出器（M15）：``StrategySpec`` → 神机 策略 ``.py``。
 
 职责边界：
 
@@ -27,7 +27,7 @@ from .magic_registry import allocate_magic
 
 __all__ = [
     "ATR_PERIOD",
-    "AlgoforgePort",
+    "ShenjiPort",
     "DEFAULT_TEMPLATE",
     "MIN_SL_POINTS",
     "MIN_TP_POINTS",
@@ -157,8 +157,8 @@ def _cost_text(cost_sensitivity: Mapping[str, float]) -> str:
     return ", ".join(f"{k}x={v:.4f}" for k, v in items)
 
 
-class AlgoforgePort(TargetPort):
-    """AlgoForge 平台导出端口。
+class ShenjiPort(TargetPort):
+    """神机 平台导出端口。
 
     Args:
         ledger_path: magic 账本路径；``None`` 用默认路径。
@@ -192,7 +192,7 @@ class AlgoforgePort(TargetPort):
         """提取渲染上下文（内核源码、magic、文件名、参数空间等）。"""
         if not isinstance(spec.payload, FactorPayload):
             raise ValueError(
-                "AlgoForge 因子模板仅支持 FactorPayload；"
+                "神机 因子模板仅支持 FactorPayload；"
                 f"当前 payload 为 {type(spec.payload).__name__}（模板参数导出属于模式 B，T04 未实现）"
             )
         tokens = tuple(int(t) for t in spec.payload.tokens)
@@ -227,7 +227,7 @@ class AlgoforgePort(TargetPort):
         if spec.payload.vocab_version:
             FORMULA_VOCAB.verify(spec.payload.vocab_version)
 
-        # magic 必须是 int（AlgoForge 侧 magic: int）；强制指定的可能是字符串（测试 / CLI），
+        # magic 必须是 int（神机 侧 magic: int）；强制指定的可能是字符串（测试 / CLI），
         # 这里统一归一，保证模板渲染出的是裸整数字面量而不是 "661801"。
         raw_magic = self.magic or allocate_magic(
             spec.name or "unnamed", 1, ledger_path=self.ledger_path
@@ -276,7 +276,7 @@ class AlgoforgePort(TargetPort):
         }
 
     def render(self, spec: StrategySpec, ctx: Mapping[str, Any]) -> str:
-        """渲染 AlgoForge 策略源码。"""
+        """渲染 神机 策略源码。"""
         plan: KernelPlan = ctx["plan"]
         param_space: tuple[ParamSpace, ...] = ctx["param_space"]
         evidence = spec.evidence

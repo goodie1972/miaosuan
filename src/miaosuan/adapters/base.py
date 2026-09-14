@@ -130,7 +130,7 @@ class PlatformSpec:
     """目标平台静态描述（数据驱动，不含逻辑）。
 
     Attributes:
-        name: 平台名（如 ``algoforge``）。
+        name: 平台名（如 ``shenji``）。
         file_suffix: 导出文件后缀。
         module_header: 生成文件顶部的 import 行（按给出顺序渲染）。
         stub_modules: ``{模块名: (导出符号, ...)}`` —— 本地无该平台 SDK 时，
@@ -186,7 +186,7 @@ class ExportResult:
         platform: 平台名。
         filename: 建议文件名（``YYYYMMDD_名称_vN.py``）。
         source: 渲染出的源码全文。
-        magic: 分配到的策略 magic（``int``，与 AlgoForge 侧 ``magic: int`` 一致）。
+        magic: 分配到的策略 magic（``int``，与 神机 侧 ``magic: int`` 一致）。
         param_space: 可调参数空间（顺序稳定）。
         issues: 静态检查结果。
         ok: 是否无 ``ERROR`` 级问题。
@@ -316,7 +316,7 @@ def install_stub_modules(platform: PlatformSpec) -> tuple[str, ...]:
     """按 :attr:`PlatformSpec.stub_modules` 注入占位模块（数据驱动）。
 
     仅在本机没有目标平台 SDK 时生效：已存在于 ``sys.modules`` 的模块不会被覆盖，
-    因此在真实 AlgoForge 环境里调用本函数是**无操作**。
+    因此在真实 神机 环境里调用本函数是**无操作**。
 
     Args:
         platform: 平台描述。
