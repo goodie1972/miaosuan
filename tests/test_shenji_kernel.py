@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from miaosuan.adapters.algoforge.kernel import (
+from miaosuan.adapters.shenji.kernel import (
     KernelExtractionError,
     build_kernel_plan,
 )
@@ -73,7 +73,7 @@ def test_every_feature_extracts(feature_id: int) -> None:
 
 def test_unknown_symbol_would_raise() -> None:
     """闭包校验器本身可用：手工构造缺依赖的块必须报错。"""
-    from miaosuan.adapters.algoforge.kernel import _validate_blocks
+    from miaosuan.adapters.shenji.kernel import _validate_blocks
 
     with pytest.raises(KernelExtractionError, match="未定义符号"):
         _validate_blocks(["def f(x):\n    return _totally_missing_helper(x)\n"])

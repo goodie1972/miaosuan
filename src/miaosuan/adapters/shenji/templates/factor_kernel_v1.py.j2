@@ -64,7 +64,7 @@ from typing import Any
 # ── 词表版本（硬约束 H-1 冻结锁；lint AF007 会校验与内核派生版本一致）────────
 VOCAB_VERSION = "{{ vocab_version }}"
 
-# ── 策略身份（AlgoForge 契约：四项必须齐全）────────────────────────────────
+# ── 策略身份（神机 契约：四项必须齐全）────────────────────────────────
 # magic 必须是**裸 int**：平台侧是 magic: int（core/bridge.py:40），
 # 写成字符串会导致 p.magic == magic 永不相等 → 接管不到旧仓、产生孤儿单。
 STRATEGY_MAGIC = {{ magic }}
@@ -547,13 +547,13 @@ class {{ class_name }}({{ base_classes | join(", ") }}):
         return price + stop_dist, (price - take_dist if take_dist > 0.0 else 0.0)
 
     def generate_signal(self) -> tuple[Any, ...] | None:
-        """按 AlgoForge 平台契约生成交易信号（**无参**；K 线从 ``self.candles`` 读）。
+        """按 神机 平台契约生成交易信号（**无参**；K 线从 ``self.candles`` 读）。
 
         平台契约（``strategies.base.BaseStrategy``）：
 
         * 基类 ``on_tick`` 先 ``refresh_data()`` 把 K 线灌进 ``self.candles``，
           再以**无参**方式调用本方法。因此这里**不能**声明 ``candles`` 形参 ——
-          否则 AlgoForge 一调用就 ``TypeError``，导出策略根本加载不起来。
+          否则 神机 一调用就 ``TypeError``，导出策略根本加载不起来。
         * 返回 ``None``（无信号）或六元组
           ``(signal, score_long, score_short, factors_long, factors_short, indicator_values)``；
           ``signal`` 必须是 ``OrderType`` 枚举（``on_tick`` 会读 ``signal.value``）。

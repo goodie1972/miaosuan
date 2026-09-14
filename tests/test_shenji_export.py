@@ -1,4 +1,4 @@
-"""M15/M16：AlgoForge 导出 —— 命名、magic、契约常量、门禁降级标注。"""
+"""M15/M16：神机 导出 —— 命名、magic、契约常量、门禁降级标注。"""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from miaosuan.adapters.algoforge import AlgoforgePort, build_param_space, readable_formula
-from miaosuan.adapters.algoforge.contract import REQUIRED_CONSTANTS
+from miaosuan.adapters.shenji import ShenjiPort, build_param_space, readable_formula
+from miaosuan.adapters.shenji.contract import REQUIRED_CONSTANTS
 from miaosuan.core.vocab import VOCAB_VERSION
 from miaosuan.ir.schema import (
     Evidence,
@@ -52,13 +52,13 @@ def _spec(
     )
 
 
-def _port(**kwargs: object) -> AlgoforgePort:
+def _port(**kwargs: object) -> ShenjiPort:
     defaults: dict[str, object] = {"magic": "661801", "date": "20260910"}
     defaults.update(kwargs)
-    return AlgoforgePort(**defaults)  # type: ignore[arg-type]
+    return ShenjiPort(**defaults)  # type: ignore[arg-type]
 
 
-def test_filename_follows_algoforge_convention() -> None:
+def test_filename_follows_shenji_convention() -> None:
     result = _port().compile(_spec())
     assert result.filename == "20260910_h1_xauusd_miaosuan_v1.py"
 
@@ -84,7 +84,7 @@ def test_magic_is_rendered_as_bare_int_not_string() -> None:
 def test_strategy_declares_name_equal_to_pool_key() -> None:
     """P0 回归：策略类必须声明 ``name``，且等于策略名（STRATEGY_POOL 的 key）。
 
-    依据（已核 AlgoForge 源码，非转述）：
+    依据（已核 神机 源码，非转述）：
       docs/strategy_dev_guide.md:28   ``name = "my_strategy"  # settings.STRATEGY_POOL 的 key``
       engine_standalone/main.py:106   ``cls = scan_strategies().get(name)``
       engine_standalone/main.py:529   同上；查不到就 ``Unknown strategy, skip``
@@ -257,7 +257,7 @@ def test_min_tp_points_is_independent_and_scales_with_ratio() -> None:
     不参与计算（``take_dist`` 恒为 0）；这里只断言**比例关系**成立——
     将来重新启用止盈时按该公式重推导即可保住盈亏比。
     """
-    from miaosuan.adapters.algoforge.generator import (
+    from miaosuan.adapters.shenji.generator import (
         MIN_SL_POINTS,
         MIN_TP_POINTS,
         SL_ATR_MULT,

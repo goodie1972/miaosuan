@@ -4,7 +4,7 @@
 
 ==========  ================================================================
 ``mine``    数据 → 切分（封印 hold-out）→ 搜索 → 门禁 → ``StrategySpec`` JSON
-``export``  ``StrategySpec`` JSON → AlgoForge 策略 ``.py``（含 lint）
+``export``  ``StrategySpec`` JSON → 神机 策略 ``.py``（含 lint）
 ``verify``  对导出文件做 repaint lint +（可选）数值保真度回归
 ``report``  打印 spec 的证据/溯源摘要
 ==========  ================================================================
@@ -18,8 +18,8 @@
 用法示例::
 
     miaosuan mine --data data/xauusd_h1.parquet --budget standard --out artifacts/spec.json
-    miaosuan export --spec artifacts/spec.json --out-dir algoforge-strategies
-    miaosuan verify --file algoforge-strategies/20260910_xauusd_v1.py --data data/xauusd_h1.parquet
+    miaosuan export --spec artifacts/spec.json --out-dir shenji-strategies
+    miaosuan verify --file shenji-strategies/20260910_xauusd_v1.py --data data/xauusd_h1.parquet
     miaosuan report --spec artifacts/spec.json
 """
 
@@ -33,8 +33,8 @@ from typing import Any
 import numpy as np
 import typer
 
-from .adapters.algoforge import AlgoforgePort
-from .adapters.algoforge.lint import lint_source
+from .adapters.shenji import ShenjiPort
+from .adapters.shenji.lint import lint_source
 from .adapters.base import install_stub_modules, uninstall_stub_modules
 from .config import AppConfig
 from .core.features import compute_features
@@ -54,7 +54,7 @@ __all__ = ["app", "backtest", "export", "mine", "report", "ui", "verify"]
 app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
-    help="妙算（MiaoSuan）—— 声明式因子挖掘 + AlgoForge 策略导出",
+    help="妙算（MiaoSuan）—— 声明式因子挖掘 + 神机 策略导出",
 )
 
 #: 合法预算档位。
@@ -232,7 +232,7 @@ def export(
     ledger: str = typer.Option("", "--ledger", help="magic 账本路径（缺省用默认路径）"),
     date: str = typer.Option("", "--date", help="文件名日期 YYYYMMDD（缺省取当天 UTC）"),
 ) -> None:
-    """导出 AlgoForge 策略 .py（自动分配 magic + 静态检查）。"""
+    """导出 神机 策略 .py（自动分配 magic + 静态检查）。"""
     try:
         spec = read_spec(spec_path)
     except (MiaoSuanError, FileNotFoundError, OSError, ValueError) as exc:
@@ -247,7 +247,7 @@ def export(
             provenance=spec.provenance,
             notes=spec.notes,
         )
-    port = AlgoforgePort(
+    port = ShenjiPort(
         ledger_path=ledger or None,
         date=date,
         gate_deadband=float(gate_deadband),
@@ -336,7 +336,7 @@ def _fidelity_error(path: str, tokens: tuple[int, ...], raw: dict[str, Any]) -> 
     """导入导出文件，对比其因子与原生 :class:`StackVM` 的最大绝对误差。"""
     import importlib.util
 
-    stubs = install_stub_modules(AlgoforgePort.platform)
+    stubs = install_stub_modules(ShenjiPort.platform)
     try:
         spec = importlib.util.spec_from_file_location("_miaosuan_verify_target", path)
         if spec is None or spec.loader is None:

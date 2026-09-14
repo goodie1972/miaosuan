@@ -1,7 +1,7 @@
 # 妙算（MiaoSuan）
 
 > 定位：把量化因子挖掘系统 **AlphaMaster(AM)** 重构为「去 torch、可复现、插件化」的新程序。
-> 一句话：**一套纯 numpy 的声明式因子语言 + 一个遗传编程搜索器 + 一个 AlgoForge 策略双向适配层。**
+> 一句话：**一套纯 numpy 的声明式因子语言 + 一个遗传编程搜索器 + 一个 神机 策略双向适配层。**
 
 ---
 
@@ -11,8 +11,8 @@
 
 | 模式 | 输入 | 输出 | 引擎 |
 |---|---|---|---|
-| **模式 A：因子挖掘** | 行情数据（Panel） | 一份可信的因子公式 → 可导出的 AlgoForge 策略 | RPN-GA 结构搜索 |
-| **模式 B：参数寻优** | 已有 AlgoForge 策略 | 外提参数后的最优参数集 → 回写策略新版本 | Optuna TPE + 事件驱动回测 |
+| **模式 A：因子挖掘** | 行情数据（Panel） | 一份可信的因子公式 → 可导出的 神机 策略 | RPN-GA 结构搜索 |
+| **模式 B：参数寻优** | 已有 神机 策略 | 外提参数后的最优参数集 → 回写策略新版本 | Optuna TPE + 事件驱动回测 |
 
 两种模式通过**统一的产物 IR（`StrategySpec`）** 打通：模式 A 的导出物可直接作为模式 B 的输入，
 形成 `mine → export → tune → export v2 → tune …` 的闭环。
@@ -24,7 +24,7 @@ CLI  ──►  Pipeline  ──►  {search(GA) | tune(Optuna)}  ──►  cor
                           │                                  ▲
                     data/ + market/（可插拔）             ir/ + gate/ + report/
                           │
-                    adapters/algoforge（正向生成 / 反向抽取）
+                    adapters/shenji（正向生成 / 反向抽取）
 ```
 
 **依赖方向铁律（CI 强制，架构 §1.2 / §9.7）**：

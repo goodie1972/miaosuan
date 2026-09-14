@@ -29,10 +29,10 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from ..adapters.algoforge.generator import readable_formula
-from ..adapters.algoforge.lint import lint_source
-from ..adapters.algoforge.realtime import (
-    AlgoforgeReadOnlyClient,
+from ..adapters.shenji.generator import readable_formula
+from ..adapters.shenji.lint import lint_source
+from ..adapters.shenji.realtime import (
+    ShenjiReadOnlyClient,
     RealtimeOutcome,
     env_config,
     safe_call,
@@ -166,16 +166,16 @@ def _validate_market_choice(symbol: str, market: str) -> None:
     )
 
 
-# ── 实时页：AlgoForge 后端**只读**代理 ───────────────────────────────────────
+# ── 实时页：神机 后端**只读**代理 ───────────────────────────────────────
 
-def _realtime_client() -> AlgoforgeReadOnlyClient:
+def _realtime_client() -> ShenjiReadOnlyClient:
     """构造只读客户端（地址/超时每次读环境变量，便于运维改配置）。
 
-    默认 ``http://127.0.0.1:1783``（AlgoForge dashboard），超时 3 秒。
-    **只读**白名单在客户端层强制（见 :mod:`miaosuan.adapters.algoforge.realtime`）。
+    默认 ``http://127.0.0.1:1783``（神机 dashboard），超时 3 秒。
+    **只读**白名单在客户端层强制（见 :mod:`miaosuan.adapters.shenji.realtime`）。
     """
     base_url, timeout = env_config()
-    return AlgoforgeReadOnlyClient(base_url=base_url, timeout=timeout)
+    return ShenjiReadOnlyClient(base_url=base_url, timeout=timeout)
 
 
 def _outcome_payload(outcome: RealtimeOutcome, base_url: str) -> dict[str, Any]:
@@ -424,7 +424,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/strategies")
     def list_strategies() -> list[dict[str, Any]]:
-        """列出已导出的 AlgoForge 策略 .py（按修改时间倒序）。
+        """列出已导出的 神机 策略 .py（按修改时间倒序）。
 
         只认**带** ``STRATEGY_MAGIC`` 的文件：该常量由导出模板强制写入，是"这
         是导出产物"的准确判据。否则 artifacts 下的临时脚本也会被当成策略列出

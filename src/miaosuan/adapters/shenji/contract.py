@@ -1,4 +1,4 @@
-"""AlgoForge 平台契约常量（M15）。
+"""神机 平台契约常量（M15）。
 
 集中定义**不可变**的平台约定，避免散落在生成器与模板里：
 
@@ -9,7 +9,7 @@
   （含数据驱动的 ``stub_modules``，使生成文件可在离线环境被 import）。
 
 magic 规则（6 位十进制）：``66`` + 两位序号 + 两位版本号。``66`` 为自用号段，
-与 AlgoForge 既有策略号段隔离。序号由 :mod:`magic_registry` 账本分配，**不得**
+与 神机 既有策略号段隔离。序号由 :mod:`magic_registry` 账本分配，**不得**
 硬编码。
 """
 
@@ -30,7 +30,7 @@ __all__ = [
 ]
 
 #: 平台名（与目录名一致）。
-PLATFORM_NAME: str = "algoforge"
+PLATFORM_NAME: str = "shenji"
 
 #: magic 号段前缀（自用）。
 MAGIC_PREFIX: str = "66"
@@ -59,7 +59,7 @@ REQUIRED_CONSTANTS: tuple[str, ...] = (
 #: 触发 R1（GATE 零点不连续）保护的算子名。
 GATE_TOKEN_NAME: str = "GATE"
 
-#: AlgoForge 平台描述（数据驱动）。
+#: 神机 平台描述（数据驱动）。
 PLATFORM_SPEC: PlatformSpec = PlatformSpec(
     name=PLATFORM_NAME,
     file_suffix=".py",
@@ -85,7 +85,7 @@ PLATFORM_SPEC: PlatformSpec = PlatformSpec(
             "OrderType": ("BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT", "BUY_STOP", "SELL_STOP"),
         },
     },
-    # 占位基类必须如实还原抽象面（成员名逐条取自 algoforge-dev 真源码）：
+    # 占位基类必须如实还原抽象面（成员名逐条取自 shenji-dev 真源码）：
     #   strategies/base.py:345  BaseStrategy  → generate_signal
     #   core/bridge.py:68-120   MT4BridgeBase → 下列 9 个桥接方法
     stub_abstracts={
@@ -107,14 +107,14 @@ PLATFORM_SPEC: PlatformSpec = PlatformSpec(
     supports_short=True,
     # 只继承 BaseStrategy：它自带 refresh_data()（灌 self.candles）与 on_tick()，
     # 导出策略不需要 MT4BridgeBase 的任何能力；多继承它只会引入 9 个未实现的
-    # 抽象方法，把类变成抽象类。AlgoForge 现网 27 个策略也全是单继承 BaseStrategy。
+    # 抽象方法，把类变成抽象类。神机 现网 27 个策略也全是单继承 BaseStrategy。
     base_classes=("BaseStrategy",),
     default_symbol="XAUUSD",
 )
 
 
 def default_filename(name: str, version: int, *, date: str = "") -> str:
-    """生成 AlgoForge 约定的文件名 ``YYYYMMDD_名称_vN.py``。
+    """生成 神机 约定的文件名 ``YYYYMMDD_名称_vN.py``。
 
     Args:
         name: 策略名（已清洗为 ``[A-Za-z0-9_]+``）。

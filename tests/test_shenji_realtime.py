@@ -1,4 +1,4 @@
-"""03 实时页：AlgoForge 后端**只读**客户端测试。
+"""03 实时页：神机 后端**只读**客户端测试。
 
 重点证明"不下单"是**可被测试证明**的，而不是写在注释里：
 越界（非 GET / 非白名单路径 / 非法查询参数）时 ``_open``（唯一 socket 出口）
@@ -13,10 +13,10 @@ from typing import Any
 
 import pytest
 
-from miaosuan.adapters.algoforge.realtime import (
+from miaosuan.adapters.shenji.realtime import (
     ALLOWED_PATHS,
     DEFAULT_BASE_URL,
-    AlgoforgeReadOnlyClient,
+    ShenjiReadOnlyClient,
     BackendUnreachable,
     ReadOnlyViolation,
     RealtimeOutcome,
@@ -49,9 +49,9 @@ def _bind(
     exc: BaseException | None = None,
     status: int = 200,
     record: list[tuple[str, str]] | None = None,
-) -> AlgoforgeReadOnlyClient:
+) -> ShenjiReadOnlyClient:
     """把客户端的 ``_open`` 换成桩，并可选记录调用。"""
-    client = AlgoforgeReadOnlyClient()
+    client = ShenjiReadOnlyClient()
 
     def _open(request: Any) -> Any:
         if record is not None:
@@ -128,7 +128,7 @@ def test_get_sends_get_and_parses_json(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_base_url_is_configurable(monkeypatch: pytest.MonkeyPatch) -> None:
     record: list[tuple[str, str]] = []
-    client = AlgoforgeReadOnlyClient(base_url="http://127.0.0.1:9999/")
+    client = ShenjiReadOnlyClient(base_url="http://127.0.0.1:9999/")
 
     def _open(request: Any) -> Any:
         record.append((request.get_method(), request.full_url))
@@ -150,7 +150,7 @@ def test_candles_query_is_url_encoded_and_clamped(monkeypatch: pytest.MonkeyPatc
 
 
 def test_signals_latest_requires_strategy() -> None:
-    client = AlgoforgeReadOnlyClient()
+    client = ShenjiReadOnlyClient()
     with pytest.raises(ValueError, match="必须指定策略名"):
         client.signals_latest("")
     with pytest.raises(ValueError, match="必须指定策略名"):
@@ -190,7 +190,7 @@ def test_http_error_carries_status(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_bad_json_maps_to_bad_json_reason(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = AlgoforgeReadOnlyClient()
+    client = ShenjiReadOnlyClient()
 
     class _Raw:
         status = 200
@@ -231,7 +231,7 @@ def test_safe_call_failure_envelope(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_safe_call_reraises_readonly_violation() -> None:
     """白名单越界是**编程错误**，不能被 safe_call 吞掉。"""
-    client = AlgoforgeReadOnlyClient()
+    client = ShenjiReadOnlyClient()
     with pytest.raises(ReadOnlyViolation):
         safe_call(client.get, "/api/engine/start")
 
@@ -239,16 +239,16 @@ def test_safe_call_reraises_readonly_violation() -> None:
 # ── 环境配置 ────────────────────────────────────────────────────────────────
 
 def test_env_config_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("MIAOSUAN_ALGOFORGE_URL", raising=False)
-    monkeypatch.delenv("MIAOSUAN_ALGOFORGE_TIMEOUT", raising=False)
+    monkeypatch.delenv("MIAOSUAN_SHENJI_URL", raising=False)
+    monkeypatch.delenv("MIAOSUAN_SHENJI_TIMEOUT", raising=False)
     assert env_config() == (DEFAULT_BASE_URL, 3.0)
 
 
 def test_env_config_override_and_bad_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MIAOSUAN_ALGOFORGE_URL", "http://127.0.0.1:1234")
-    monkeypatch.setenv("MIAOSUAN_ALGOFORGE_TIMEOUT", "2.5")
+    monkeypatch.setenv("MIAOSUAN_SHENJI_URL", "http://127.0.0.1:1234")
+    monkeypatch.setenv("MIAOSUAN_SHENJI_TIMEOUT", "2.5")
     assert env_config() == ("http://127.0.0.1:1234", 2.5)
-    monkeypatch.setenv("MIAOSUAN_ALGOFORGE_TIMEOUT", "not-a-number")
+    monkeypatch.setenv("MIAOSUAN_SHENJI_TIMEOUT", "not-a-number")
     assert env_config()[1] == 3.0
-    monkeypatch.setenv("MIAOSUAN_ALGOFORGE_TIMEOUT", "-1")
+    monkeypatch.setenv("MIAOSUAN_SHENJI_TIMEOUT", "-1")
     assert env_config()[1] == 3.0
