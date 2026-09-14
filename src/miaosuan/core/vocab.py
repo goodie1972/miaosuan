@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """Formula_Vocabulary 集成与确定性版本（移植自 AM ``model_core/vocab.py``，近乎原样）。
 
 本模块把 Formula_Vocabulary 从「手工维护的特征名元组 + 手工版本字符串」迁移为
@@ -10,7 +16,7 @@
   - 构建时用集合校验 token 名称全局唯一、无缺失/重复/多余（R3.1、R3.2）。
   - ``VOCAB_VERSION`` 由有序 token 名称列表确定性派生（R3.4、R3.5）：
 
-        VOCAB_VERSION = "v" + sha256("\\n".join(token_names)).hexdigest()[:12]
+        VOCAB_VERSION = "v" + sha256("\n".join(token_names)).hexdigest()[:12]
 
     相同有序列表 → 相同版本；任意组成/顺序变化 → 不同版本。
   - ``FORMULA_VOCAB.verify(artifact_version)``：版本不匹配抛
@@ -55,12 +61,13 @@ VOCAB_SCHEMA_TAG = "4.0-registry"
 def compute_vocab_version(token_names: tuple[str, ...]) -> str:
     """由有序 token 名称列表确定性派生紧凑版本标识。
 
-    VOCAB_VERSION = "v" + sha256("\\n".join(token_names)).hexdigest()[:12]
+    VOCAB_VERSION = "v" + sha256("\n".join(token_names)).hexdigest()[:12]
 
     性质：相同的有序列表 → 相同版本；任意组成或顺序变化 → 不同版本。使用换行
     作为稳定分隔符，避免名称拼接歧义。
     """
-    joined = "\n".join(token_names)
+    joined = "
+".join(token_names)
     digest = hashlib.sha256(joined.encode("utf-8")).hexdigest()
     return "v" + digest[:12]
 

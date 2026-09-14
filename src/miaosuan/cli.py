@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """妙算命令行入口（M14）—— **唯一**允许做 IO / 读环境变量的层。
 
 四个子命令构成「模式 A」一条命令闭环：
@@ -133,7 +139,8 @@ def _write_history(path: Path, result: Any, *, spec_out: str, budget: str) -> in
     payload = _history_payload(result, spec_out=spec_out, budget=budget)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        json.dumps(payload, ensure_ascii=False, indent=2) + "
+", encoding="utf-8"
     )
     return len(payload["points"])
 
@@ -452,7 +459,8 @@ def backtest(
         target = Path(out)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            json.dumps(payload, ensure_ascii=False, indent=2) + "
+", encoding="utf-8"
         )
 
     m = result.metrics

@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """统一绩效指标 + 成本敏感性曲线（架构 §2 ``report/metrics.py``，M9）。
 
 * **统一指标**：Sharpe / Sortino / Calmar / 最大回撤（MDD）/ 波动 / 换手 / 年化 / IC；

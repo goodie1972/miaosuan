@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """占位符哨兵：``core/`` 内**不得**残留任何未实现的占位（M3/M4 验收后）。
 
 以文本扫描 ``src/miaosuan/core/*.py``，禁止出现：

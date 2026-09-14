@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """特征工程（numpy 化移植，M4）—— 65 个特征，纯 numpy，无 torch。
 
 本模块把冻结 ``AlphaMaster`` 的 ``model_core/features.py``（原 torch 实现，

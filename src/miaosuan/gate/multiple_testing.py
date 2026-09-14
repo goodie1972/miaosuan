@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """多重检验校正（架构 §6.4，M12）。
 
 搜索器在有限评估预算内比较**大量候选公式**（trials），「最高分」天然含选择偏差

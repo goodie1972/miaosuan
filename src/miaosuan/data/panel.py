@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """``Panel`` —— OHLCV 数据契约（架构 §2 / §9.4）。
 
 ``Panel`` 是**产品轴与数据源的纯数据容器**：只有 OHLCV + time + symbols + fingerprint

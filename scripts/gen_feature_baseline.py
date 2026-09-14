@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """生成 M4 特征对拍的 **torch 基准**（运行在装有真实 torch 的解释器上）。
 
 用 AM 的**原始 torch 实现**（``model_core.features.MT5FeatureEngineer.compute_features``）
@@ -14,7 +20,7 @@
 
 运行：
 
-    C:\\Users\\Administrator\\.workbuddy\\binaries\\python\\envs\\default\\Scripts\\python.exe \\
+    C:\Users\Administrator\.workbuddy\binaries\python\envs\default\Scripts\python.exe \
         scripts/gen_feature_baseline.py
 
 可用 ``MIAOSUAN_AM_ROOT`` 覆盖 AM 仓库位置。对 AM 仓库**零写入**。
@@ -31,7 +37,7 @@ from pathlib import Path
 import numpy as np
 
 _ROOT = Path(__file__).resolve().parent.parent
-_DEFAULT_AM_ROOT = Path(r"D:\backup\BaoBao\PythonProgram\AlphaMaster-main")
+_DEFAULT_AM_ROOT = Path(r"D:ackup\BaoBao\PythonProgram\AlphaMaster-main")
 _FIX = _ROOT / "tests" / "fixtures"
 _OUT_INPUTS = _FIX / "frozen_feature_inputs.npz"
 _OUT_INPUTS_META = _FIX / "feature_inputs_meta.json"
@@ -147,7 +153,8 @@ def main() -> int:
     }
     with args.inputs_meta.open("w", encoding="utf-8") as fh:
         json.dump(inputs_meta, fh, ensure_ascii=False, indent=2)
-        fh.write("\n")
+        fh.write("
+")
 
     baseline_meta = {
         "_comment": "AM 原实现 compute_features 输出基准，请勿手工编辑。",
@@ -164,7 +171,8 @@ def main() -> int:
     }
     with args.baseline_meta.open("w", encoding="utf-8") as fh:
         json.dump(baseline_meta, fh, ensure_ascii=False, indent=2)
-        fh.write("\n")
+        fh.write("
+")
 
     print(f"[OK] AM 根: {am_root}")
     print(f"[OK] torch={torch.__version__} numpy={np.__version__}")

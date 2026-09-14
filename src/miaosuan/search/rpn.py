@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """RPN 表示与遗传算子（架构 §1.3 AD-2、M10）。
 
 **表示**：定长 token 数组 ``L=8``（Q6-A）。token id 分段与 :mod:`miaosuan.core.vocab`

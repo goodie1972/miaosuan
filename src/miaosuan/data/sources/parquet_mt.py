@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """MT4/外汇 Parquet 数据源（MVP 唯一实现，架构 §2 ``data/sources/parquet_mt.py``）。
 
 封装 :mod:`miaosuan.data.loader` 的 Parquet 语义（成交量列名 ``tick_volume`` 优先、

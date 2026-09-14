@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """妙算本地 Web 仪表盘（模式 A 可视化）。
 
 职责边界（延续架构依赖铁律）：
@@ -65,7 +71,7 @@ _EXCLUDED_JSON = {"magic_registry.json", "holdout_seals.json", "config_snapshot.
 
 def _safe_name(name: str, *, suffixes: set[str] | None = None) -> Path:
     """把用户传入的文件名约束为 artifacts 下的单个文件（拒绝路径穿越）。"""
-    if not name or "/" in name or "\\" in name or ".." in name:
+    if not name or "/" in name or "\" in name or ".." in name:
         raise HTTPException(status_code=400, detail=f"非法文件名：{name!r}")
     path = (_ARTIFACTS / name).resolve()
     if _ARTIFACTS.resolve() not in path.parents:
@@ -214,7 +220,8 @@ class MineJob:
         """在后台线程里按行读取子进程输出（UTF-8，容错替换）。"""
         assert self.proc.stdout is not None
         for raw in self.proc.stdout:
-            line = raw.rstrip("\r\n")
+            line = raw.rstrip("
+")
             with self.lock:
                 self.lines.append(line)
         self.proc.wait()
@@ -582,7 +589,8 @@ def create_app() -> FastAPI:
             args += ["--rolling-window", str(req.rolling_window)]
         code, output = _run_sync(args)
         if code != 0:
-            raise HTTPException(status_code=400, detail=f"回测失败（code={code}）：\n{output}")
+            raise HTTPException(status_code=400, detail=f"回测失败（code={code}）：
+{output}")
         if not out_path.is_file():
             raise HTTPException(status_code=500, detail=f"回测未产出结果文件：{out_path.name}")
         payload: dict[str, Any] = json.loads(out_path.read_text(encoding="utf-8"))

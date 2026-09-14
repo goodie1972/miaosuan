@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """M5 backtest 数值对拍：妙算 numpy vs 冻结 AM ``model_core/backtest.py``。
 
 AM 运行态：``MT5Backtest(cost_rate=0.0003, periods_per_year=6240)``，``REWARD_MODE="ftmo"``

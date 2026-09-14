@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """因子内核提取器（M15 支撑模块）—— 把公式用到的算子/特征源码搬进生成文件。
 
 为什么需要它
@@ -276,7 +282,7 @@ def _rename_block(segment: str, mapping: dict[str, str]) -> str:
     def _substitute(match: re.Match[str]) -> str:
         return mapping.get(match.group(0), match.group(0))
 
-    pattern = re.compile(r"\b(" + "|".join(re.escape(n) for n in ordered) + r")\b")
+    pattern = re.compile(r"(" + "|".join(re.escape(n) for n in ordered) + r")")
     return pattern.sub(_substitute, segment)
 
 

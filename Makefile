@@ -26,7 +26,7 @@ PYTHON_BOOT ?= python
 ORACLE_PYTHON ?= C:/Users/Administrator/.workbuddy/binaries/python/envs/default/Scripts/python.exe
 
 .DEFAULT_GOAL := help
-.PHONY: help env smoke test parity lint format fixtures clean
+.PHONY: help env smoke test parity lint format fixtures clean add_agpl_header
 
 help:
 	@echo "妙算（MiaoSuan）可用目标："
@@ -58,7 +58,12 @@ test:
 parity:
 	$(PYTHON) -m pytest tests/parity
 
-# ── 静态检查 ───────────────────────────────────────────────────────────────
+# Add AGPL header to all source files before any distribution target
+add_agpl_header:
+	@bash scripts/add_agpl_header.sh
+
+
+
 lint:
 	$(PYTHON) -m ruff check src tests
 	$(PYTHON) -m mypy

@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """差分对拍（parity）测试的共享装置 —— 加载冻结的 AlphaMaster 作为 Oracle。
 
 架构 §6.3：妙算（numpy）与冻结 AM（torch）对拍。AM 仓库**只读**，妙算绝不修改它。
@@ -37,7 +43,7 @@ import pytest
 # ── 路径 ───────────────────────────────────────────────────────────────────
 
 #: 冻结 AM 仓库（只读 Oracle）。可用环境变量覆盖（CI / 异机）。
-_DEFAULT_AM_ROOT = Path(r"D:\backup\BaoBao\PythonProgram\AlphaMaster-main")
+_DEFAULT_AM_ROOT = Path(r"D:ackup\BaoBao\PythonProgram\AlphaMaster-main")
 
 #: 冻结快照
 _FIXTURE = Path(__file__).resolve().parent.parent / "fixtures" / "am_vocab_snapshot.json"

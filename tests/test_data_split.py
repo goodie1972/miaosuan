@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """三段切分 + purge/embargo + hold-out 一次性封印单测（M7）。
 
 （批量）验收：同数据 + 同 seed → 切分可复现（指纹一致）；同一 hold-out 指纹第二次使用 →

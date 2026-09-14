@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """M4 底层 helper 对拍（**紧容差** 1e-5）：隔离「归一化放大」，证明移植正确。
 
 65 特征的输出统一经过 ``_norm``（median/MAD 稳健归一化），会把 1e-7 量级的 float32

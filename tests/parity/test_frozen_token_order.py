@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """名称/顺序冻结锁回归（M3）：妙算注册表必须与 ``frozen_token_order.json`` 逐项一致。
 
 这份 fixture 由 ``scripts/gen_frozen_fixture.py`` 从**冻结的 AlphaMaster**实时提取

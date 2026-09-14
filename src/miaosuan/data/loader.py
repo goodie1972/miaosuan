@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """数据加载器：Parquet / CSV → :class:`~miaosuan.data.panel.Panel`（架构 §2）。
 
 复刻冻结 AlphaMaster ``data_pipeline`` 的数据语义（详见

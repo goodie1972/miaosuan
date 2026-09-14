@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
+# -*- coding: utf-8 -*-
 """h1_testxau_miaosuan —— 由妙算（MiaoSuan）自动生成，**请勿手工编辑**。
 
 公式（RPN，8 个 token）

@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """门禁综合 verdict 单测（M12 / 验收 #4）。
 
 验收 #4：**固定 fixture → 稳定 verdict 快照**。此处以固定数值输入断言 ``snapshot()`` 确定性。

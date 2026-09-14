@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """依赖方向（M16.5 扩展）：``adapters`` 与「唯一 IO/env 边界」。
 
 在既有 ``test_dependency_direction.py``（只管 ``core/``）之外补充两条新规：
@@ -50,7 +56,9 @@ def _forbidden_imports(tree: ast.AST) -> list[str]:
 def test_adapters_do_not_import_cli_or_tune(path: Path) -> None:
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     violations = _forbidden_imports(tree)
-    assert not violations, f"{path.name} 违反依赖方向：\n  - " + "\n  - ".join(violations)
+    assert not violations, f"{path.name} 违反依赖方向：
+  - " + "
+  - ".join(violations)
 
 
 def test_adapters_never_import_torch() -> None:

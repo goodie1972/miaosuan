@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """``MarketProfile`` / ``CostModel`` 单测（M8）。
 
 覆盖：v1 全 14 必填字段冻结、四实例齐备、``apply_cost``（含买卖不对称）、``CostModel``

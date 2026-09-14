@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """M4 特征**因果性**断言（no look-ahead）。
 
 因果性定义：``output[t]`` 仅依赖 ``input[<= t]``。据此有两个方向的等价断言：

@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """``Panel`` 数据契约单测（M6）。
 
 覆盖：形状/类型校验、``[N,T]`` 契约、``slice_view``、``to_raw_dict``、指纹确定性与敏感性。

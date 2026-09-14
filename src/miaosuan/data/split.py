@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """三段切分 + purge/embargo + hold-out 一次性封印（架构 §6.1，M7）。
 
 ```
@@ -224,7 +230,8 @@ class HoldoutSealRegistry:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {"version": _LEDGER_VERSION, "seals": seals}
         tmp = self.path.parent / (self.path.name + ".tmp")
-        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "
+", encoding="utf-8")
         os.replace(tmp, self.path)
 
 

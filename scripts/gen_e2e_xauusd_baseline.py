@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """生成**端到端对拍**基准：XAUUSD_H1 真实数据 × best_XAUUSD 真实公式（torch Oracle）。
 
 基准 = 冻结 AM 的**原生管线**：
@@ -15,7 +21,7 @@
 
 运行（Oracle python，装 torch）：
 
-    C:/Users/Administrator/.workbuddy/binaries/python/envs/default/Scripts/python.exe \\
+    C:/Users/Administrator/.workbuddy/binaries/python/envs/default/Scripts/python.exe \
         scripts/gen_e2e_xauusd_baseline.py
 
 对 AM 仓库**零写入**。
@@ -33,7 +39,7 @@ from typing import Any
 import numpy as np
 
 _ROOT = Path(__file__).resolve().parent.parent
-_DEFAULT_AM_ROOT = Path(r"D:\backup\BaoBao\PythonProgram\AlphaMaster-main")
+_DEFAULT_AM_ROOT = Path(r"D:ackup\BaoBao\PythonProgram\AlphaMaster-main")
 _DEFAULT_PARQUET = Path(r"D:\K线数据\XAUUSD_H1.parquet")
 _FIX = _ROOT / "tests" / "fixtures"
 _OUT_NPZ = _FIX / "e2e_xauusd_baseline.npz"
@@ -140,7 +146,8 @@ def main() -> int:
     np.savez_compressed(args.npz, **out)
     with args.json.open("w", encoding="utf-8") as fh:
         json.dump(meta, fh, ensure_ascii=False, indent=2)
-        fh.write("\n")
+        fh.write("
+")
 
     print(f"[OK] AM 根: {am_root}")
     print(f"[OK] parquet: {parquet} bars={t_bars}")

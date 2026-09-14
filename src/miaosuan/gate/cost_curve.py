@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """成本敏感性曲线与 2x 成本闸（架构 §6.4，M12）。
 
 **理念**：一个因子若在「1x 成本」下漂亮、在「2x 成本」下就死，则它是「捡硬币于推土机前」，

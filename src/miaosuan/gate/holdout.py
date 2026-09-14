@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """hold-out 一次性封印闸（架构 §6.1 / §9.5，M12）。
 
 **铁律**：hold-out 段是「最后一次、只此一次」的诚实检验。搜索路径（GA 循环）**绝不**触碰
