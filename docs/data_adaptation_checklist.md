@@ -1,7 +1,7 @@
 # 数据适配坑清单（T02 输入）
 
 > 状态：**记录，未实现**。本文档由 M5（T01 收官）沉淀，用于指导 T02 的 `data/` 层实现。
-> 所有条目均来自对冻结 AlphaMaster 数据路径的**逐行核对**与端到端对拍（XAUUSD_H1）实测，
+> 所有条目均来自端到端对拍（XAUUSD_H1）实测，
 > 而非臆测。妙算 `core/` **不做任何数据 IO / 适配**；适配逻辑一律下沉到 T02 的 `data/`。
 >
 > 预留接口见 `src/miaosuan/core/ports.py`（`DataSource` / `MarketProfile` / `CostModelProtocol`）。
@@ -15,21 +15,20 @@
 
 ## 1. 复权 / 价格调整（adjustment）
 
-- **现状**：AlphaMaster 的 `ParquetDataManager` **不做任何复权**：直接取列原始 OHLC，转
+- **现状**：妙算的 `ParquetDataManager` **不做任何复权**：直接取列原始 OHLC，转
   `float32`。它假设 parquet 已是「目标口径」的价格序列（期货连续合约 / 现货 / 已复权股票）。
 - **坑**：股票品种若为「不复权 / 前复权 / 后复权」不同口径，因子数值与回测收益会系统性
   偏差；期货主力连续合约存在**换月跳空**，会污染 `MA_DIFF` / `MOMENTUM` / `TRIX` 等差分特征。
 - **T02 动作**：
-  - `DataSource.adjustment_mode` 显式声明口径（`none | qfq | hfq | backadj`），**默认 `none`
-    以对齐 AM**；
+  - `DataSource.adjustment_mode` 显式声明口径（`none | qfq | hfq | backadj`），**默认 `none`**；
   - 复权在**加载后、特征前**统一施加，禁止只改部分字段；
   - 期货连续合约需支持「价差调整 / 比例调整」开关，并在 `MarketProfile` 标注 `is_continuous`。
-- **对拍影响**：端到端对拍用 `none` 口径，故与 AM 逐位一致；任何复权模式都是**新语义**，
+- **对拍影响**：端到端对拍用 `none` 口径；任何复权模式都是**新语义**，
   必须单独建对拍基准，不得混用。
 
 ## 2. 时间戳单位修复（`time` 被误存为「秒/1000」）
 
-- **AM 语义**（`parquet_manager.py`）：
+- **数据语义**（`parquet_manager.py`）：
   ```python
   if is_numeric_dtype(time) and time.max() < 10_000_000:   # 1970-04-27 之前
       time = time * 1000                                   # 视为被除过 1000，乘回
@@ -37,7 +36,7 @@
 - **坑**：部分 A 股导出工具把 Unix **秒**误存为「秒/1000」，日期会退到 1970 年，导致跨品种
   时间轴对齐完全错乱。
 - **T02 动作**：保留该修复但**升级为显式列契约**：
-  - 声明 `time_unit ∈ {s, ms}`，默认**自动探测**（阈值 `1e7` 与 AM 一致）；
+  - 声明 `time_unit ∈ {s, ms}`，默认**自动探测**（阈值 `1e7`）；
   - 探测结果写入加载日志/元信息，便于审计；
   - 拒绝「非单调可修复」的时间戳（如出现负数、NaN）。
 - **风险**：阈值法在「极早期历史数据」上可能误判；T02 建议以「中位数时间戳落在合理年份区间」
@@ -45,7 +44,7 @@
 
 ## 3. 缺失 bar / 重复时间戳（去重与排序）
 
-- **AM 语义**：
+- **数据语义**：
   ```python
   sub = sub.sort_values("time")
   sub = sub[~sub["time"].duplicated(keep="last")]   # 重复时间戳保留最后一条
@@ -61,35 +60,35 @@
 
 ## 4. 多品种时间轴对齐（alignment）
 
-- **AM 语义**（`MT5DataManager._align_timelines`）：
+- **数据语义**（`MT5DataManager._align_timelines`）：
   1. **优先取时间戳交集**（只保留所有品种都有真实报价的 bar），以彻底消除休市
      `forward-fill` 造成的「伪重复 K 线」；
   2. 交集不足 `MIN_BARS` 时**降级为并集 + `ffill`** 并告警；
   3. **只允许 `ffill`（因果填充），严禁 `bfill`**（避免未来信息泄漏）；
   4. 起始处缺历史 → `fillna(0.0)`（避免下游 `log` / `divide` 出 `-inf`）。
 - **坑**：并集 + 双向填充是最常见的 look-ahead 泄漏源；`fillna(0.0)` 会把「无报价」当成
-  「价格为 0」，对**价格类**特征是隐式污染（AM 接受此权衡）。
+  「价格为 0」，对**价格类**特征是隐式污染（妙算接受此权衡）。
 - **T02 动作**：
   - `DataSource.trading_calendar` / `tradable_mask` 显式表达「该 bar 是否有真实报价」；
-  - 对齐策略可配置（`intersection | union_ffill`），默认对齐 AM（intersection 优先）；
+  - 对齐策略可配置（`intersection | union_ffill`），默认 `intersection` 优先；
   - 在特征计算前把「无报价」的 bar 标记出来，供特征层决定 `NaN` 还是 `0`（**不要把 0 当价格**）。
 - **单品种 vs 多品种**：`N=1` 走滚动时序归一，`N>1` 走截面归一（见 `core/vm.py`）。对齐会改变
   `N`，从而**切换归一化路径**——对齐策略必须在上游一次性定死，不能中途改变 `N`。
 
 ## 5. 成交量列名（`tick_volume` vs `volume`）
 
-- **AM 语义**：
+- **数据语义**：
   ```python
   volume_col = "tick_volume" if "tick_volume" in df.columns else "volume"
   ```
 - **坑**：MT5 导出为 `tick_volume`，第三方导出为 `volume`；若列选择错误，`volume` 相关特征
   （`VWAP` / `VWAP_DEV` / 量价类）全错或抛 `KeyError`。
-- **T02 动作**：`MarketProfile.volume_semantics ∈ {tick, real}`；列解析按 AM 优先级，并在
+- **T02 动作**：`MarketProfile.volume_semantics ∈ {tick, real}`；列解析按 `tick_volume` 优先级，并在
   元信息记录实际使用的列名。对拍数据为 `volume`（`has_tick_volume = false`）。
 
 ## 6. 目标收益 `target_ret`（前视 horizon = 2）
 
-- **AM 语义**（`MT5DataManager._compute_target_ret`）：
+- **数据语义**（`MT5DataManager._compute_target_ret`）：
   ```
   target_ret[n, t] = log(open[n, t+2] / open[n, t+1])   # t ∈ [0, T-3]
   target_ret[n, T-2] = target_ret[n, T-1] = 0           # 末两根零填充（边界）

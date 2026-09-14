@@ -1,7 +1,7 @@
 # 妙算（MiaoSuan）—— 唯一配置入口
 #
 # 设计目标（架构 §1.2）：
-#   * 消灭 AlphaMaster「没有 pytest.ini」的问题 —— 所有测试配置集中在此；
+#   * 统一测试配置，消除缺失 pytest.ini 的问题；
 #   * 单一配置源，杜绝 AM 的「双 config 架构倒置」（engine.py 反向 import 根目录 config）；
 #   * Python 目标版本 3.11（架构 §8）。本机无 3.11，实际在 3.13 上验证，
 #     详见 README「已知差异」小节。
@@ -49,7 +49,7 @@ dependencies = [
 [project.optional-dependencies]
 # 模式 B（T05）依赖
 tune = ["TA-Lib>=0.4.0", "optuna>=3.4"]
-# 仅 tests/parity 使用：加载冻结的 AlphaMaster 作对拍 Oracle，不进生产依赖
+# 仅 tests/parity 使用：加载冻结的基准作对拍 Oracle，不进生产依赖
 oracle = ["torch>=2.0"]
 # 开发工具
 dev = [
@@ -80,7 +80,7 @@ testpaths = ["tests"]
 pythonpath = ["src"]              # 免安装即可 import miaosuan
 addopts = "-ra -q"
 markers = [
-    "parity: 与冻结 AlphaMaster 的差分对拍（tests/parity）",
+    "parity: 与冻结基准的差分对拍（tests/parity）",
     "slow: 慢测试",
 ]
 filterwarnings = [
