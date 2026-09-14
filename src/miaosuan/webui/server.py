@@ -26,6 +26,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from ..adapters.algoforge.generator import readable_formula
@@ -315,9 +316,13 @@ def create_app() -> FastAPI:
     """构造仪表盘 FastAPI 应用。"""
     app = FastAPI(title="妙算仪表盘", docs_url=None, redoc_url=None)
 
+    _STATIC_DIR: Path = Path(__file__).resolve().parent / "static"
+
     @app.get("/", response_class=HTMLResponse)
     def index() -> FileResponse:
         return FileResponse(_INDEX_HTML)
+
+    app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
     # ── 数据与产物只读视图 ───────────────────────────────────────────────
     @app.get("/api/data")

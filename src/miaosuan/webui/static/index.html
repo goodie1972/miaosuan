@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="/static/logo.png">
 <title>妙算 · 因子挖掘中心</title>
 <!--
   配色与尺寸**逐值取自 AlgoForge 前端源码**（已人工复核，非二手转述）：
@@ -100,9 +101,12 @@ header {
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand .mark {
   width: 30px; height: 30px; border-radius: var(--r-ctrl); flex: none;
-  background: var(--gold); color: #0d1117;
-  display: grid; place-items: center; font-weight: 800; font-size: 15px;
+  display: grid; place-items: center; overflow: hidden;
 }
+.brand .mark img {
+  width: 100%; height: 100%; object-fit: contain; border-radius: var(--r-ctrl);
+}
+html[data-theme="dark"] .brand .mark img { filter: brightness(1.15); }
 .brand h1 { font-size: 17px; margin: 0; letter-spacing: .5px; }
 .brand .sub { color: var(--ink-2); font-size: var(--fs-tiny); }
 .pill {
@@ -247,7 +251,7 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
 
 <header>
   <div class="brand">
-    <span class="mark">妙</span>
+    <span class="mark"><img src="/static/logo.png" alt="妙算"></span>
     <div>
       <h1>妙算 · 因子挖掘中心</h1>
       <div class="sub">MiaoSuan · 声明式因子挖掘 → AlgoForge 策略导出</div>
@@ -545,6 +549,8 @@ function dbg(msg) {
 /* ── 主题（localStorage，切 data-theme 属性，不刷新）───────────────── */
 function applyTheme(t) {
   document.documentElement.setAttribute("data-theme", t);
+  var logo = document.querySelector(".brand .mark img");
+  if (logo) { logo.src = "/static/" + (t === "dark" ? "logo_dark.png" : "logo.png"); }
   try { localStorage.setItem(THEME_KEY, t); } catch (e) { /* 隐私模式忽略 */ }
 }
 function initTheme() {
