@@ -4,7 +4,7 @@
 #   make env    创建虚拟环境并安装依赖（新机器一次成功）
 #   make smoke  最小自检（能 import 妙算包并跑通核心自检）
 #   make test   运行全部测试
-#   make parity 与冻结 AlphaMaster 的差分对拍（vocab 版本恒等）
+#   make parity 与冻结基准的差分对拍（vocab 版本恒等）
 #   make lint   静态检查（ruff + mypy）
 #
 # Windows 用 .venv/Scripts/python.exe，POSIX 用 .venv/bin/python，自动探测。
@@ -33,7 +33,7 @@ help:
 	@echo "  make env     创建 .venv 并安装依赖（含 dev + pre-commit 钩子）"
 	@echo "  make smoke   最小自检：import 妙算包 + vocab 版本自检"
 	@echo "  make test    运行全部测试"
-	@echo "  make parity  与冻结 AlphaMaster 的差分对拍"
+	@echo "  make parity  与冻结基准的差分对拍"
 	@echo "  make lint    ruff check + mypy"
 	@echo "  make format  ruff format"
 	@echo "  make fixtures 用 Oracle(torch) 重新生成冻结基准/清单（需 ORACLE_PYTHON）"
