@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """依赖方向检查（CI 强制，架构 §1.2 / §9.7）。
 
 以 AST 静态扫描 ``src/miaosuan/core/*.py``，断言核心域满足铁律：
@@ -116,7 +122,9 @@ def test_core_dependency_direction(path: Path) -> None:
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
     violations = _iter_violations(tree)
-    assert not violations, f"{path.name} 违反依赖方向铁律：\n  - " + "\n  - ".join(violations)
+    assert not violations, f"{path.name} 违反依赖方向铁律：
+  - " + "
+  - ".join(violations)
 
 
 def test_core_files_exist() -> None:

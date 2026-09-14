@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """数据加载器单测（M6）—— 复刻 AM ``data_pipeline`` 语义。
 
 覆盖：成交量列名（``tick_volume`` 优先）、``time<1e7 → ×1000``、排序去重（``keep="last"``）、

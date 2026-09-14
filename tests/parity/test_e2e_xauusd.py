@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """M5 **端到端对拍**：XAUUSD_H1 真实数据 × best_XAUUSD 真实公式（妙算 numpy vs AM torch）。
 
 链路（team-lead 验收新增项）：

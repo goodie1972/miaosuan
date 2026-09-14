@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """magic 号段账本（M15）—— 6 位 magic 的分配与去重。
 
 号段规则：``66`` + 两位序号 + 两位版本号（如 ``661801`` = 序号 18 / 版本 1）。

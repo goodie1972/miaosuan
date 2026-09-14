@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """早停与三档预算（架构 §6.2，M11）。
 
 **原则（不可协商，A12 2026-09-10）**：**墙钟为硬约束、代数预算为辅**；每次运行显式指定档位，

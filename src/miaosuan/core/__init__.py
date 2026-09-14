@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """妙算核心域（``core/``）—— **纯 numpy 内核**。
 
 铁律（CI 强制，架构 §1.2 / §9.7）：

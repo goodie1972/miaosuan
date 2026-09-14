@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """M3 算子对拍的**确定性输入用例**（纯 numpy，无 torch / 无妙算依赖）。
 
 同一份用例被两侧共享：

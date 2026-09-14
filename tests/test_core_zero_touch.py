@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """零改主干（zero-touch）CI 断言：新增第 4 个 MarketProfile 不得触碰 ``core/``。
 
 架构 §9.4 硬分界要求「市场怎么交易」的差异**全部**落在 :mod:`miaosuan.market`

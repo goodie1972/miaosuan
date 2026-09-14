@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """M5 signal 数值对拍：妙算 numpy vs 冻结 AM 的 ``strategy_manager/signal.py``。
 
 连续仓位 = ``tanh(factor)`` 后套中性带（``|pos| < min_trade_exposure`` → 0）；并校验妙算新增

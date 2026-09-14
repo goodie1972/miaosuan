@@ -22,7 +22,7 @@ version = "0.1.0"
 description = "妙算（MiaoSuan）—— 去 torch 的声明式因子挖掘 + 神机 策略调优引擎"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "Proprietary" }
+license = { text = "AGPL-3.0" }
 authors = [{ name = "MiaoSuan Team" }]
 keywords = ["quant", "factor-mining", "genetic-programming", "shenji", "rpn"]
 classifiers = [

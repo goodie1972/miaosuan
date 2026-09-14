@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """``mine`` 端到端编排：数据 → 切分 → 搜索 → 门禁 → 带评分候选（架构 §6，验收 #1）。
 
 这是把 M6–M12 串成一条完整流水线的**唯一编排点**：

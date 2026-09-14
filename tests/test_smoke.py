@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """最小自检（``make smoke``）。
 
 断言：妙算包可导入、核心 vocab 可派生、配置与日志基础设施可工作。
@@ -65,7 +71,8 @@ def test_logging_json_line_has_run_id() -> None:
     record = logging.LogRecord("miaosuan.test", logging.INFO, __file__, 1, "hello", None, None)
     record.run_id = run_id
     formatter = JsonLineFormatter(run_id=run_id)
-    buf.write(formatter.format(record) + "\n")
+    buf.write(formatter.format(record) + "
+")
     logger.info("world")
 
     lines = [line for line in buf.getvalue().splitlines() if line.strip()]

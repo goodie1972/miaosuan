@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """M4 特征数值对拍：妙算 numpy 实现 vs 冻结 AM 的 torch 基准。
 
 基准文件由 ``scripts/gen_feature_baseline.py`` 在**真实 torch 环境**中用 AM 原始实现生成
@@ -208,7 +214,8 @@ def test_feature_parity_global_worst(cases: dict, computed: dict, baseline: dict
 
     assert worst[3] <= 1.0, f"全局最大误差/容差比超限：{worst}"
     print(
-        f"\n全局最坏：ratio={worst[3]:.3e} |Δ|={worst[2]:.3e} "
+        f"
+全局最坏：ratio={worst[3]:.3e} |Δ|={worst[2]:.3e} "
         f"（特征 {worst[0]} / 用例 {worst[1]}），比较组数 {total}"
     )
 

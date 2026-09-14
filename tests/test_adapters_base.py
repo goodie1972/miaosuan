@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """M16.5：平台无关层（ParamSpace / PlatformSpec / TargetPort / 占位模块）。"""
 
 from __future__ import annotations
@@ -72,7 +78,8 @@ class _DummyPort(TargetPort):
         }
 
     def render(self, spec: StrategySpec, ctx: Mapping[str, Any]) -> str:
-        return f"# {spec.name}\n"
+        return f"# {spec.name}
+"
 
     def lint(self, source: str, spec: StrategySpec | None = None) -> list[LintIssue]:
         return [LintIssue("D001", LintSeverity.WARNING, "warn", 1)]

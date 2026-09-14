@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """门禁综合判定（架构 §6.4，M12）。
 
 把四项证据聚合成一个「可上线 / 仅研究 / 拦截」的结论：

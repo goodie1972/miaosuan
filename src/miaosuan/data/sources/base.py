@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """``DataSource`` 实现基类（架构 §2「每产品一个源」）。
 
 本模块落地 :class:`~miaosuan.core.ports.DataSource` 协议的**公共骨架**：源标识、品种/周期、

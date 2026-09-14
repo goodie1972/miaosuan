@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """WebUI 仪表盘接口测试（``src/miaosuan/webui/server.py``）。
 
 为什么不用 ``fastapi.testclient.TestClient``
@@ -228,9 +234,12 @@ def test_strategies_lists_only_real_exports(app: Any, tmp_path: Any) -> None:
     lint 规则要求声明该常量），把真实导出淹掉。
     """
     (tmp_path / "real_export.py").write_text(
-        'STRATEGY_MAGIC = "661801"\nSTRATEGY_NAME = "x"\n', encoding="utf-8"
+        'STRATEGY_MAGIC = "661801"
+STRATEGY_NAME = "x"
+', encoding="utf-8"
     )
-    (tmp_path / "scratch_debug.py").write_text("print(1)\n", encoding="utf-8")
+    (tmp_path / "scratch_debug.py").write_text("print(1)
+", encoding="utf-8")
 
     status, data = _call(app, "GET", "/api/strategies")
     assert status == 200

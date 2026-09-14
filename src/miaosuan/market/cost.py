@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """``CostModel`` —— 交易成本模型（架构 §3.2 ``CostModel``，买卖可不对称）。
 
 对应 :class:`~miaosuan.core.ports.CostModelProtocol`：

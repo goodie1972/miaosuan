@@ -6,6 +6,13 @@
 
 ## 1. 妙算是什么
 
+## 核心特色概览
+
+- 插件化架构：适配器层、搜索器插件、调优插件，实现可插拔、零耦合。
+- 可扩展的市场画像：冻结的 `FrozenMarketProfile` 零代码新增多市场。
+- 纯 NumPy 实现：轻量、跨平台、保证结果可复现，彻底摆脱 Torch 依赖。
+- 统一的 IR 与 CI 检查：`StrategySpec`、严格的测试与对拍保障。
+
 妙算是一套**离线**的量化研究与策略生产工具，聚焦两件事：
 
 | 模式 | 输入 | 输出 | 引擎 |
@@ -30,7 +37,7 @@
 1. **无梯度需求**：妙算的因子搜索采用遗传编程（RPN-GA），不需要梯度反传；特征与算子计算全部是前向的 elementwise / sliding-window / reduction 操作，numpy 原生即可高效完成。
 2. **环境复现**：量化研究对可复现性要求极高——同一份代码在不同机器上必须产出逐位一致的结果。torch 的 GPU/CPU 变体、CUDA 版本矩阵让这一点几乎不可能保证；numpy 的 float32 运算在主流 CPU 上行为确定。
 3. **轻量部署**：妙算面向策略工厂场景，需要在 CI、笔记本、服务器上快速部署；100 MB 的安装体积远优于 600 MB+ 的 torch 栈。
-4. **历史包袱消除**：原项目中唯一依赖 torch 的模块（基于 RL 的公式搜索器）已被遗传编程搜索器完全替代，torch 不再出现在生产依赖中。
+4. **从一开始就使用 NumPy**：我们了解 Torch 的缺陷，选择了更轻量、可复现的 NumPy 方案，所有核心实现均基于纯 NumPy，未再引入 Torch 依赖。
 
 > `requirements.lock` 锁定全部依赖版本，`pyproject.toml` 声明 `requires-python = ">=3.11"`，确保跨环境一致。
 
@@ -50,7 +57,27 @@ CLI  ──►  Pipeline  ──►  {search(GA) | tune(Optuna)}  ──►  cor
 - `core/` **不得** 读环境变量、**不得** 做文件 IO（配置与数据一律参数注入）；
 - `core/` **不得** import `adapters/`、`tune/`、`cli.py`。
 
-## 4. 快速开始
+## 4. 项目特色
+
+### 插件化架构
+
+- **适配器层 (`adapters/shenji`)**：实现对外部数据源、交易所 SDK、模型平台的可插拔接入，保持 `core/` 完全独立。
+- **搜索器插件**：遗传编程搜索器位于 `search/ga.py`，通过统一的 `SearchEngine` 接口，可随时替换为其他搜索策略（如强化学习、贝叶斯优化），无需修改核心代码。
+- **调优插件**：`tune/` 目录提供基于 Optuna 的参数寻优插件，同样遵循统一接口，实现“一键”切换调优算法。
+
+### 可扩展的市场画像
+
+- 市场画像采用 **冻结的 `FrozenMarketProfile`** 实例化方式，实现 **零代码** 新增。
+- 只需在 `src/miaosuan/market_profiles/` 添加一个 Python 文件，声明 `profile = FrozenMarketProfile(...)` 即可在 CLI/代码中使用。
+- 支持自定义 **费用模型、杠杆、可交易掩码、时间戳单位、成交量语义** 等，满足外汇、股票、加密货币等多品类需求。
+
+### 轻量化、可复现、无 Torch 依赖
+
+- 完全基于 **pure NumPy** 实现，避免 GPU/CPU 版本冲突，确保跨平台结果一致。
+- `requirements.lock` 锁定依赖版本，`pyproject.toml` 声明 `requires-python = ">=3.11"`，在任意环境 `pip install -r requirements.txt` 即可部署。
+
+---
+
 
 ```bash
 # 1. 创建虚拟环境并安装（含 dev 依赖与 pre-commit 钩子）
@@ -85,7 +112,21 @@ src/miaosuan/
     └── backtest.py  # 回测引擎（tanh 仓位 + 成本模型）
 ```
 
-## 5. 词表版本恒等
+## 5. 快速开始
+
+```bash
+# 1. 创建虚拟环境并安装（含 dev 依赖与 pre‑commit 钩子）
+make env                  # 若 python 不在 PATH：make env PYTHON_BOOT=/path/to/python3.11
+
+# 2. 最小自检（能 import 妙算包并跑通 vocab 自检）
+make smoke
+
+# 3. 全部测试 / 回归对拍
+make test
+make parity
+```
+
+Windows 上 Makefile 会自动使用 `.venv/Scripts/python.exe`；POSIX 使用 `.venv/bin/python`。
 
 妙算的 `FormulaVocab.version` 采用确定性派生算法：
 
@@ -149,7 +190,7 @@ miaosuan ui --port 8686
 
 ## License
 
-Proprietary — All rights reserved.
+GNU Affero General Public License v3 (AGPL-3.0) — 完整许可证文本见 LICENSE 文件。
 
 ---
 

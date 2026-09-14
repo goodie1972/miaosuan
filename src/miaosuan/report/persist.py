@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """报告产物层（IO 半边，M5）。
 
 架构把「纯计算」放 ``core/``（无 IO），把「产物持久化」移出。AM ``model_core/evaluator.py``

@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2026 Original Author
+# Copyright (c) 2026 Your Company
+# Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+# See the LICENSE file in the project root for the full license text.
+
 """因子有效性评估器（numpy 化移植，M5）—— 打分 / 剪枝 / 消融 / 报告 / Active_Subset。
 
 移植自冻结 AlphaMaster 的 ``model_core/evaluator.py``（原 torch 实现），逐行对齐语义
