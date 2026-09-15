@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2026 Original Author
-# Copyright (c) 2026 Your Company
+# Copyright (c) 2026 MiaoSuan Team
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
@@ -282,7 +281,7 @@ def _rename_block(segment: str, mapping: dict[str, str]) -> str:
     def _substitute(match: re.Match[str]) -> str:
         return mapping.get(match.group(0), match.group(0))
 
-    pattern = re.compile(r"(" + "|".join(re.escape(n) for n in ordered) + r")")
+    pattern = re.compile(r"\b(" + "|".join(re.escape(n) for n in ordered) + r")\b")
     return pattern.sub(_substitute, segment)
 
 

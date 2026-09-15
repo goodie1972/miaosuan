@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2026 Original Author
-# Copyright (c) 2026 Your Company
+# Copyright (c) 2026 MiaoSuan Team
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
@@ -13,7 +12,7 @@
 
 运行（需要能 import AM 的解释器，即装有 torch 的环境）：
 
-    C:\Users\Administrator\.workbuddy\binaries\python\envs\default\Scripts\python.exe \
+    C:\\Users\\Administrator\\.workbuddy\\binaries\\python\\envs\\default\\Scripts\\python.exe \\
         scripts/gen_frozen_fixture.py
 
 可用环境变量覆盖 AM 仓库位置：``MIAOSUAN_AM_ROOT``。
@@ -31,7 +30,7 @@ from pathlib import Path
 
 # 妙算仓库根（本文件位于 <root>/scripts/）
 _ROOT = Path(__file__).resolve().parent.parent
-_DEFAULT_AM_ROOT = Path(r"D:ackup\BaoBao\PythonProgram\AlphaMaster-main")
+_DEFAULT_AM_ROOT = Path(r"D:\backup\BaoBao\PythonProgram\AlphaMaster-main")
 _OUT = _ROOT / "tests" / "fixtures" / "frozen_token_order.json"
 
 
@@ -101,8 +100,7 @@ def main() -> int:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("w", encoding="utf-8") as fh:
         json.dump(data, fh, ensure_ascii=False, indent=2)
-        fh.write("
-")
+        fh.write("\n")
 
     print(f"[OK] AM 根: {am_root}")
     print(

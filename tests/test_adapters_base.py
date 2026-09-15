@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2026 Original Author
-# Copyright (c) 2026 Your Company
+# Copyright (c) 2026 MiaoSuan Team
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
@@ -78,8 +77,7 @@ class _DummyPort(TargetPort):
         }
 
     def render(self, spec: StrategySpec, ctx: Mapping[str, Any]) -> str:
-        return f"# {spec.name}
-"
+        return f"# {spec.name}\n"
 
     def lint(self, source: str, spec: StrategySpec | None = None) -> list[LintIssue]:
         return [LintIssue("D001", LintSeverity.WARNING, "warn", 1)]

@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2026 Original Author
-# Copyright (c) 2026 Your Company
+# Copyright (c) 2026 MiaoSuan Team
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
@@ -45,8 +44,7 @@ def test_am_best_plan_shape() -> None:
 
 def test_am_best_blocks_are_namespaced() -> None:
     plan = build_kernel_plan(AM_BEST)
-    joined = "
-".join(plan.blocks)
+    joined = "\n".join(plan.blocks)
     # 两个 core 模块都定义了 _EPS / _ema_simple，必须被前缀隔离
     assert "ft_EPS" in joined and "op_EPS" in joined
     assert "ft_ema_simple" not in joined or "op_ema_simple" not in joined
@@ -56,8 +54,7 @@ def test_blocks_exec_without_name_error() -> None:
     plan = build_kernel_plan(AM_BEST)
     namespace: dict[str, object] = {"np": __import__("numpy"), "Any": object, "math": __import__("math")}
     exec(  # noqa: S102 - 校验提取产物可执行，是保真度回归的前置条件
-        compile("
-".join(plan.blocks), "<kernel>", "exec"), namespace
+        compile("\n".join(plan.blocks), "<kernel>", "exec"), namespace
     )
     assert "ft_c_trix_15" in namespace  # 特征入口 wrapper（rename 保留 c 标记）
     assert "op_gate" in namespace
@@ -84,15 +81,12 @@ def test_unknown_symbol_would_raise() -> None:
     from miaosuan.adapters.shenji.kernel import _validate_blocks
 
     with pytest.raises(KernelExtractionError, match="未定义符号"):
-        _validate_blocks(["def f(x):
-    return _totally_missing_helper(x)
-"])
+        _validate_blocks(["def f(x):\n    return _totally_missing_helper(x)\n"])
 
 
 def test_duplicate_tokens_do_not_duplicate_entries() -> None:
     plan = build_kernel_plan((0, 0, OFFSET + 4))
     assert [entry[0] for entry in plan.feature_entries] == [0, 0]
     # 特征函数只被解析一次（同名符号复用），块内不应重复定义
-    joined = "
-".join(plan.blocks)
+    joined = "\n".join(plan.blocks)
     assert joined.count("def ft_c_ret(") == 1

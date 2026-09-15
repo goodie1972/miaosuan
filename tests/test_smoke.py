@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2026 Original Author
-# Copyright (c) 2026 Your Company
+# Copyright (c) 2026 MiaoSuan Team
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
@@ -71,8 +70,7 @@ def test_logging_json_line_has_run_id() -> None:
     record = logging.LogRecord("miaosuan.test", logging.INFO, __file__, 1, "hello", None, None)
     record.run_id = run_id
     formatter = JsonLineFormatter(run_id=run_id)
-    buf.write(formatter.format(record) + "
-")
+    buf.write(formatter.format(record) + "\n")
     logger.info("world")
 
     lines = [line for line in buf.getvalue().splitlines() if line.strip()]
