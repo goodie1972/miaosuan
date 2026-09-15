@@ -252,13 +252,14 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
   <div class="brand">
     <span class="mark"><img src="/static/logo.png" alt="妙算"></span>
     <div>
-      <h1>妙算 · 因子挖掘中心</h1>
-      <div class="sub">MiaoSuan · 声明式因子挖掘 → 神机 策略导出</div>
+      <h1 id="pageTitle">妙算 · 因子挖掘中心</h1>
+      <div class="sub" id="pageSubtitle">MiaoSuan · 声明式因子挖掘 → 神机 策略导出</div>
     </div>
   </div>
   <span class="pill" id="statusPill"><span class="dot"></span><span id="statusText">空闲</span></span>
   <div class="meta-line" id="cfgMeta">词表 — · tokens —</div>
   <div class="spacer"></div>
+  <button id="btnLang" class="ghost" title="切换语言" onclick="switchLang()">EN</button>
   <button id="btnTheme" class="ghost" title="切换深浅主题">◐ 主题</button>
 </header>
 
@@ -266,6 +267,7 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
   <button data-view="mine" class="active"><span class="step-no">01</span>挖掘</button>
   <button data-view="backtest"><span class="step-no">02</span>回测</button>
   <button data-view="live"><span class="step-no">03</span>实时</button>
+  <button data-view="tune"><span class="step-no">04</span>调优</button>
 </nav>
 
 <main>
@@ -513,6 +515,47 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
       <div id="rtSignals" class="empty">等待数据…</div>
     </section>
   </div>
+
+  <!-- ══ 04 调优 ═══════════════════════════════════════════════════ -->
+  <div class="view" id="view-tune">
+    <section class="card">
+      <h2>① 调优配置 <span class="hint">— TPE 采样 + 回测评估</span></h2>
+      <div class="row">
+        <div style="flex:2"><label>策略 Spec</label><select id="tuneSpec"></select></div>
+        <div style="flex:2"><label>行情数据</label><select id="tuneData"></select></div>
+        <div style="flex:1"><label>试验次数</label><input id="tuneTrials" class="mono" value="50"></div>
+        <div style="flex:1"><label>优化目标</label>
+          <select id="tuneMetric">
+            <option value="sharpe">Sharpe</option>
+            <option value="sortino">Sortino</option>
+            <option value="calmar">Calmar</option>
+            <option value="composite">综合评分</option>
+          </select></div>
+        <div style="flex:1"><label>随机种子</label><input id="tuneSeed" class="mono" value="42"></div>
+        <div style="flex:0"><button id="btnStartTune" class="primary">开始调优</button></div>
+      </div>
+      <div class="tiny muted" style="margin-top:8px" id="tuneNote"></div>
+    </section>
+
+    <section class="card" id="tuneResultCard" style="display:none">
+      <h2>② 调优结果</h2>
+      <div class="kv" id="tuneKv">
+        <div><div class="k">最优评分</div><div class="v" id="tBestScore">—</div></div>
+        <div><div class="k">耗时</div><div class="v" id="tElapsed">—</div></div>
+        <div><div class="k">试验次数</div><div class="v" id="tTrials">—</div></div>
+      </div>
+      <div class="tbl-wrap" style="margin-top:12px">
+        <table id="tuneTable">
+          <tr><th>参数名</th><th>最优值</th><th>评分</th></tr>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>③ 历史调优记录</h2>
+      <div id="tuneHistory" class="empty">加载中…</div>
+    </section>
+  </div>
 </main>
 
 <script>
@@ -533,6 +576,390 @@ var state = {
   trace: []
 };
 var THEME_KEY = "miaosuan-theme";
+var LANG_KEY = "miaosuan-lang";
+
+/* ── i18n 翻译字典 ─────────────────────────────────────────────── */
+var TRANSLATIONS = {
+  zh: {
+    title: "妙算 · 因子挖掘中心",
+    subtitle: "MiaoSuan · 声明式因子挖掘 → 神机 策略导出",
+    statusIdle: "空闲",
+    statusMining: "挖掘中",
+    cfgMeta: "词表 — · tokens —",
+    btnTheme: "◐ 主题",
+    btnLang: "EN",
+    navMine: "挖掘",
+    navBacktest: "回测",
+    navLive: "实时",
+    navTune: "调优",
+    step1Data: "① 数据文件",
+    step1Hint: "— 指纹把「这次用了哪份数据」钉死",
+    labelData: "行情数据（parquet / csv）",
+    btnInspect: "读取元信息",
+    dataMetaDefault: "选择数据文件后点「读取元信息」—— 展示品种 / 周期 / bar 数 / 年限 / 路径 / 数据指纹。",
+    step2Title: "② 启动挖掘（mine）",
+    labelBudget: "预算档位",
+    budgetQuick: "quick · 约30分钟",
+    budgetStd: "standard · 约2小时",
+    budgetDeep: "deep · 约8小时",
+    labelSeed: "种子（0=默认）",
+    labelSymbol: "标的",
+    labelTimeframe: "周期",
+    labelMarket: "市场画像（留空 = 按标的自动推断）",
+    btnStartMine: "开始挖掘",
+    step3Title: "③ 进度与分数",
+    kStatus: "状态",
+    kReason: "停止原因",
+    kGen: "代数",
+    kEval: "评估次数",
+    kVal: "最优 val_score",
+    kDsr: "DSR（去膨胀夏普）",
+    kDiv: "多样性",
+    kGate: "门禁结论",
+    step4Title: "④ 训练曲线与候选分数",
+    step4Hint: "— 真实数据，非模拟",
+    curveEmpty: "暂无逐代历史 —— 完成一次挖掘后，这里显示真实的训练曲线",
+    curveHint: "数据来源与口径：<b>CLI 子进程输出的 Top-5 候选行</b>（<span class=\"mono\">[i] 公式 val=… dsr=… verdict=…</span>）。",
+    step5Title: "⑤ 实时日志",
+    step5Hint: "— 等宽字体 · 自动滚到底",
+    labelCmd: "实际执行的 CLI 命令",
+    btnScroll: "暂停滚动",
+    logEmpty: "尚未启动任务。",
+    step6Title: "⑥ 最优公式",
+    formulaDefault: "（尚无结果）",
+    btnCopy: "复制公式",
+    step7Title: "⑦ 门禁与谱系",
+    step7Hint: "— 妙算相对 AM 的差异优势",
+    lGate: "门禁结论",
+    lReasons: "触发原因",
+    lGit: "git sha",
+    lSeed: "随机种子",
+    lVocab: "词表版本（冻结锁）",
+    lMarket: "市场画像",
+    lFp: "数据指纹",
+    btnVerify: "校验",
+    step8Title: "⑧ 历史 Spec",
+    step9Title: "⑨ 已导出策略（神机 .py）",
+    loading: "加载中…",
+    noSpec: "（还没有 spec —— 先跑一次挖掘）",
+    noStrategy: "（还没有导出策略）",
+    step10Title: "⑩ 说明 / 帮助",
+    step11Title: "⑪ 调试面板",
+    btnDebug: "显示调试信息",
+    debugHint: "默认关闭；打开后展示最近的前端异常与后端响应。",
+    // 回测页
+    btConfigTitle: "① 回测配置",
+    btConfigHint: "— 子进程调 CLI，不直接 import 内核",
+    labelSpec: "StrategySpec",
+    labelBtData: "行情数据",
+    labelBtMarket: "市场画像（可空）",
+    labelBtWindow: "滚动窗口（0=自动）",
+    btnBacktest: "运行回测",
+    btRunning: "回测中…（子进程调 CLI，全样本逐 bar 计算）",
+    btComplete: "完成 · 结果已落盘",
+    kpiTitle: "② 绩效概览",
+    kpiHint: "— 真实指标，非 val_score",
+    kTotalReturn: "累计收益",
+    kAnnualReturn: "年化收益",
+    kSharpe: "Sharpe",
+    kSortino: "Sortino",
+    kMaxDrawdown: "最大回撤（相对）",
+    kTrades: "交易数",
+    kWinRate: "胜率",
+    kProfitFactor: "盈亏比（均盈/均亏）",
+    chartTitle: "③ 资金曲线",
+    chartHint: "— 内联 SVG",
+    rollingTitle: "④ 滚动 Sharpe",
+    rollingHint: "— 滑窗，窗口未满处留空",
+    tradesTitle: "⑤ 交易明细",
+    tradesHint: "— 方向翻转 = 新的一笔",
+    noTrades: "本次回测没有产生任何交易（仓位全程未过中性带）。",
+    // 实时页
+    liveTitle: "03 实时",
+    bannerConnecting: "正在连接后端…",
+    bannerRefreshing: "首次刷新中",
+    readonlyNote: "<b>只读接入</b>：仅对后端发 <span class=\"mono\">GET</span> 白名单（引擎状态 / 报价 / K 线 / 信号），",
+    noWrite: "<b>绝不下单、绝不平仓、绝不启停引擎</b>；没有写操作。后端地址",
+    autoRefresh: "每 2 秒自动刷新",
+    engineTitle: "① 引擎状态",
+    quoteTitle: "② 当前报价",
+    candlesTitle: "③ K 线",
+    signalsTitle: "④ 最近信号",
+    // 调优页
+    tuneTitle: "04 调优",
+    tuneConfigTitle: "① 调优配置",
+    tuneConfigHint: "— TPE 采样 + 回测评估",
+    labelTuneSpec: "策略 Spec",
+    labelTuneData: "行情数据",
+    labelTuneTrials: "试验次数",
+    labelTuneMetric: "优化目标",
+    labelTuneSeed: "随机种子",
+    btnStartTune: "开始调优",
+    tuneRunning: "调优中…",
+    tuneComplete: "完成 · 结果已落盘",
+    tuneResultsTitle: "② 调优结果",
+    kBestScore: "最优评分",
+    kElapsed: "耗时",
+    kTrials: "试验次数",
+    paramTable: "参数名",
+    paramValue: "参数值",
+    scoreCol: "评分",
+    // 数据获取
+    acquisitionTitle: "数据获取",
+    sourcesTitle: "数据来源",
+    cachedTitle: "本地缓存",
+    btnFetch: "获取数据",
+    btnRefreshCache: "刷新缓存列表",
+    sourceShenji: "Shenji DB",
+    sourceNetwork: "Network API",
+    available: "可用",
+    unavailable: "不可用",
+    noCache: "暂无缓存数据",
+    symbolLabel: "品种",
+    timeframeLabel: "周期",
+    sinceLabel: "起始时间（Unix秒，留空=增量）",
+    // 帮助
+    helpBar1: "bar1 语义 —— 为什么策略不会重绘？",
+    helpBar1Desc: "导出文件的 <span class=\"mono\">generate_signal</span> 只用<b>已收盘 K 线</b>（<span class=\"mono\">candles[:-1]</span>），",
+    helpDsr: "DSR 是什么？",
+    helpDsrDesc: "DSR = Deflated Sharpe Ratio（去膨胀夏普）。搜索过程试了几千个公式，最优结果天然带"选择偏差"；",
+    helpBlocked: "BLOCKED 意味着什么？",
+    helpBlockedDesc: "未通过实盘门禁：导出文件会被强制打上 <span class=\"mono\">RESEARCH_ONLY</span> 警示块、",
+    helpVocab: "词表冻结锁（VOCAB_VERSION）的作用",
+    helpVocabDesc: "token 只在<b>同一词表</b>下有意义。导出文件内嵌 <span class=\"mono\">VOCAB_VERSION</span>，",
+  },
+  en: {
+    title: "MiaoSuan · Factor Mining Center",
+    subtitle: "Declarative Factor Mining → Shenji Strategy Export",
+    statusIdle: "Idle",
+    statusMining: "Mining...",
+    cfgMeta: "Vocab — · tokens —",
+    btnTheme: "◐ Theme",
+    btnLang: "中文",
+    navMine: "Mine",
+    navBacktest: "Backtest",
+    navLive: "Live",
+    navTune: "Tune",
+    step1Data: "① Data File",
+    step1Hint: "— Fingerprint locks data provenance",
+    labelData: "Market Data (parquet / csv)",
+    btnInspect: "Inspect",
+    dataMetaDefault: "Select a data file and click Inspect to show symbol/timeframe/bars/duration/path/fingerprint.",
+    step2Title: "② Start Mining (mine)",
+    labelBudget: "Budget",
+    budgetQuick: "quick ~30min",
+    budgetStd: "standard ~2h",
+    budgetDeep: "deep ~8h",
+    labelSeed: "Seed (0=default)",
+    labelSymbol: "Symbol",
+    labelTimeframe: "Timeframe",
+    labelMarket: "Market Profile (auto if empty)",
+    btnStartMine: "Start Mining",
+    step3Title: "③ Progress & Score",
+    kStatus: "Status",
+    kReason: "Stop Reason",
+    kGen: "Generations",
+    kEval: "Evaluations",
+    kVal: "Best Val-Score",
+    kDsr: "DSR (Deflated Sharpe)",
+    kDiv: "Diversity",
+    kGate: "Gate Verdict",
+    step4Title: "④ Training Curve & Candidates",
+    step4Hint: "— Real data, not simulated",
+    curveEmpty: "No history yet — complete a mining run to see the training curve.",
+    curveHint: "Source: <b>CLI Top-5 candidate lines</b> (<span class=\"mono\">[i] formula val=… dsr=… verdict=…</span>).",
+    step5Title: "⑤ Live Log",
+    step5Hint: "— Monospace · Auto-scroll",
+    labelCmd: "Actual CLI Command",
+    btnScroll: "Pause Scroll",
+    logEmpty: "No task started yet.",
+    step6Title: "⑥ Best Formula",
+    formulaDefault: "(No result yet)",
+    btnCopy: "Copy Formula",
+    step7Title: "⑦ Gate & Provenance",
+    step7Hint: "— MiaoSuan vs AM differentiation",
+    lGate: "Gate Verdict",
+    lReasons: "Trigger Reasons",
+    lGit: "Git SHA",
+    lSeed: "Random Seed",
+    lVocab: "Vocab Version (Frozen Lock)",
+    lMarket: "Market Profile",
+    lFp: "Data Fingerprint",
+    btnVerify: "Verify",
+    step8Title: "⑧ History Specs",
+    step9Title: "⑨ Exported Strategies (Shenji .py)",
+    loading: "Loading…",
+    noSpec: "(No spec yet — run mining first)",
+    noStrategy: "(No exported strategies yet)",
+    step10Title: "⑩ Help / Documentation",
+    step11Title: "⑪ Debug Panel",
+    btnDebug: "Show Debug Info",
+    debugHint: "Off by default; opens recent frontend errors and backend responses.",
+    // Backtest
+    btConfigTitle: "① Backtest Config",
+    btConfigHint: "— Subprocess calls CLI, no direct kernel import",
+    labelSpec: "StrategySpec",
+    labelBtData: "Market Data",
+    labelBtMarket: "Market Profile (optional)",
+    labelBtWindow: "Rolling Window (0=auto)",
+    btnBacktest: "Run Backtest",
+    btRunning: "Backtesting… (subprocess, full-sample per-bar)",
+    btComplete: "Done · Result saved to",
+    kpiTitle: "② Performance Summary",
+    kpiHint: "— Real metrics, not val_score",
+    kTotalReturn: "Total Return",
+    kAnnualReturn: "Annual Return",
+    kSharpe: "Sharpe",
+    kSortino: "Sortino",
+    kMaxDrawdown: "Max Drawdown (rel)",
+    kTrades: "Trades",
+    kWinRate: "Win Rate",
+    kProfitFactor: "Profit Factor",
+    chartTitle: "③ Equity Curve",
+    chartHint: "— Inline SVG",
+    rollingTitle: "④ Rolling Sharpe",
+    rollingHint: "— Sliding window, empty where insufficient",
+    tradesTitle: "⑤ Trade Details",
+    tradesHint: "— Direction flip = new trade",
+    noTrades: "No trades generated (position never exceeded neutral band).",
+    // Live
+    liveTitle: "03 Live",
+    bannerConnecting: "Connecting to backend…",
+    bannerRefreshing: "First refresh in progress",
+    readonlyNote: "<b>Read-only access</b>: only <span class=\"mono\">GET</span> whitelisted endpoints (engine status / quotes / candles / signals),",
+    noWrite: "<b>No orders, no closes, no engine control</b>. Backend address",
+    autoRefresh: "Auto-refresh every 2s",
+    engineTitle: "① Engine Status",
+    quoteTitle: "② Current Quote",
+    candlesTitle: "③ Candles",
+    signalsTitle: "④ Latest Signals",
+    // Tune
+    tuneTitle: "04 Tune",
+    tuneConfigTitle: "① Tuning Config",
+    tuneConfigHint: "— TPE sampling + backtest evaluation",
+    labelTuneSpec: "Strategy Spec",
+    labelTuneData: "Market Data",
+    labelTuneTrials: "Trial Count",
+    labelTuneMetric: "Optimization Metric",
+    labelTuneSeed: "Random Seed",
+    btnStartTune: "Start Tuning",
+    tuneRunning: "Tuning in progress…",
+    tuneComplete: "Done · Result saved",
+    tuneResultsTitle: "② Tuning Results",
+    kBestScore: "Best Score",
+    kElapsed: "Elapsed",
+    kTrials: "Trials",
+    paramTable: "Parameter",
+    paramValue: "Value",
+    scoreCol: "Score",
+    // Acquisition
+    acquisitionTitle: "Data Acquisition",
+    sourcesTitle: "Data Sources",
+    cachedTitle: "Local Cache",
+    btnFetch: "Fetch Data",
+    btnRefreshCache: "Refresh Cache List",
+    sourceShenji: "Shenji DB",
+    sourceNetwork: "Network API",
+    available: "Available",
+    unavailable: "Unavailable",
+    noCache: "No cached data",
+    symbolLabel: "Symbol",
+    timeframeLabel: "Timeframe",
+    sinceLabel: "Since (Unix ts, empty=incremental)",
+    // Help
+    helpBar1: "bar1 semantics — why no repaint?",
+    helpBar1Desc: "The exported <span class=\"mono\">generate_signal</span> uses only <b>closed candles</b> (<span class=\"mono\">candles[:-1]</span>),",
+    helpDsr: "What is DSR?",
+    helpDsrDesc: "DSR = Deflated Sharpe Ratio. The search tests thousands of formulas; optimal results have selection bias.",
+    helpBlocked: "What does BLOCKED mean?",
+    helpBlockedDesc: "Failed live gate: exported file gets <span class=\"mono\">RESEARCH_ONLY</span> tag,",
+    helpVocab: "Vocab frozen lock (VOCAB_VERSION)",
+    helpVocabDesc: "Tokens only make sense under the <b>same vocabulary</b>. Exported files embed <span class=\"mono\">VOCAB_VERSION</span>,",
+  }
+};
+
+function t(key) {
+  var lang = localStorage.getItem(LANG_KEY) || "zh";
+  var dict = TRANSLATIONS[lang] || TRANSLATIONS.zh;
+  return dict[key] || key;
+}
+
+function applyLanguage() {
+  var lang = localStorage.getItem(LANG_KEY) || "zh";
+  document.documentElement.setAttribute("lang", lang === "zh" ? "zh-CN" : "en");
+  var btn = $("btnLang");
+  if (btn) { btn.textContent = t("btnLang"); }
+  var title = $("pageTitle");
+  if (title) { title.textContent = t("title"); }
+  var sub = $("pageSubtitle");
+  if (sub) { sub.textContent = t("subtitle"); }
+  var statusText = $("statusText");
+  if (statusText && !state.polling) { statusText.textContent = t("statusIdle"); }
+  var cfgMeta = $("cfgMeta");
+  if (cfgMeta && cfgMeta.textContent.indexOf("词表") === -1 && cfgMeta.textContent.indexOf("Vocab") === -1) {
+    cfgMeta.textContent = t("cfgMeta");
+  }
+  // Step headers
+  var h2s = document.querySelectorAll("section.card > h2");
+  h2s.forEach(function(h) {
+    var txt = h.textContent || "";
+    if (txt.indexOf("① 数据文件") !== -1) { h.childNodes[0].textContent = t("step1Data") + " "; }
+    if (txt.indexOf("② 启动挖掘") !== -1) { h.childNodes[0].textContent = t("step2Title") + " "; }
+    if (txt.indexOf("③ 进度") !== -1) { h.childNodes[0].textContent = t("step3Title") + " "; }
+    if (txt.indexOf("④ 训练曲线") !== -1) { h.childNodes[0].textContent = t("step4Title") + " "; }
+    if (txt.indexOf("⑤ 实时日志") !== -1) { h.childNodes[0].textContent = t("step5Title") + " "; }
+    if (txt.indexOf("⑥ 最优公式") !== -1) { h.childNodes[0].textContent = t("step6Title") + " "; }
+    if (txt.indexOf("⑦ 门禁") !== -1) { h.childNodes[0].textContent = t("step7Title") + " "; }
+    if (txt.indexOf("⑧ 历史 Spec") !== -1) { h.childNodes[0].textContent = t("step8Title") + " "; }
+    if (txt.indexOf("⑨ 已导出") !== -1) { h.childNodes[0].textContent = t("step9Title") + " "; }
+    if (txt.indexOf("⑩ 说明") !== -1) { h.childNodes[0].textContent = t("step10Title") + " "; }
+    if (txt.indexOf("⑪ 调试") !== -1) { h.childNodes[0].textContent = t("step11Title") + " "; }
+  });
+  // Nav buttons
+  var navBtns = document.querySelectorAll("#stepper button");
+  navBtns.forEach(function(btn) {
+    var view = btn.getAttribute("data-view");
+    if (view === "mine") btn.innerHTML = '<span class="step-no">01</span>' + t("navMine");
+    if (view === "backtest") btn.innerHTML = '<span class="step-no">02</span>' + t("navBacktest");
+    if (view === "live") btn.innerHTML = '<span class="step-no">03</span>' + t("navLive");
+    if (view === "tune") btn.innerHTML = '<span class="step-no">04</span>' + t("navTune");
+  });
+  // KV labels
+  var kvPairs = document.querySelectorAll(".kv .k");
+  kvPairs.forEach(function(k) {
+    var txt = k.textContent || "";
+    if (txt === "状态") k.textContent = t("kStatus");
+    if (txt === "停止原因") k.textContent = t("kReason");
+    if (txt === "代数") k.textContent = t("kGen");
+    if (txt === "评估次数") k.textContent = t("kEval");
+    if (txt === "最优 val_score") k.textContent = t("kVal");
+    if (txt === "DSR（去膨胀夏普）") k.textContent = t("kDsr");
+    if (txt === "多样性") k.textContent = t("kDiv");
+    if (txt === "门禁结论") k.textContent = t("kGate");
+  });
+  // Buttons
+  var btnInspect = $("btnInspect");
+  if (btnInspect) btnInspect.textContent = t("btnInspect");
+  var btnMine = $("btnMine");
+  if (btnMine) btnMine.textContent = t("btnStartMine");
+  var btnScroll = $("btnScroll");
+  if (btnScroll) btnScroll.textContent = state.autoscroll ? t("btnScroll") : "恢复滚动";
+  var btnCopy = $("btnCopy");
+  if (btnCopy) btnCopy.textContent = t("btnCopy");
+  var btnVerify = $("btnVerify");
+  if (btnVerify) btnVerify.textContent = t("btnVerify");
+  var btnBacktest = $("btnBacktest");
+  if (btnBacktest) btnBacktest.textContent = t("btnBacktest");
+  var btnDebug = $("btnDebug");
+  if (btnDebug) btnDebug.textContent = state.debug ? "隐藏调试信息" : t("btnDebug");
+}
+
+function switchLang() {
+  var current = localStorage.getItem(LANG_KEY) || "zh";
+  var next = current === "zh" ? "en" : "zh";
+  localStorage.setItem(LANG_KEY, next);
+  applyLanguage();
+}
 
 function esc(s) {
   return String(s === null || s === undefined ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -1376,6 +1803,104 @@ function rtSetPolling(on) {
   }
 }
 
+/* ── 调优页 ───────────────────────────────────────────────────────── */
+function loadTuneOptions() {
+  jfetch("/api/specs").then(function (specs) {
+    if (!specs.length) {
+      $("tuneSpec").innerHTML = '<option value="">（还没有 spec —— 先跑一次挖掘）</option>';
+      return;
+    }
+    $("tuneSpec").innerHTML = specs.map(function (s) {
+      return '<option value="' + esc(s.file) + '">' + esc(s.file)
+        + " · " + esc(s.symbol || "-") + " " + esc(s.timeframe || "-") + "</option>";
+    }).join("");
+  }).catch(function (e) {
+    $("tuneSpec").innerHTML = '<option value="">（spec 列表失败：' + esc(e.message) + "）</option>";
+  });
+  jfetch("/api/data").then(function (rows) {
+    if (!rows.length) {
+      $("tuneData").innerHTML = '<option value="">（未找到行情文件）</option>';
+      return;
+    }
+    $("tuneData").innerHTML = rows.map(function (d) {
+      return '<option value="' + esc(d.path) + '">' + esc(d.name) + " · " + d.size_mb + "MB</option>";
+    }).join("");
+  }).catch(function (e) {
+    $("tuneData").innerHTML = '<option value="">（行情列表失败：' + esc(e.message) + "）</option>";
+  });
+}
+
+function startTune() {
+  var spec = $("tuneSpec").value;
+  var data = $("tuneData").value;
+  if (!spec) { alert("请先选择一个 StrategySpec（先在 01 挖掘页跑一次）"); return; }
+  if (!data) { alert("请选择行情数据文件"); return; }
+  var btn = $("btnStartTune");
+  btn.disabled = true;
+  $("tuneNote").textContent = "调优中…（TPE 采样 + 回测评估，预计需要几分钟）";
+  post("/api/tune/start", {
+    spec: spec,
+    data: data,
+    n_trials: parseInt($("tuneTrials").value, 10) || 50,
+    metric: $("tuneMetric").value,
+    seed: parseInt($("tuneSeed").value, 10) || 42
+  }).then(function (r) {
+    // 轮询检查状态
+    var checkInterval = setInterval(function () {
+      jfetch("/api/tune/status").then(function (s) {
+        if (!s.running) {
+          clearInterval(checkInterval);
+          $("tuneNote").textContent = "完成 · 结果已落盘";
+          btn.disabled = false;
+          loadTuneResult();
+          loadTuneHistory();
+        }
+      }).catch(function () { clearInterval(checkInterval); });
+    }, 3000);
+  }).catch(function (e) {
+    $("tuneNote").textContent = "调优失败：" + e.message;
+    alert("调优失败：" + e.message);
+    btn.disabled = false;
+  });
+}
+
+function loadTuneResult() {
+  jfetch("/api/tune/result").then(function (r) {
+    $("tuneResultCard").style.display = "block";
+    $("tBestScore").textContent = Number(r.best.score).toFixed(4);
+    $("tElapsed").textContent = r.elapsed_sec + "s";
+    $("tTrials").textContent = r.n_trials;
+    var rows = Object.entries(r.best.params || {}).map(function (p) {
+      return '<tr><td>' + esc(p[0]) + '</td><td class="mono">' + Number(p[1]).toFixed(6) + '</td><td>—</td></tr>';
+    }).join("");
+    $("tuneTable").innerHTML = '<tr><th>参数名</th><th>最优值</th><th>评分</th></tr>' + rows;
+  }).catch(function (e) {
+    // 尚未完成或无结果
+  });
+}
+
+function loadTuneHistory() {
+  jfetch("/api/tune/list").then(function (rows) {
+    if (!rows.length) {
+      $("tuneHistory").className = "empty";
+      $("tuneHistory").textContent = "（还没有调优记录）";
+      return;
+    }
+    $("tuneHistory").className = "";
+    $("tuneHistory").innerHTML = '<div class="tbl-wrap"><table><tr><th>文件</th><th>试验数</th><th>最优分</th><th>耗时</th><th>时间</th></tr>'
+      + rows.map(function (r) {
+        return '<tr><td class="mono tiny">' + esc(r.file) + "</td>"
+          + "<td>" + r.n_trials + "</td>"
+          + "<td>" + Number(r.best_score).toFixed(4) + "</td>"
+          + "<td>" + r.elapsed_sec + "s</td>"
+          + '<td class="tiny muted">' + esc(r.mtime) + "</td></tr>";
+      }).join("") + "</table></div>";
+  }).catch(function (e) {
+    $("tuneHistory").className = "empty";
+    $("tuneHistory").textContent = "加载失败：" + e.message;
+  });
+}
+
 /* ── 绑定 ─────────────────────────────────────────────────────────── */
 function bind() {
   $("btnTheme").onclick = function () {
@@ -1394,6 +1919,7 @@ function bind() {
   $("btnCopy").onclick = copyFormula;
   $("btnVerify").onclick = runVerify;
   $("btnBacktest").onclick = runBacktest;
+  $("btnStartTune").onclick = startTune;
   // 事件委托：specList 每次刷新都会重写 innerHTML，故监听器挂在容器上。
   // 用 data-file + getAttribute 取值（不再把文件名拼进 onclick 的 JS 字符串上下文，
   // 否则文件名里的引号能逃出 HTML 转义 → 注入）。

@@ -53,8 +53,9 @@ from .ir.schema import FactorPayload, StrategySpec
 from .market.profiles import get_profile
 from .pipeline import run_mine
 from .report.equity import run_full_backtest
+from .tune import TuneConfig, TuneEngine, load_param_space_from_spec
 
-__all__ = ["app", "backtest", "export", "mine", "report", "ui", "verify"]
+__all__ = ["app", "backtest", "export", "mine", "report", "tune", "ui", "verify"]
 
 app = typer.Typer(
     add_completion=False,
@@ -484,6 +485,75 @@ def backtest(
     )
     if out:
         _echo(f"结果已写入：{out}")
+
+
+# ── tune ──────────────────────────────────────────────────────────────────
+@app.command()
+def tune(
+    spec: str = typer.Option(..., "--spec", help="策略 Spec JSON 路径"),
+    data: str = typer.Option(..., "--data", help="行情数据文件（parquet / csv）"),
+    param_spaces: str = typer.Option("", "--param-spaces", help="参数空间 JSON 字符串（如 '[{\"name\":\"neutral_band\",\"default\":0.05,\"kind\":\"float\",\"low\":0.01,\"high\":0.2}]'）"),
+    n_trials: int = typer.Option(50, "--n-trials", help="最大试验次数"),
+    metric: str = typer.Option("sharpe", "--metric", help="优化目标指标（sharpe/sortino/calmar/composite）"),
+    seed: int = typer.Option(42, "--seed", help="随机种子"),
+    out: str = typer.Option("", "--out", help="结果输出路径（缺省自动命名）"),
+) -> None:
+    """参数寻优：对已导出策略的语义参数做 TPE 采样调优。"""
+    import json as _json
+
+    # 加载 spec
+    try:
+        spec_obj = read_spec(spec)
+    except (MiaoSuanError, FileNotFoundError, OSError, ValueError) as exc:
+        _die(f"无法读取 spec 文件 {spec!r}：{exc}")
+
+    # 解析因子 token
+    from .ir.schema import FactorPayload
+    tokens: tuple[int, ...] = ()
+    if isinstance(spec_obj.payload, FactorPayload):
+        tokens = tuple(spec_obj.payload.tokens)
+    else:
+        _die("spec 载荷不是因子体，无法寻优（需先挖掘产出 FactorPayload）")
+
+    # 解析参数空间
+    raw_spaces = _json.loads(param_spaces) if param_spaces else []
+    from .adapters.base import ParamSpace
+    param_spaces = [ParamSpace.from_dict(s) for s in raw_spaces]
+    if not param_spaces:
+        # 尝试从 spec 自动提取
+        auto_spaces = load_param_space_from_spec(spec)
+        if auto_spaces:
+            param_spaces = auto_spaces
+
+    config = TuneConfig(
+        spec_path=spec,
+        param_spaces=param_spaces,
+        n_trials=n_trials,
+        metric=metric,
+        seed=seed,
+    )
+
+    _echo(f"寻优配置：{len(param_spaces)} 个参数 · {n_trials} 次试验 · metric={metric}")
+    _echo(f"数据：{data}  spec：{spec}")
+
+    engine = TuneEngine(config)
+    try:
+        result = engine.optimize(tokens, data, spec_obj)
+    except Exception as exc:
+        _die(f"寻优失败：{type(exc).__name__}: {exc}")
+
+    # 输出结果
+    _echo("")
+    _echo(f"寻优完成：{result.n_trials} 次试验 · 耗时 {result.elapsed_sec:.1f}s")
+    _echo(f"最优评分：{result.best.score:.4f}")
+    _echo("最优参数：")
+    for k, v in sorted(result.best.params.items()):
+        _echo(f"  {k} = {v:.6f}")
+
+    # 落盘
+    out_path = Path(out) if out else Path(config.out_dir) / f"tune_{result.result_id}.json"
+    save_tune_result(result, out_path)
+    _echo(f"结果已写入：{out_path}")
 
 
 # ── ui ──────────────────────────────────────────────────────────────────────
