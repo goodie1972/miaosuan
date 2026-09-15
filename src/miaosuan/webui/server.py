@@ -669,4 +669,126 @@ def create_app() -> FastAPI:
         client = _realtime_client()
         return _outcome_payload(safe_call(client.signals_latest, strategy), client.base_url)
 
+    # ── 数据获取模块 ─────────────────────────────────────────────────────
+    @app.get("/api/acquisition/sources")
+    def acquisition_sources() -> list[dict[str, Any]]:
+        """列出已配置的数据来源及其可用性。"""
+        from ..data.acquisition import list_sources
+        return list_sources()
+
+    @app.get("/api/acquisition/cached")
+    def acquisition_cached() -> list[dict[str, Any]]:
+        """列出本地缓存的数据文件。"""
+        from ..data.acquisition import list_cached
+        return list_cached()
+
+    class FetchRequest(BaseModel):
+        symbol: str
+        timeframe: str = "H1"
+        since: int = 0
+
+    @app.post("/api/acquisition/fetch")
+    def acquisition_fetch(req: FetchRequest) -> dict[str, Any]:
+        """触发数据获取（增量或全量）。"""
+        from ..data.acquisition import fetch as acquire
+        try:
+            path = acquire(req.symbol, req.timeframe, since=req.since or None)
+            return {"ok": True, "path": str(path)}
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail=f"数据获取失败：{exc}") from exc
+
+    # ── 参数寻优模块 ─────────────────────────────────────────────────────
+    class TuneRequest(BaseModel):
+        spec: str
+        data: str
+        param_spaces: list[dict[str, Any]] = []
+        n_trials: int = 50
+        metric: str = "sharpe"
+        seed: int = 42
+
+    class TuneStatusResponse(BaseModel):
+        running: bool = False
+        result_id: str = ""
+        progress: int = 0
+        total: int = 0
+        best_score: float = 0.0
+        error: str = ""
+
+    _tune_job: dict[str, Any] = {}
+
+    @app.post("/api/tune/start")
+    def tune_start(req: TuneRequest) -> dict[str, Any]:
+        """启动参数寻优任务。"""
+        import threading
+
+        try:
+            spec_path = _safe_name(req.spec, suffixes={".json"})
+            data_path = _resolve_data_file(req.data)
+        except HTTPException as exc:
+            raise exc
+
+        def _run():
+            try:
+                from ..ir.codec import read_spec
+                from ..adapters.base import ParamSpace
+                from ..tune import TuneConfig, TuneEngine
+
+                spec = read_spec(str(spec_path))
+                param_spaces = [ParamSpace.from_dict(s) for s in req.param_spaces]
+                config = TuneConfig(
+                    spec_path=str(spec_path),
+                    param_spaces=param_spaces,
+                    n_trials=req.n_trials,
+                    metric=req.metric,
+                    seed=req.seed,
+                )
+                engine = TuneEngine(config)
+                result = engine.optimize(tuple(spec.payload.tokens), str(data_path), spec)
+                _tune_job["result"] = result.to_dict()
+                _tune_job["running"] = False
+            except Exception as exc:  # noqa: BLE001
+                _tune_job["error"] = f"{type(exc).__name__}: {exc}"
+                _tune_job["running"] = False
+
+        _tune_job = {"running": True, "result": None, "error": ""}
+        threading.Thread(target=_run, daemon=True).start()
+        return {"ok": True, "message": "寻优任务已启动"}
+
+    @app.get("/api/tune/status")
+    def tune_status() -> dict[str, Any]:
+        """查询寻优任务状态。"""
+        return {
+            "running": _tune_job.get("running", False),
+            "error": _tune_job.get("error", ""),
+        }
+
+    @app.get("/api/tune/result")
+    def tune_result() -> dict[str, Any]:
+        """获取寻优结果。"""
+        result = _tune_job.get("result")
+        if result is None:
+            raise HTTPException(status_code=404, detail="尚未完成寻优任务")
+        return result
+
+    @app.get("/api/tune/list")
+    def tune_list() -> list[dict[str, Any]]:
+        """列出历史寻优结果。"""
+        out: list[dict[str, Any]] = []
+        if not _ARTIFACTS.is_dir():
+            return out
+        for path in sorted(_ARTIFACTS.glob("tune_*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                out.append({
+                    "file": path.name,
+                    "result_id": data.get("result_id", ""),
+                    "n_trials": data.get("n_trials", 0),
+                    "best_score": data.get("best", {}).get("score", 0.0),
+                    "elapsed_sec": data.get("elapsed_sec", 0),
+                    "mtime": time.strftime("%m-%d %H:%M", time.localtime(path.stat().st_mtime)),
+                })
+            except (OSError, json.JSONDecodeError):
+                continue
+        return out
+
     return app
