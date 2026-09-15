@@ -214,7 +214,8 @@ class HoldoutSealRegistry:
         seals = self._read()
         if fingerprint in seals:
             raise HoldoutSealedError(
-                "该 hold-out 指纹已被使用过（一次性封印），拒绝二次 peek",
+                "该 hold-out 指纹已被使用过（一次性封印），拒绝二次 peek。"
+                "请更换随机种子（--seed）或清除封印台账后重试。",
                 context={"fingerprint": fingerprint, "first": seals[fingerprint]},
             )
         entry: dict[str, Any] = {"seq": len(seals) + 1, "meta": dict(meta) if meta else {}}
