@@ -184,15 +184,18 @@ def mine(
     _echo(f"指纹：{panel.fingerprint}")
 
     git_sha = resolve_git_sha()
-    outcome = run_mine(
-        panel,
-        config=config,
-        budget_profile=budget,
-        top_k=top_k,
-        n_folds=n_folds,
-        market=market,
-        git_sha=git_sha,
-    )
+    try:
+        outcome = run_mine(
+            panel,
+            config=config,
+            budget_profile=budget,
+            top_k=top_k,
+            n_folds=n_folds,
+            market=market,
+            git_sha=git_sha,
+        )
+    except MiaoSuanError as exc:
+        _die(f"挖掘失败：{exc}")
     result = outcome.result
     spec = outcome.spec
 
