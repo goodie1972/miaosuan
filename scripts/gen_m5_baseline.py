@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2026 Original Author
-# Copyright (c) 2026 Your Company
+# Copyright (c) 2026 MiaoSuan Team
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
@@ -17,7 +16,7 @@
 
 运行（Oracle python，装 torch）：
 
-    C:/Users/Administrator/.workbuddy/binaries/python/envs/default/Scripts/python.exe \
+    C:/Users/Administrator/.workbuddy/binaries/python/envs/default/Scripts/python.exe \\
         scripts/gen_m5_baseline.py
 
 可用 ``MIAOSUAN_AM_ROOT`` 覆盖 AM 仓库位置。对 AM 仓库**零写入**。
@@ -36,7 +35,7 @@ from typing import Any
 import numpy as np
 
 _ROOT = Path(__file__).resolve().parent.parent
-_DEFAULT_AM_ROOT = Path(r"D:ackup\BaoBao\PythonProgram\AlphaMaster-main")
+_DEFAULT_AM_ROOT = Path(r"D:\backup\BaoBao\PythonProgram\AlphaMaster-main")
 _FIX = _ROOT / "tests" / "fixtures"
 _OUT_NPZ = _FIX / "m5_baseline.npz"
 _OUT_JSON = _FIX / "m5_baseline.json"
@@ -254,8 +253,7 @@ def main() -> int:
     np.savez_compressed(args.npz, **npz)
     with args.json.open("w", encoding="utf-8") as fh:
         json.dump(meta, fh, ensure_ascii=False, indent=2)
-        fh.write("
-")
+        fh.write("\n")
 
     print(f"[OK] AM 根: {am_root}")
     print(f"[OK] torch={torch.__version__} numpy={np.__version__}")

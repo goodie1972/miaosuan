@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2026 Original Author
-# Copyright (c) 2026 Your Company
+# Copyright (c) 2026 MiaoSuan Team
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
@@ -14,7 +13,7 @@
 
 运行：
 
-    C:\Users\Administrator\.workbuddy\binaries\python\envs\default\Scripts\python.exe \
+    C:\\Users\\Administrator\\.workbuddy\\binaries\\python\\envs\\default\\Scripts\\python.exe \\
         scripts/gen_ops_baseline.py
 
 可用 ``MIAOSUAN_AM_ROOT`` 覆盖 AM 仓库位置。对 AM 仓库**零写入**。
@@ -31,7 +30,7 @@ from pathlib import Path
 import numpy as np
 
 _ROOT = Path(__file__).resolve().parent.parent
-_DEFAULT_AM_ROOT = Path(r"D:ackup\BaoBao\PythonProgram\AlphaMaster-main")
+_DEFAULT_AM_ROOT = Path(r"D:\backup\BaoBao\PythonProgram\AlphaMaster-main")
 _OUT_NPZ = _ROOT / "tests" / "fixtures" / "ops_baseline.npz"
 _OUT_META = _ROOT / "tests" / "fixtures" / "ops_baseline_meta.json"
 
@@ -112,8 +111,7 @@ def main() -> int:
     }
     with args.meta.open("w", encoding="utf-8") as fh:
         json.dump(meta, fh, ensure_ascii=False, indent=2)
-        fh.write("
-")
+        fh.write("\n")
 
     print(f"[OK] AM 根: {am_root}")
     print(f"[OK] torch={torch.__version__} numpy={np.__version__}")

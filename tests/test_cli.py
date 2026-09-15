@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2026 Original Author
-# Copyright (c) 2026 Your Company
+# Copyright (c) 2026 MiaoSuan Team
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
@@ -320,18 +319,12 @@ def test_verify_command_on_exported_file(tmp_path: Path, spec_file: Path) -> Non
 def test_verify_rejects_repaint_file(tmp_path: Path) -> None:
     bad = tmp_path / "bad_strategy.py"
     bad.write_text(
-        'STRATEGY_MAGIC = "661801"
-'
-        'STRATEGY_NAME = "bad"
-'
-        'STRATEGY_VERSION = "1"
-'
-        'STRATEGY_CHANGELOG = ("v1",)
-'
-        "def generate_signal(candles):
-"
-        "    return candles[-1]
-",
+        'STRATEGY_MAGIC = "661801"\n'
+        'STRATEGY_NAME = "bad"\n'
+        'STRATEGY_VERSION = "1"\n'
+        'STRATEGY_CHANGELOG = ("v1",)\n'
+        "def generate_signal(candles):\n"
+        "    return candles[-1]\n",
         encoding="utf-8",
     )
     result = runner.invoke(app, ["verify", "--file", str(bad)])
@@ -366,9 +359,6 @@ def test_mine_rejects_unknown_budget(tmp_path: Path) -> None:
 
 
 def test_extract_tokens_helper() -> None:
-    assert _extract_tokens("_TOKENS = (33, 62, 3)
-") == (33, 62, 3)
-    assert _extract_tokens("_TOKENS = ()
-") == ()
-    assert _extract_tokens("nothing here
-") == ()
+    assert _extract_tokens("_TOKENS = (33, 62, 3)\n") == (33, 62, 3)
+    assert _extract_tokens("_TOKENS = ()\n") == ()
+    assert _extract_tokens("nothing here\n") == ()

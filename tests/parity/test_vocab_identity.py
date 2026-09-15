@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2026 Original Author
-# Copyright (c) 2026 Your Company
+# Copyright (c) 2026 MiaoSuan Team
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
 """★ 词表恒等对拍：妙算（numpy） vs 冻结 AlphaMaster（torch）。
 
 这是架构 §6.3 所称「最优雅的一条对拍」：``VOCAB_VERSION`` 由
-``sha256("\n".join(token_names))[:12]`` 确定性派生。只要妙算的 token 组成与顺序和
+``sha256("\\n".join(token_names))[:12]`` 确定性派生。只要妙算的 token 组成与顺序和
 AM 完全一致，版本字符串**必然相同**（AM 现产物为 ``v9217a2c0d91a``）。这是一个
 **零成本的移植正确性证明** —— 若移植中不小心改了顺序或漏了算子，它会立刻变红。
 
