@@ -283,6 +283,27 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
       <div id="dataMeta" class="empty">选择数据文件后点「读取元信息」—— 展示品种 / 周期 / bar 数 / 年限 / 路径 / 数据指纹。</div>
     </section>
 
+    <section class="card" id="acqCard">
+      <h2>①ᵇ 数据获取 <span class="hint">— 神机本地库 / 网络下载 · 增量优先</span></h2>
+      <div class="row">
+        <div style="flex:1"><label>品种</label><input id="acqSymbol" placeholder="XAUUSD"></div>
+        <div style="flex:1"><label>周期</label><input id="acqTimeframe" placeholder="H1" value="H1"></div>
+        <div style="flex:1"><label>起始时间（Unix 秒，留空 = 增量）</label><input id="acqSince" type="number" placeholder="0"></div>
+        <div style="flex:0"><button id="btnAcqFetch" class="primary">获取数据</button></div>
+      </div>
+      <div class="grid grid2" style="margin-top:12px">
+        <div>
+          <div class="tiny muted" style="margin-bottom:4px" id="acqSourcesTitle">数据来源</div>
+          <div id="acqSources" class="empty">加载中…</div>
+        </div>
+        <div>
+          <div class="tiny muted" style="margin-bottom:4px">本地缓存</div>
+          <div id="acqCached" class="empty">加载中…</div>
+        </div>
+      </div>
+      <div class="tiny muted" style="margin-top:8px" id="acqNote"></div>
+    </section>
+
     <section class="card">
       <h2>② 启动挖掘（mine）</h2>
       <div class="row">
@@ -722,7 +743,7 @@ var TRANSLATIONS = {
     helpBar1: "bar1 语义 —— 为什么策略不会重绘？",
     helpBar1Desc: "导出文件的 <span class=\"mono\">generate_signal</span> 只用<b>已收盘 K 线</b>（<span class=\"mono\">candles[:-1]</span>），",
     helpDsr: "DSR 是什么？",
-    helpDsrDesc: "DSR = Deflated Sharpe Ratio（去膨胀夏普）。搜索过程试了几千个公式，最优结果天然带"选择偏差"；",
+    helpDsrDesc: "DSR = Deflated Sharpe Ratio（去膨胀夏普）。搜索过程试了几千个公式，最优结果天然带“选择偏差”；",
     helpBlocked: "BLOCKED 意味着什么？",
     helpBlockedDesc: "未通过实盘门禁：导出文件会被强制打上 <span class=\"mono\">RESEARCH_ONLY</span> 警示块、",
     helpVocab: "词表冻结锁（VOCAB_VERSION）的作用",
@@ -989,7 +1010,7 @@ function initTheme() {
 /* ── 视图切换 ─────────────────────────────────────────────────────── */
 function setView(v) {
   state.view = v;
-  ["mine", "backtest", "live"].forEach(function (name) {
+  ["mine", "backtest", "live", "tune"].forEach(function (name) {
     var el = $("view-" + name);
     if (el) { el.className = "view" + (name === v ? " active" : ""); }
   });
@@ -1596,6 +1617,134 @@ function renderBacktest(r) {
     + (r.trades_truncated ? "（明细已截断）" : "") + "。</div>";
 }
 
+/* ── 04 调优页：参数寻优（TPE 采样 + 回测评估）─────────────────
+   后端为长任务（Optuna 多次回测），采用「启动 → 轮询状态 → 取结果」三步，
+   避免单请求挂死。结果落盘 artifacts/tune_*.json，前端拉取展示。 */
+function loadTuneOptions() {
+  jfetch("/api/specs").then(function (specs) {
+    if (!specs.length) {
+      $("tuneSpec").innerHTML = '<option value="">' + esc(t("noSpec")) + "</option>";
+      return;
+    }
+    $("tuneSpec").innerHTML = specs.map(function (s) {
+      return '<option value="' + esc(s.file) + '">' + esc(s.file)
+        + " · " + esc(s.symbol || "-") + " " + esc(s.timeframe || "-") + "</option>";
+    }).join("");
+  }).catch(function (e) {
+    $("tuneSpec").innerHTML = '<option value="">（spec 列表失败：' + esc(e.message) + "）</option>";
+  });
+  jfetch("/api/data").then(function (rows) {
+    if (!rows.length) {
+      $("tuneData").innerHTML = '<option value="">' + esc("未找到行情文件") + "</option>";
+      return;
+    }
+    $("tuneData").innerHTML = rows.map(function (d) {
+      return '<option value="' + esc(d.path) + '">' + esc(d.name) + " · " + d.size_mb + "MB</option>";
+    }).join("");
+  }).catch(function (e) {
+    $("tuneData").innerHTML = '<option value="">（行情列表失败：' + esc(e.message) + "）</option>";
+  });
+  loadTuneHistory();
+}
+
+function startTune() {
+  var spec = $("tuneSpec").value;
+  var data = $("tuneData").value;
+  if (!spec) { alert(t("noSpec")); return; }
+  if (!data) { alert("请选择行情数据文件"); return; }
+  var btn = $("btnStartTune");
+  btn.disabled = true;
+  $("tuneNote").textContent = t("tuneRunning");
+  post("/api/tune/start", {
+    spec: spec,
+    data: data,
+    param_spaces: [],   // 缺省：后端自动从 spec 推导（预留接口，暂无需手填）
+    n_trials: parseInt($("tuneTrials").value, 10) || 50,
+    metric: $("tuneMetric").value,
+    seed: parseInt($("tuneSeed").value, 10) || 42
+  }).then(function () {
+    pollTune();
+  }).catch(function (e) {
+    $("tuneNote").textContent = "调优启动失败：" + e.message;
+    btn.disabled = false;
+  });
+}
+
+function pollTune() {
+  var timer = setInterval(function () {
+    jfetch("/api/tune/status").then(function (s) {
+      if (s.running) {
+        $("tuneNote").textContent = t("tuneRunning") + " …";
+        return;
+      }
+      clearInterval(timer);
+      $("btnStartTune").disabled = false;
+      if (s.error) {
+        $("tuneNote").textContent = "调优失败：" + s.error;
+        return;
+      }
+      return loadTuneResult();
+    }).catch(function (e) {
+      clearInterval(timer);
+      $("btnStartTune").disabled = false;
+      $("tuneNote").textContent = "状态查询失败：" + e.message;
+    });
+  }, 2000);
+}
+
+function loadTuneResult() {
+  jfetch("/api/tune/result").then(function (r) {
+    $("tuneNote").textContent = t("tuneComplete");
+    renderTuneResult(r);
+    loadTuneHistory();
+  }).catch(function (e) {
+    $("tuneNote").textContent = "结果获取失败：" + e.message;
+  });
+}
+
+function renderTuneResult(r) {
+  var card = $("tuneResultCard");
+  card.style.display = "";
+  $("tBestScore").textContent = r.best ? Number(r.best.score).toFixed(4) : "—";
+  $("tElapsed").textContent = (r.elapsed_sec || 0).toFixed(1) + "s";
+  $("tTrials").textContent = String(r.n_trials || 0);
+  // 参数表：最优参数逐行列出。值来自后端 JSON，统一先 esc() 再拼进单元格，
+  // 避免把原始字符串直接塞进 innerHTML（参数名理论上可控，仍按注入面处理）。
+  var bestParams = (r.best && r.best.params) || {};
+  var keys = Object.keys(bestParams);
+  var rows = keys.length ? keys.map(function (k) {
+    return "<tr><td class=\"mono\">" + esc(k) + "</td>"
+      + '<td class="mono">' + esc(String(Number(bestParams[k]).toFixed(6))) + "</td></tr>";
+  }).join("") : '<tr><td colspan="2" class="muted tiny">（无参数字段）</td></tr>';
+  var th1 = esc(t("paramTable"));
+  var th2 = esc(t("paramValue"));
+  $("tuneTable").innerHTML = '<tr><th>' + th1 + '</th><th>' + th2 + '</th></tr>' + rows;
+}
+
+function loadTuneHistory() {
+  jfetch("/api/tune/list").then(function (rows) {
+    var box = $("tuneHistory");
+    if (!rows.length) {
+      box.className = "empty";
+      box.textContent = "（还没有调优记录）";
+      return;
+    }
+    box.className = "";
+    box.innerHTML = '<div class="tbl-wrap"><table><tr><th>文件</th><th>试验数</th>'
+      + "<th>最优分</th><th>耗时</th><th>时间</th></tr>"
+      + rows.map(function (r) {
+        return '<tr><td class="mono tiny">' + esc(r.file) + "</td>"
+          + "<td>" + esc(r.n_trials) + "</td>"
+          + "<td class=\"mono\">" + Number(r.best_score || 0).toFixed(4) + "</td>"
+          + "<td>" + (r.elapsed_sec || 0).toFixed(1) + "s</td>"
+          + '<td class="tiny muted">' + esc(r.mtime || "") + "</td></tr>";
+      }).join("") + "</table></div>";
+  }).catch(function (e) {
+    $("tuneHistory").className = "empty";
+    $("tuneHistory").textContent = "加载失败：" + e.message;
+  });
+}
+
 /* ── 03 实时：神机 后端**只读**接入 ─────────────────────────────
    本页只对妙算后端发 GET（/api/realtime/*），妙算后端再只读转发到 神机。
    后端不可达 / 超时 / 桥接离线三种情况都在顶部横幅**醒目提示**，并把数据区
@@ -1803,102 +1952,76 @@ function rtSetPolling(on) {
   }
 }
 
-/* ── 调优页 ───────────────────────────────────────────────────────── */
-function loadTuneOptions() {
-  jfetch("/api/specs").then(function (specs) {
-    if (!specs.length) {
-      $("tuneSpec").innerHTML = '<option value="">（还没有 spec —— 先跑一次挖掘）</option>';
-      return;
-    }
-    $("tuneSpec").innerHTML = specs.map(function (s) {
-      return '<option value="' + esc(s.file) + '">' + esc(s.file)
-        + " · " + esc(s.symbol || "-") + " " + esc(s.timeframe || "-") + "</option>";
-    }).join("");
-  }).catch(function (e) {
-    $("tuneSpec").innerHTML = '<option value="">（spec 列表失败：' + esc(e.message) + "）</option>";
-  });
-  jfetch("/api/data").then(function (rows) {
+/* ── 数据获取页：神机本地库 / 网络下载 · 增量优先 ─────────────────
+   三步同调优：列来源 → 拉缓存 → 触发增量获取（POST 落盘后再刷缓存 + 行情下拉）。 */
+function loadAcqSources() {
+  jfetch("/api/acquisition/sources").then(function (rows) {
+    var box = $("acqSources");
     if (!rows.length) {
-      $("tuneData").innerHTML = '<option value="">（未找到行情文件）</option>';
+      box.className = "empty";
+      box.textContent = t("noCache") + " / （无配置来源）";
       return;
     }
-    $("tuneData").innerHTML = rows.map(function (d) {
-      return '<option value="' + esc(d.path) + '">' + esc(d.name) + " · " + d.size_mb + "MB</option>";
+    box.className = "";
+    box.innerHTML = rows.map(function (s) {
+      var chip = s.available
+        ? '<span class="chip ok">' + t("available") + "</span>"
+        : '<span class="chip bad">' + t("unavailable") + "</span>";
+      return '<div class="kv" style="margin-bottom:6px">'
+        + '<div class="k" style="display:flex;justify-content:space-between">'
+        + "<b>" + esc(s.name) + "</b>" + chip + "</div>"
+        + '<div class="v tiny muted">' + esc(s.description || s.note || "") + "</div>"
+        + "</div>";
     }).join("");
   }).catch(function (e) {
-    $("tuneData").innerHTML = '<option value="">（行情列表失败：' + esc(e.message) + "）</option>";
+    var box = $("acqSources");
+    box.className = "empty";
+    box.textContent = "加载来源失败：" + e.message;
   });
 }
 
-function startTune() {
-  var spec = $("tuneSpec").value;
-  var data = $("tuneData").value;
-  if (!spec) { alert("请先选择一个 StrategySpec（先在 01 挖掘页跑一次）"); return; }
-  if (!data) { alert("请选择行情数据文件"); return; }
-  var btn = $("btnStartTune");
-  btn.disabled = true;
-  $("tuneNote").textContent = "调优中…（TPE 采样 + 回测评估，预计需要几分钟）";
-  post("/api/tune/start", {
-    spec: spec,
-    data: data,
-    n_trials: parseInt($("tuneTrials").value, 10) || 50,
-    metric: $("tuneMetric").value,
-    seed: parseInt($("tuneSeed").value, 10) || 42
-  }).then(function (r) {
-    // 轮询检查状态
-    var checkInterval = setInterval(function () {
-      jfetch("/api/tune/status").then(function (s) {
-        if (!s.running) {
-          clearInterval(checkInterval);
-          $("tuneNote").textContent = "完成 · 结果已落盘";
-          btn.disabled = false;
-          loadTuneResult();
-          loadTuneHistory();
-        }
-      }).catch(function () { clearInterval(checkInterval); });
-    }, 3000);
-  }).catch(function (e) {
-    $("tuneNote").textContent = "调优失败：" + e.message;
-    alert("调优失败：" + e.message);
-    btn.disabled = false;
-  });
-}
-
-function loadTuneResult() {
-  jfetch("/api/tune/result").then(function (r) {
-    $("tuneResultCard").style.display = "block";
-    $("tBestScore").textContent = Number(r.best.score).toFixed(4);
-    $("tElapsed").textContent = r.elapsed_sec + "s";
-    $("tTrials").textContent = r.n_trials;
-    var rows = Object.entries(r.best.params || {}).map(function (p) {
-      return '<tr><td>' + esc(p[0]) + '</td><td class="mono">' + Number(p[1]).toFixed(6) + '</td><td>—</td></tr>';
-    }).join("");
-    $("tuneTable").innerHTML = '<tr><th>参数名</th><th>最优值</th><th>评分</th></tr>' + rows;
-  }).catch(function (e) {
-    // 尚未完成或无结果
-  });
-}
-
-function loadTuneHistory() {
-  jfetch("/api/tune/list").then(function (rows) {
+function loadAcqCached() {
+  jfetch("/api/acquisition/cached").then(function (rows) {
+    var box = $("acqCached");
     if (!rows.length) {
-      $("tuneHistory").className = "empty";
-      $("tuneHistory").textContent = "（还没有调优记录）";
+      box.className = "empty";
+      box.textContent = t("noCache");
       return;
     }
-    $("tuneHistory").className = "";
-    $("tuneHistory").innerHTML = '<div class="tbl-wrap"><table><tr><th>文件</th><th>试验数</th><th>最优分</th><th>耗时</th><th>时间</th></tr>'
+    box.className = "";
+    box.innerHTML = '<div class="tbl-wrap"><table><tr><th>文件</th><th>大小</th><th>时间</th></tr>'
       + rows.map(function (r) {
-        return '<tr><td class="mono tiny">' + esc(r.file) + "</td>"
-          + "<td>" + r.n_trials + "</td>"
-          + "<td>" + Number(r.best_score).toFixed(4) + "</td>"
-          + "<td>" + r.elapsed_sec + "s</td>"
-          + '<td class="tiny muted">' + esc(r.mtime) + "</td></tr>";
+        return '<tr><td class="mono tiny">' + esc(r.name) + "</td>"
+          + "<td>" + (r.size_mb != null ? r.size_mb + "MB" : "—") + "</td>"
+          + '<td class="tiny muted">' + esc(r.mtime || r.updated_at || "") + "</td></tr>";
       }).join("") + "</table></div>";
   }).catch(function (e) {
-    $("tuneHistory").className = "empty";
-    $("tuneHistory").textContent = "加载失败：" + e.message;
+    var box = $("acqCached");
+    box.className = "empty";
+    box.textContent = "加载缓存失败：" + e.message;
   });
+}
+
+function startAcqFetch() {
+  var symbol = $("acqSymbol").value.trim();
+  if (!symbol) {
+    $("acqNote").textContent = "请填写品种（symbol）";
+    return;
+  }
+  var btn = $("btnAcqFetch");
+  btn.disabled = true;
+  $("acqNote").textContent = "获取中…（增量优先：本地无则全量，有则增量）";
+  post("/api/acquisition/fetch", {
+    symbol: symbol,
+    timeframe: $("acqTimeframe").value.trim() || "H1",
+    since: parseInt($("acqSince").value, 10) || 0
+  }).then(function (r) {
+    $("acqNote").textContent = "完成：" + (r.path || r.message || "已落盘");
+    loadAcqCached();
+    loadData(); // 刷新 01/02 的行情下拉
+  }).catch(function (e) {
+    $("acqNote").textContent = "获取失败：" + e.message;
+  }).then(function () { btn.disabled = false; });
 }
 
 /* ── 绑定 ─────────────────────────────────────────────────────────── */
@@ -1920,6 +2043,7 @@ function bind() {
   $("btnVerify").onclick = runVerify;
   $("btnBacktest").onclick = runBacktest;
   $("btnStartTune").onclick = startTune;
+  $("btnAcqFetch").onclick = startAcqFetch;
   // 事件委托：specList 每次刷新都会重写 innerHTML，故监听器挂在容器上。
   // 用 data-file + getAttribute 取值（不再把文件名拼进 onclick 的 JS 字符串上下文，
   // 否则文件名里的引号能逃出 HTML 转义 → 注入）。
@@ -1957,6 +2081,9 @@ function boot() {
   renderCurve([]);  // 首屏无历史 → 走空状态，不画空图
   refreshLists();   // ⑧⑨ 两张表首屏就要有内容，否则一直停在"加载中…"
   loadBacktestOptions();   // 02 回测页的下拉（spec / 行情 / 画像）
+  loadTuneOptions();       // 04 调优页的下拉（spec / 行情 / 历史）
+  loadAcqSources();        // ①ᵇ 数据获取：来源列表
+  loadAcqCached();         // ①ᵇ 数据获取：本地缓存列表
   startPolling();
 }
 boot();
