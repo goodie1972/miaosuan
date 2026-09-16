@@ -24,26 +24,62 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import numpy as np
 
 from ..adapters.base import ParamSpace
+from ..core.signal import MIN_TRADE_EXPOSURE
 from ..data.loader import load
 from ..ir.schema import ParamPayload, StrategySpec
 from ..market.profiles import get_profile
 from ..report.equity import BacktestRun, run_full_backtest
 
 __all__ = [
+    "SEMANTIC_SEARCH_SPACES",
     "TrialResult",
     "TuneConfig",
     "TuneEngine",
     "TuneResult",
     "evaluate_trial",
     "load_param_space_from_spec",
+    "mine_param_spaces",
     "save_tune_result",
     "score_trial",
 ]
+
+
+#: 语义参数搜索空间（缺省值与 :class:`Semantics` 默认值保持一致）。
+#: 这三项是**真正影响信号与指标**的「策略语义旋钮」——
+#: ``neutral_band``（中性带）/ ``roll_window``（因子归一化窗口，喂 StackVM）/
+#: ``long_only``（只做多），缺参时即取 Spec 默认。
+#: 键 = 参数名（与生成代码类属性逐字一致）；
+#: 值 = ``{kind, default, low, high, step, choices, description}``，
+#: 由 :func:`mine_param_spaces` 读入，仅 :func:`load_param_space_from_spec` 与前端下拉消费。
+SEMANTIC_SEARCH_SPACES: dict[str, dict[str, Any]] = {
+    "neutral_band": {
+        "kind": "float",
+        "default": 0.05,
+        "low": 0.01,
+        "high": 0.25,
+        "step": 0.01,
+        "description": "中性带：|position| < 该值 时置 0 不交易（越小越敏感、换手越高）",
+    },
+    "roll_window": {
+        "kind": "int",
+        "default": 500,
+        "low": 20,
+        "high": 1200,
+        "step": 20,
+        "description": "因子滚动归一化窗口（bar 数）：窗口越大越平滑、越迟钝",
+    },
+    "long_only": {
+        "kind": "choice",
+        "default": 0,
+        "choices": ["False", "True"],
+        "description": "是否只做多（True 时强制空头仓位 = 0）",
+    },
+}
 
 
 # ── 数据类 ───────────────────────────────────────────────────────────────────
@@ -166,20 +202,76 @@ class TuneResult:
 
 # ── 工具函数 ─────────────────────────────────────────────────────────────────
 
+def mine_param_spaces(
+    default: Mapping[str, Any] | None = None,
+) -> list[ParamSpace]:
+    """按 :data:`SEMANTIC_SEARCH_SPACES` 生成可调参数空间。
+
+    这是「缺省自动挖参」的单一来源：把语义旋钮的搜索范围固化成一份字典，
+    调用方可传入 ``default``（通常来自某条 Spec 的 ``Semantics``）覆盖缺省值，
+    从而让挖出来的空间**贴合该策略的既有默认**，而不是用全局硬编码。
+
+    Args:
+        default: 各参数名的缺省值映射（一般传 :meth:`Semantics.to_dict` 或子集）。
+
+    Returns:
+        参数空间列表（顺序固定，便于复现与下拉展示）。
+    """
+    default = dict(default or {})
+    spaces: list[ParamSpace] = []
+    for name, spec in SEMANTIC_SEARCH_SPACES.items():
+        # 缺省值：调用方给的值（贴合该 Spec）优先，缺省才落到搜索空间里的全局默认。
+        base = default.get(name, spec["default"])
+        kind = spec["kind"]
+        if kind == "choice":
+            spaces.append(ParamSpace(
+                name=name,
+                default=float(base),
+                kind="choice",
+                choices=tuple(str(c) for c in spec["choices"]),
+                description=spec.get("description", ""),
+            ))
+            continue
+        spaces.append(ParamSpace(
+            name=name,
+            default=float(base),
+            kind=kind,
+            low=spec.get("low"),
+            high=spec.get("high"),
+            step=spec.get("step"),
+            description=spec.get("description", ""),
+        ))
+    return spaces
+
+
 def load_param_space_from_spec(spec_path: str) -> list[ParamSpace]:
-    """从已导出策略 spec 中提取 ``ParamSpace`` 定义（若有）。
+    """从已导出策略 spec 自动挖掘可调参数空间。
+
+    真实实现（取代旧的空壳 stub）：读取 Spec 的 :class:`Semantics`，把「策略
+    语义旋钮」里**真正影响信号**的三项——``neutral_band``、``roll_window``、
+    ``long_only``——挖成 :class:`ParamSpace` 列表，缺省值跟随该 Spec 自身
+    （贴合其既有语义），而非全局硬编码。
+
+    只挖这三项的原因：这是回测链路里**唯一可被参数改变且真实影响指标**的
+    语义维度。``roll_window`` 走 :class:`Semantics` 喂给 :class:`StackVM` 的
+    因子归一化（影响信号 → 影响 metrics）；注意它**不是** :func:`run_full_backtest`
+    的 ``rolling_window``（那个只是滚动夏普的**报告窗口**，不进 metrics，调它会
+    污染夏普曲线）。因子 token 本身是「被挖出来的结果」，不参与调参（改了即换策略）；
+    成本 / 画像属于 :class:`FrozenMarketProfile`，不属于可搜索的语义旋钮。
 
     Args:
         spec_path: StrategySpec JSON 文件路径。
 
     Returns:
-        参数空间列表（当前为空，预留扩展点）。
+        参数空间列表；spec 不可读 / 缺语义段时返回空列表（交由调用方决定降级）。
     """
     try:
-        spec = StrategySpec.from_dict(json.loads(Path(spec_path).read_text(encoding="utf-8")))
+        spec = StrategySpec.from_dict(
+            json.loads(Path(spec_path).read_text(encoding="utf-8"))
+        )
     except (OSError, json.JSONDecodeError, ValueError):
         return []
-    return []
+    return mine_param_spaces(default=spec.semantics.to_dict())
 
 
 def score_trial(
@@ -226,6 +318,15 @@ def evaluate_trial(
 ) -> BacktestRun:
     """执行一次回测试验。
 
+    参数空间里**被 Spec 语义真实消费**的旋钮（见 :data:`SEMANTIC_SEARCH_SPACES`）
+    在此处接回 :func:`run_full_backtest`：
+
+    * ``neutral_band`` / ``rolling_window`` → 改写 :class:`Semantics`（平台无关语义段）；
+    * ``long_only`` → 作为 :func:`run_full_backtest` 的显式参数下发。
+
+    未知参数名（非语义旋钮，例如平台专属的止损点数）会被**忽略**，避免把回测
+    喂成无法消费的值——寻优空间应由 :func:`load_param_space_from_spec` 限定在这几项内。
+
     Args:
         tokens: 因子 token 序列。
         params: 当前试验的参数值。
@@ -239,16 +340,32 @@ def evaluate_trial(
     profile_name = spec.provenance.market or panel.market_profile_name or "forex"
     profile = get_profile(profile_name)
 
-    semantics = spec.semantics
-    if "neutral_band" in params:
-        semantics = type(semantics)(
-            **{**semantics.to_dict(), "neutral_band": params["neutral_band"]}
-        )
+    # 旋钮 → run_full_backtest 实参的映射（键名与 Semantics 字段逐字一致）：
+    #   neutral_band → neutral_band（中性带阈值）
+    #   roll_window  → factor_roll_window（喂给 StackVM，影响因子归一化）
+    # 未知参数（如平台专属的止损点数）在此被**忽略**，不传给回测。
+    neutral_band = params.get("neutral_band")
+    roll_window = params.get("roll_window")
+
+    # long_only 可能来自 choice 空间（字符串 "True"/"False"），须做**真值**转换，
+    # 否则 bool("False") == True（非空串），会把"只做多"误判成 False。
+    long_only = params.get("long_only")
+    if long_only is not None:
+        long_only = _as_bool(long_only)
 
     return run_full_backtest(
         tokens, panel, profile,
-        semantics=semantics,
+        neutral_band=float(neutral_band) if neutral_band is not None else MIN_TRADE_EXPOSURE,
+        long_only=long_only,
+        factor_roll_window=int(roll_window) if roll_window is not None else None,
     )
+
+
+def _as_bool(value: Any) -> bool:
+    """把可能为字符串（choice 空间）的取值转成布尔真值。"""
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "y", "t")
+    return bool(value)
 
 
 def save_tune_result(result: TuneResult, path: str | Path) -> None:

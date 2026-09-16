@@ -731,10 +731,16 @@ def create_app() -> FastAPI:
             try:
                 from ..ir.codec import read_spec
                 from ..adapters.base import ParamSpace
-                from ..tune import TuneConfig, TuneEngine
+                from ..tune import TuneConfig, TuneEngine, load_param_space_from_spec
 
                 spec = read_spec(str(spec_path))
                 param_spaces = [ParamSpace.from_dict(s) for s in req.param_spaces]
+                if not param_spaces:
+                    # 前端未显式指定参数空间 → 自动从 spec 挖掘语义旋钮
+                    # （neutral_band / roll_window / long_only），缺省值贴合该 spec。
+                    auto_spaces = load_param_space_from_spec(str(spec_path))
+                    if auto_spaces:
+                        param_spaces = auto_spaces
                 config = TuneConfig(
                     spec_path=str(spec_path),
                     param_spaces=param_spaces,

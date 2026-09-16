@@ -555,6 +555,9 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
         <div style="flex:1"><label>随机种子</label><input id="tuneSeed" class="mono" value="42"></div>
         <div style="flex:0"><button id="btnStartTune" class="primary">开始调优</button></div>
       </div>
+      <div class="tiny muted" style="margin-top:8px">
+        参数空间：留空（默认）时后端自动从所选 spec 挖掘语义旋钮（neutral_band / roll_window / long_only），缺省值贴合该 spec。
+      </div>
       <div class="tiny muted" style="margin-top:8px" id="tuneNote"></div>
     </section>
 
