@@ -362,13 +362,14 @@ def run_full_backtest(
     rolling_window: int | None = None,
     neutral_band: float = MIN_TRADE_EXPOSURE,
     long_only: bool | None = None,
+    factor_roll_window: int | None = None,
 ) -> BacktestRun:
     """在**全样本**上跑一次回测，返回逐 bar 序列与汇总指标。
 
     计算链（全部复用 ``core`` 既有语义，不改任何已有返回值）::
 
         features  = compute_features(panel.to_raw_dict())          # [N, F, T]
-        factor    = StackVM().execute(tokens, features)            # [N, T]
+        factor    = StackVM(roll_window=factor_roll_window).execute(tokens, features)
         position  = tanh(factor)  （过中性带置 0）                  # [N, T]
         ret       = log(open[t+2] / open[t+1])                     # [N, T]
         pnl       = profile.apply_cost(position, ret)              # [N, T]
@@ -378,9 +379,13 @@ def run_full_backtest(
         tokens: 因子 token 序列（来自 ``StrategySpec.payload.tokens``）。
         panel: 行情面板。
         profile: 市场画像（提供成本率、年化 bar 数、是否只做多）。
-        rolling_window: 滚动夏普窗口；``None`` 时用 ``bars_per_year // 12``。
+        rolling_window: **滚动夏普的报告窗口**（bar 数）；``None`` 时用 ``bars_per_year // 12``。
+            只影响夏普曲线平滑度，**不**进入 metrics。
         neutral_band: 中性带阈值（低于此值不持仓）。
         long_only: 是否只做多；``None`` 时取 ``profile.long_only``。
+        factor_roll_window: **因子归一化的滚动窗口**（喂给 :class:`StackVM`，
+            真实影响信号 → 影响 metrics）。对应 :class:`Semantics.roll_window`；
+            这是寻优里的 ``roll_window`` 旋钮。``None`` 时用 :class:`StackVM` 默认值。
 
     Returns:
         :class:`BacktestRun`。
@@ -390,7 +395,8 @@ def run_full_backtest(
     """
     raw = panel.to_raw_dict()
     features = compute_features(raw)
-    factor = StackVM().execute([int(t) for t in tokens], features)
+    vm = StackVM(roll_window=int(factor_roll_window)) if factor_roll_window else StackVM()
+    factor = vm.execute([int(t) for t in tokens], features)
     if factor is None:
         raise MiaoSuanError(f"公式不可求值（tokens={list(tokens)!r}）")
 

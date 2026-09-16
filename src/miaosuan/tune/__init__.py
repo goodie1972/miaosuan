@@ -21,23 +21,27 @@
 from __future__ import annotations
 
 from .engine import (
+    SEMANTIC_SEARCH_SPACES,
     TrialResult,
     TuneConfig,
     TuneEngine,
     TuneResult,
     evaluate_trial,
     load_param_space_from_spec,
+    mine_param_spaces,
     save_tune_result,
     score_trial,
 )
 
 __all__ = [
+    "SEMANTIC_SEARCH_SPACES",
     "TrialResult",
     "TuneConfig",
     "TuneEngine",
     "TuneResult",
     "evaluate_trial",
     "load_param_space_from_spec",
+    "mine_param_spaces",
     "save_tune_result",
     "score_trial",
 ]
