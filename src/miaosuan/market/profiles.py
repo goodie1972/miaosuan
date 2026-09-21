@@ -27,7 +27,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -96,6 +96,15 @@ class FrozenMarketProfile:
     :param allow_intraday_exit: 是否允许当日平仓（A 股 T+1 = False）。
     :param settlement_days: 结算延迟天数（A 股 = 1；外汇/加密 = 0）。
     :param limit_pct: 涨跌停幅度（A 股 0.10 / 0.20 / 0.05）；无涨跌停市场 = None。
+    :param symbols: Web UI 便捷下拉项——该画像覆盖的品种标识（如 ``["XAUUSD"]``）。
+        非 v1 交易规则契约，仅供数据获取页的品种下拉；留空则 UI 不预填选项。
+    :param timeframes: Web UI 便捷下拉项——该画像支持的周期标识（如 ``["H1", "D1"]``）。
+        同上，仅供数据获取页的周期下拉。
+    :param data_sources: Web UI 数据获取页——该市场画像**严格匹配**的数据源类型列表
+        （取值为 ``Shenji`` / ``TradingView`` / ``OKX`` / ``Binance`` / ``Dukascopy``
+        / ``AkShare`` / ``其他``）。
+        不同市场的数据源相互独立、互不相同；UI 仅展示该列表内的来源，杜绝跨市场串用。
+        注：神机（``Shenji``）库仅存 XAUUSD 单一品种，故只归属 FOREX_XAUUSD。
     """
 
     name: str
@@ -113,6 +122,11 @@ class FrozenMarketProfile:
     allow_intraday_exit: bool
     settlement_days: int
     limit_pct: float | None = None
+    # ── UI 选择便捷字段（非 v1 交易规则契约，仅供 Web UI 下拉联动）────
+    symbols: list[str] = field(default_factory=list)
+    timeframes: list[str] = field(default_factory=list)
+    # ── 数据源归类（非 v1 交易规则契约，仅供数据获取页按市场画像严格匹配）──
+    data_sources: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -171,7 +185,7 @@ class FrozenMarketProfile:
         return bool(self.tradable_mask[index])
 
 
-# ── 四个实例（FOREX_XAUUSD + 3 个占位）─────────────────────────────────────
+# ── 五个实例（FOREX_XAUUSD + 3 个占位 + 国内商品期货）─────────────────────
 
 #: 外汇/贵金属现货（MVP 目标市场）。H1，24×5 交易，年化 bar 数对齐 AM ``6240``。
 FOREX_XAUUSD = FrozenMarketProfile(
@@ -190,6 +204,9 @@ FOREX_XAUUSD = FrozenMarketProfile(
     allow_intraday_exit=True,
     settlement_days=0,
     limit_pct=None,
+    symbols=["XAUUSD"],
+    timeframes=["D1", "H1", "H4", "M15", "M30", "M5", "W1"],
+    data_sources=["Shenji", "TradingView", "Dukascopy"],
 )
 
 #: A 股研究（**占位**）：只做多、T+1、涨跌停 ±10%、卖出印花税。
@@ -209,6 +226,9 @@ CN_EQUITY_RESEARCH = FrozenMarketProfile(
     allow_intraday_exit=False,
     settlement_days=1,
     limit_pct=0.10,
+    symbols=["000001"],
+    timeframes=["D1", "W1", "M1", "M5", "M15", "M30", "H1"],
+    data_sources=["AkShare"],
 )
 
 #: 美股研究（**占位**）：T+1 结算，6.5 小时交易时段。
@@ -228,6 +248,9 @@ US_EQUITY_RESEARCH = FrozenMarketProfile(
     allow_intraday_exit=True,
     settlement_days=1,
     limit_pct=None,
+    symbols=["AAPL"],
+    timeframes=["D1", "W1", "M1", "M5", "M15", "M30", "H1"],
+    data_sources=["TradingView", "AkShare"],
 )
 
 #: 加密现货（**第四个占位**）：24/7 连续，USDT 计价，无涨跌停。
@@ -247,6 +270,33 @@ CRYPTO_BTC = FrozenMarketProfile(
     allow_intraday_exit=True,
     settlement_days=0,
     limit_pct=None,
+    symbols=["BTCUSDT"],
+    timeframes=["D1", "H1", "H4", "M15", "M30", "M5", "W1"],
+    data_sources=["OKX", "TradingView", "Binance"],
+)
+
+#: 国内商品期货（化工 / 农化方向）。T+0 可当日平仓、保证金杠杆（约 10x）、
+#: 涨跌停幅度随品种 / 交易所浮动故 ``limit_pct=None``。
+#: 合约乘数取 10 吨/手（甲醇 MA 口径；尿素 UR 为 20 吨/手，此处按主品种近似）。
+CN_COMMODITY_FUTURES = FrozenMarketProfile(
+    name="CN_COMMODITY_FUTURES",
+    quote_currency="CNY",
+    cost_model=CostModel(commission=0.0001, slippage=0.0002, sell_tax=0.0, asymmetric=False),
+    long_only=False,
+    leverage=10.0,
+    lot_size=1.0,
+    tick_size=1.0,
+    contract_multiplier=10.0,
+    bars_per_year=244 * 4,
+    bars_per_day=4,
+    session_hours=((9, 0), (11, 30), (13, 30), (15, 0)),
+    tradable_mask=None,
+    allow_intraday_exit=True,
+    settlement_days=0,
+    limit_pct=None,
+    symbols=["MA0", "UR0"],
+    timeframes=["D1", "H1", "M15", "M30", "M5"],
+    data_sources=["AkShare"],
 )
 
 #: 全部 profile 注册表（新增产品只需在此追加，**不改 ``core/``**）
@@ -255,6 +305,7 @@ PROFILES: dict[str, FrozenMarketProfile] = {
     CN_EQUITY_RESEARCH.name: CN_EQUITY_RESEARCH,
     US_EQUITY_RESEARCH.name: US_EQUITY_RESEARCH,
     CRYPTO_BTC.name: CRYPTO_BTC,
+    CN_COMMODITY_FUTURES.name: CN_COMMODITY_FUTURES,
 }
 
 #: 期望存在的 profile 名（供 CI「零改主干」与完整性断言使用）
@@ -263,6 +314,7 @@ EXPECTED_PROFILE_NAMES: tuple[str, ...] = (
     "CN_EQUITY_RESEARCH",
     "US_EQUITY_RESEARCH",
     "CRYPTO_BTC",
+    "CN_COMMODITY_FUTURES",
 )
 
 

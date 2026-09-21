@@ -243,7 +243,23 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
 .quote { display: flex; gap: 28px; flex-wrap: wrap; align-items: baseline; }
 .quote .q { display: flex; flex-direction: column; gap: 3px; }
 .quote .q b { font-family: var(--mono); font-size: 24px; font-weight: 700; }
-.quote .q span { font-size: var(--fs-tiny); color: var(--ink-2); }
+  .quote .q span { font-size: var(--fs-tiny); color: var(--ink-2); }
+
+  /* ── 数据文件：双 Tab ── */
+  .tabs { display:flex; gap:8px; margin:6px 0 14px; border-bottom:1px solid var(--line); }
+  .tab { background:none; border:none; padding:8px 14px; cursor:pointer; color:var(--ink-2); font-size:13px; border-bottom:2px solid transparent; }
+  .tab.active { color:var(--ink); border-bottom-color:#3b82f6; font-weight:700; }
+  .tab-pane { display:none; }
+  .tab-pane.active { display:block; }
+  /* ── 弹窗 ── */
+  .modal-mask { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; z-index:60; }
+  .modal-mask.show { display:flex; }
+  .modal { background:var(--bg); color:var(--ink); border:1px solid var(--line); border-radius:12px; max-width:460px; width:90%; padding:20px; box-shadow:0 12px 40px rgba(0,0,0,.3); }
+  .modal-title { font-weight:700; font-size:16px; margin-bottom:10px; }
+  .modal-title.ok { color:var(--up); }
+  .modal-title.err { color:var(--down); }
+  .modal-body { font-size:13px; line-height:1.7; word-break:break-all; }
+  .modal-foot { margin-top:16px; text-align:right; }
 </style>
 </head>
 <body>
@@ -274,34 +290,41 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
   <!-- ══ 01 挖掘 ══════════════════════════════════════════════════ -->
   <div class="view active" id="view-mine">
 
-    <section class="card">
-      <h2>① 数据文件 <span class="hint">— 指纹把「这次用了哪份数据」钉死</span></h2>
-      <div class="row">
-        <div style="flex:3"><label>行情数据（parquet / csv）</label><select id="data"></select></div>
-        <div style="flex:0"><button id="btnInspect" class="ghost">读取元信息</button></div>
+    <section class="card" id="dataCard">
+      <h2>① 数据文件 <span class="hint">— 已有数据则「选择」，无数据则「获取」</span></h2>
+      <div class="tabs">
+        <button class="tab active" data-tab="sel" onclick="switchDataTab('sel')">数据选择</button>
+        <button class="tab" data-tab="acq" onclick="switchDataTab('acq')">数据获取</button>
       </div>
-      <div id="dataMeta" class="empty">选择数据文件后点「读取元信息」—— 展示品种 / 周期 / bar 数 / 年限 / 路径 / 数据指纹。</div>
-    </section>
 
-    <section class="card" id="acqCard">
-      <h2>①ᵇ 数据获取 <span class="hint">— 神机本地库 / 网络下载 · 增量优先</span></h2>
-      <div class="row">
-        <div style="flex:1"><label>品种</label><input id="acqSymbol" placeholder="XAUUSD"></div>
-        <div style="flex:1"><label>周期</label><input id="acqTimeframe" placeholder="H1" value="H1"></div>
-        <div style="flex:1"><label>起始时间（Unix 秒，留空 = 增量）</label><input id="acqSince" type="number" placeholder="0"></div>
-        <div style="flex:0"><button id="btnAcqFetch" class="primary">获取数据</button></div>
-      </div>
-      <div class="grid grid2" style="margin-top:12px">
-        <div>
-          <div class="tiny muted" style="margin-bottom:4px" id="acqSourcesTitle">数据来源</div>
-          <div id="acqSources" class="empty">加载中…</div>
+      <!-- 数据选择 -->
+      <div id="tab-sel" class="tab-pane active">
+        <div class="row">
+          <div style="flex:3"><label>行情数据（parquet / csv）</label><select id="data"></select></div>
+          <div style="flex:0"><button id="btnInspect" class="ghost">读取元信息</button></div>
         </div>
-        <div>
-          <div class="tiny muted" style="margin-bottom:4px">本地缓存</div>
-          <div id="acqCached" class="empty">加载中…</div>
-        </div>
+        <div id="dataMeta" class="empty">选择数据文件后点「读取元信息」—— 展示品种 / 周期 / bar 数 / 年限 / 路径 / 数据指纹。</div>
       </div>
-      <div class="tiny muted" style="margin-top:8px" id="acqNote"></div>
+
+      <!-- 数据获取 -->
+      <div id="tab-acq" class="tab-pane">
+        <div class="row">
+          <div style="flex:1"><label>市场画像</label><select id="acqProfile"></select></div>
+          <div style="flex:1"><label>品种</label><select id="acqSymbol"></select></div>
+          <div style="flex:1"><label>周期</label><select id="acqTimeframe"></select></div>
+          <div style="flex:1"><label>时间（Unix秒·留空=增量）</label><input id="acqSince" type="number" placeholder="0"></div>
+          <div style="flex:2"><label>备注（自动追加至文件名）</label><input id="acqNote" placeholder="如：样本_2026Q1"></div>
+        </div>
+        <div class="tiny muted" style="margin:10px 0 4px">数据来源须对应市场画像（选定画像后方可选择，且仅能选一个）：</div>
+        <div class="row" style="align-items:flex-end">
+          <div style="flex:3"><div id="acqSources" class="empty">请先选择市场画像以解锁数据来源。</div></div>
+          <div style="flex:0"><button id="btnAcqFetch" class="primary">获取数据</button></div>
+          <div style="flex:0"><button id="btnRefreshCache" class="ghost">刷新缓存</button></div>
+        </div>
+        <div class="tiny muted" style="margin:12px 0 4px">本地缓存</div>
+        <div id="acqCached" class="empty">加载中…</div>
+        <div id="acqStatus" class="tiny muted" style="margin-top:8px"></div>
+      </div>
     </section>
 
     <section class="card">
@@ -1058,10 +1081,20 @@ function loadMeta() {
     $("cfgMeta").textContent = "词表 " + m.vocab_version
       + " · " + m.n_tokens + " tokens（" + m.n_features + " 特征 + " + m.n_operators + " 算子）"
       + " · v" + m.miaosuan_version;
+    window.__profileDetails = m.profile_details || {};
+    var names = m.profiles || [];
+    // 挖掘页画像（共享同一选项列表）
     var sel = $("market");
     var html = '<option value="" selected>自动推断</option>';
-    (m.profiles || []).forEach(function (p) { html += '<option value="' + esc(p) + '">' + esc(p) + "</option>"; });
+    names.forEach(function (p) { html += '<option value="' + esc(p) + '">' + esc(p) + "</option>"; });
     sel.innerHTML = html;
+    // 数据获取页画像（独立选择状态，同一选项列表）
+    var psel = $("acqProfile");
+    if (psel) {
+      var phtml = '<option value="" selected>请选择市场画像</option>';
+      names.forEach(function (p) { phtml += '<option value="' + esc(p) + '">' + esc(p) + "</option>"; });
+      psel.innerHTML = phtml;
+    }
   }).catch(function () {
     $("cfgMeta").textContent = "词表 — · tokens —";
   });
@@ -1957,27 +1990,28 @@ function rtSetPolling(on) {
 
 /* ── 数据获取页：神机本地库 / 网络下载 · 增量优先 ─────────────────
    三步同调优：列来源 → 拉缓存 → 触发增量获取（POST 落盘后再刷缓存 + 行情下拉）。 */
-function loadAcqSources() {
-  jfetch("/api/acquisition/sources").then(function (rows) {
+function loadAcqSources(profile) {
+  var url = "/api/acquisition/sources" + (profile ? ("?profile=" + encodeURIComponent(profile)) : "");
+  jfetch(url).then(function (rows) {
     var box = $("acqSources");
+    if (!box) return;
     if (!rows.length) {
       box.className = "empty";
-      box.textContent = t("noCache") + " / （无配置来源）";
+      box.textContent = "（该市场画像暂无可用数据来源）";
       return;
     }
+    var html = '<select id="acqSource">';
+    html += '<option value="" selected>请选择单一来源</option>';
+    rows.forEach(function (s) {
+      var label = s.source_type + " —— " + s.description + (s.available ? "" : "（不可用）");
+      html += '<option value="' + esc(s.source_type) + '"' + (s.available ? "" : " disabled") + ">" + esc(label) + "</option>";
+    });
+    html += "</select>";
     box.className = "";
-    box.innerHTML = rows.map(function (s) {
-      var chip = s.available
-        ? '<span class="chip ok">' + t("available") + "</span>"
-        : '<span class="chip bad">' + t("unavailable") + "</span>";
-      return '<div class="kv" style="margin-bottom:6px">'
-        + '<div class="k" style="display:flex;justify-content:space-between">'
-        + "<b>" + esc(s.name) + "</b>" + chip + "</div>"
-        + '<div class="v tiny muted">' + esc(s.description || s.note || "") + "</div>"
-        + "</div>";
-    }).join("");
+    box.innerHTML = html;
   }).catch(function (e) {
     var box = $("acqSources");
+    if (!box) return;
     box.className = "empty";
     box.textContent = "加载来源失败：" + e.message;
   });
@@ -2006,25 +2040,78 @@ function loadAcqCached() {
 }
 
 function startAcqFetch() {
+  var profile = $("acqProfile").value;
   var symbol = $("acqSymbol").value.trim();
-  if (!symbol) {
-    $("acqNote").textContent = "请填写品种（symbol）";
-    return;
-  }
+  var timeframe = $("acqTimeframe").value.trim();
+  var source = ($("acqSource") ? $("acqSource").value : "") || "";
+  var note = $("acqNote").value.trim();
+  var since = parseInt($("acqSince").value, 10) || 0;
+
+  if (!profile) { showModal("无法获取", "请先选择「市场画像」。", "err"); return; }
+  if (!symbol) { showModal("无法获取", "请选择「品种」（选项来自市场画像）。", "err"); return; }
+  if (!timeframe) { showModal("无法获取", "请选择「周期」（选项来自市场画像）。", "err"); return; }
+  if (!source) { showModal("无法获取", "请选择「数据来源」（选定市场画像后，仅能选一个）。", "err"); return; }
+
   var btn = $("btnAcqFetch");
   btn.disabled = true;
-  $("acqNote").textContent = "获取中…（增量优先：本地无则全量，有则增量）";
+  $("acqStatus").textContent = "获取中…（增量优先：本地无则全量，有则增量）";
   post("/api/acquisition/fetch", {
     symbol: symbol,
-    timeframe: $("acqTimeframe").value.trim() || "H1",
-    since: parseInt($("acqSince").value, 10) || 0
+    timeframe: timeframe,
+    since: since,
+    source: source,
+    note: note,
+    market_profile: profile
   }).then(function (r) {
-    $("acqNote").textContent = "完成：" + (r.path || r.message || "已落盘");
+    var msg = "已落盘：" + esc(r.path || r.message || "（未知路径）");
+    if (r.note) msg += "<br>备注：" + esc(r.note);
+    if (r.source) msg += "<br>来源：" + esc(r.source);
+    showModal("数据获取成功", msg, "ok");
+    $("acqStatus").textContent = "完成：" + (r.path || "");
     loadAcqCached();
-    loadData(); // 刷新 01/02 的行情下拉
+    loadData(); // 刷新 01 的行情下拉
   }).catch(function (e) {
-    $("acqNote").textContent = "获取失败：" + e.message;
+    showModal("数据获取失败", esc(e.message), "err");
+    $("acqStatus").textContent = "获取失败：" + e.message;
   }).then(function () { btn.disabled = false; });
+}
+
+/* ── 数据获取页：市场画像联动 / Tab 切换 / 弹窗 ───────────────────── */
+function onAcqProfileChange() {
+  var p = $("acqProfile").value;
+  var det = window.__profileDetails[p] || { symbols: [], timeframes: [] };
+  $("acqSymbol").innerHTML = (det.symbols && det.symbols.length)
+    ? det.symbols.map(function (s) { return '<option value="' + esc(s) + '">' + esc(s) + "</option>"; }).join("")
+    : '<option value="">（该画像暂无预设品种）</option>';
+  $("acqTimeframe").innerHTML = (det.timeframes && det.timeframes.length)
+    ? det.timeframes.map(function (tf) { return '<option value="' + esc(tf) + '">' + esc(tf) + "</option>"; }).join("")
+    : '<option value="">（该画像暂无预设周期）</option>';
+  if (p) {
+    loadAcqSources(p);
+  } else {
+    var box = $("acqSources");
+    if (box) box.innerHTML = '<div class="empty">请先选择市场画像以解锁数据来源。</div>';
+  }
+}
+
+function switchDataTab(tab) {
+  var tabs = document.querySelectorAll("#dataCard .tab");
+  for (var i = 0; i < tabs.length; i++) {
+    tabs[i].classList.toggle("active", tabs[i].getAttribute("data-tab") === tab);
+  }
+  $("tab-sel").classList.toggle("active", tab === "sel");
+  $("tab-acq").classList.toggle("active", tab === "acq");
+}
+
+function showModal(title, bodyHtml, kind) {
+  $("modalTitle").textContent = title;
+  $("modalTitle").className = "modal-title " + (kind || "");
+  $("modalBody").innerHTML = bodyHtml;
+  $("modal").classList.add("show");
+}
+
+function hideModal() {
+  $("modal").classList.remove("show");
 }
 
 /* ── 绑定 ─────────────────────────────────────────────────────────── */
@@ -2047,6 +2134,8 @@ function bind() {
   $("btnBacktest").onclick = runBacktest;
   $("btnStartTune").onclick = startTune;
   $("btnAcqFetch").onclick = startAcqFetch;
+  $("acqProfile").onchange = onAcqProfileChange;
+  $("btnRefreshCache").onclick = loadAcqCached;
   // 事件委托：specList 每次刷新都会重写 innerHTML，故监听器挂在容器上。
   // 用 data-file + getAttribute 取值（不再把文件名拼进 onclick 的 JS 字符串上下文，
   // 否则文件名里的引号能逃出 HTML 转义 → 注入）。
@@ -2085,11 +2174,19 @@ function boot() {
   refreshLists();   // ⑧⑨ 两张表首屏就要有内容，否则一直停在"加载中…"
   loadBacktestOptions();   // 02 回测页的下拉（spec / 行情 / 画像）
   loadTuneOptions();       // 04 调优页的下拉（spec / 行情 / 历史）
-  loadAcqSources();        // ①ᵇ 数据获取：来源列表
-  loadAcqCached();         // ①ᵇ 数据获取：本地缓存列表
+  loadAcqCached();         // ①ᵇ 数据获取：本地缓存列表（来源在选定画像后加载）
   startPolling();
 }
 boot();
 </script>
+
+<div id="modal" class="modal-mask" onclick="if(event.target===this)hideModal()">
+  <div class="modal">
+    <div id="modalTitle" class="modal-title"></div>
+    <div id="modalBody" class="modal-body"></div>
+    <div class="modal-foot"><button class="primary" onclick="hideModal()">知道了</button></div>
+  </div>
+</div>
+
 </body>
 </html>

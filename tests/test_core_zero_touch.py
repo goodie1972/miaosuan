@@ -191,14 +191,14 @@ def test_adding_fourth_profile_leaves_core_byte_identical() -> None:
 
 
 def test_registry_extensible_without_core_change() -> None:
-    # 现有 4 个画像齐备（含 CRYPTO_BTC 第 4 个）
+    # 现有 5 个画像齐备（含 CRYPTO_BTC 与新增 CN_COMMODITY_FUTURES）
     assert set(EXPECTED_PROFILE_NAMES) <= set(PROFILES)
     assert PROFILES[CRYPTO_BTC.name] is CRYPTO_BTC
-    assert len(PROFILES) == 4
+    assert len(PROFILES) == 5
 
-    # 在副本上追加第 5 个，不影响原注册表，也不需要 core 参与
+    # 在副本上再追加 1 个，不影响原注册表，也不需要 core 参与
     extended = dict(PROFILES)
     synthetic = _synthetic_fourth()
     extended[synthetic.name] = synthetic
-    assert len(extended) == 5
-    assert len(PROFILES) == 4, "不得就地污染全局注册表"
+    assert len(extended) == 6
+    assert len(PROFILES) == 5, "不得就地污染全局注册表"

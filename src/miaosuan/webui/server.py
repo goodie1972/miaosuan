@@ -45,7 +45,7 @@ from ..adapters.shenji.realtime import (
 from ..core.vocab import FORMULA_VOCAB, VOCAB_VERSION
 from ..data.loader import load
 from ..ir.provenance import MIAOSUAN_VERSION
-from ..market.profiles import EXPECTED_PROFILE_NAMES
+from ..market.profiles import EXPECTED_PROFILE_NAMES, all_profiles
 from ..pipeline import _SYMBOL_PROFILE_FALLBACK
 
 __all__ = ["create_app"]
@@ -315,6 +315,28 @@ class BacktestRequest(BaseModel):
     rolling_window: int = 0
 
 
+class FetchRequest(BaseModel):
+    """数据获取请求体（模块级，确保 FastAPI 将其识别为 JSON body）。"""
+
+    symbol: str
+    timeframe: str = "H1"
+    since: int = 0
+    source: str = ""          # 单选数据来源类名（空 = 按优先级自动）
+    note: str = ""            # 备注，追加至生成的缓存文件名
+    market_profile: str = ""  # 市场画像（前端联动；后端仅透传/校验）
+
+
+class TuneRequest(BaseModel):
+    """参数寻优请求体（模块级，确保 FastAPI 将其识别为 JSON body）。"""
+
+    spec: str
+    data: str
+    param_spaces: list[dict[str, Any]] = []
+    n_trials: int = 50
+    metric: str = "sharpe"
+    seed: int = 42
+
+
 # ── App ──────────────────────────────────────────────────────────────────────
 
 def create_app() -> FastAPI:
@@ -356,6 +378,14 @@ def create_app() -> FastAPI:
             "n_operators": len(FORMULA_VOCAB.operator_names),
             "n_tokens": FORMULA_VOCAB.size,
             "profiles": list(EXPECTED_PROFILE_NAMES),
+            "profile_details": {
+                name: {
+                    "symbols": p.symbols,
+                    "timeframes": p.timeframes,
+                    "data_sources": p.data_sources,
+                }
+                for name, p in all_profiles().items()
+            },
             "known_symbols": sorted(_SYMBOL_PROFILE_FALLBACK),
             "miaosuan_version": MIAOSUAN_VERSION,
         }
@@ -671,10 +701,18 @@ def create_app() -> FastAPI:
 
     # ── 数据获取模块 ─────────────────────────────────────────────────────
     @app.get("/api/acquisition/sources")
-    def acquisition_sources() -> list[dict[str, Any]]:
-        """列出已配置的数据来源及其可用性。"""
+    def acquisition_sources(profile: str = "") -> list[dict[str, Any]]:
+        """列出已配置的数据来源；若给定市场画像则仅返回其严格匹配的数据源类型。"""
         from ..data.acquisition import list_sources
-        return list_sources()
+
+        allowed: list[str] | None = None
+        if profile:
+            try:
+                from ..market.profiles import get_profile
+                allowed = list(get_profile(profile).data_sources)
+            except Exception:
+                allowed = None
+        return list_sources(allowed_types=allowed)
 
     @app.get("/api/acquisition/cached")
     def acquisition_cached() -> list[dict[str, Any]]:
@@ -682,30 +720,30 @@ def create_app() -> FastAPI:
         from ..data.acquisition import list_cached
         return list_cached()
 
-    class FetchRequest(BaseModel):
-        symbol: str
-        timeframe: str = "H1"
-        since: int = 0
-
     @app.post("/api/acquisition/fetch")
     def acquisition_fetch(req: FetchRequest) -> dict[str, Any]:
-        """触发数据获取（增量或全量）。"""
+        """触发数据获取（指定单一来源，可选备注）。"""
         from ..data.acquisition import fetch as acquire
         try:
-            path = acquire(req.symbol, req.timeframe, since=req.since or None)
-            return {"ok": True, "path": str(path)}
+            path = acquire(
+                req.symbol,
+                req.timeframe,
+                since=req.since or None,
+                source=req.source or None,
+                note=req.note or None,
+            )
+            return {
+                "ok": True,
+                "path": str(path),
+                "symbol": req.symbol,
+                "timeframe": req.timeframe,
+                "source": req.source or None,
+                "note": req.note or None,
+            }
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=400, detail=f"数据获取失败：{exc}") from exc
 
     # ── 参数寻优模块 ─────────────────────────────────────────────────────
-    class TuneRequest(BaseModel):
-        spec: str
-        data: str
-        param_spaces: list[dict[str, Any]] = []
-        n_trials: int = 50
-        metric: str = "sharpe"
-        seed: int = 42
-
     class TuneStatusResponse(BaseModel):
         running: bool = False
         result_id: str = ""
