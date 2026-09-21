@@ -18,6 +18,7 @@ from miaosuan.core.signal import compute_target_positions
 from miaosuan.errors import ConfigError
 from miaosuan.market.cost import ZERO_COST, CostModel
 from miaosuan.market.profiles import (
+    CN_COMMODITY_FUTURES,
     CN_EQUITY_RESEARCH,
     CRYPTO_BTC,
     EXPECTED_PROFILE_NAMES,
@@ -33,9 +34,9 @@ from miaosuan.market.profiles import (
 # ── v1 字段冻结 ─────────────────────────────────────────────────────────────
 
 
-def test_four_profiles_present() -> None:
+def test_all_profiles_present() -> None:
     assert tuple(PROFILES) == EXPECTED_PROFILE_NAMES
-    assert len(PROFILES) == 4
+    assert len(PROFILES) == 5
 
 
 def test_v1_field_set_frozen() -> None:
@@ -83,6 +84,29 @@ def test_crypto_btc_is_fourth_placeholder() -> None:
 def test_us_equity_research_placeholder() -> None:
     assert US_EQUITY_RESEARCH.name == "US_EQUITY_RESEARCH"
     assert US_EQUITY_RESEARCH.settlement_days == 1
+
+
+def test_cn_commodity_futures_semantics() -> None:
+    """国内商品期货：T+0 可当日平仓、保证金杠杆、数据源严格匹配 AkShare。"""
+    assert CN_COMMODITY_FUTURES.name == "CN_COMMODITY_FUTURES"
+    assert CN_COMMODITY_FUTURES.quote_currency == "CNY"
+    assert CN_COMMODITY_FUTURES.allow_intraday_exit is True, "期货 T+0"
+    assert CN_COMMODITY_FUTURES.leverage > 1.0, "保证金杠杆"
+    assert CN_COMMODITY_FUTURES.long_only is False
+    assert CN_COMMODITY_FUTURES.settlement_days == 0
+    assert CN_COMMODITY_FUTURES.data_sources == ["AkShare"]
+
+
+def test_shenji_only_for_forex_xauusd() -> None:
+    """神机库仅存 XAUUSD 单一品种，故只归属 FOREX_XAUUSD，不得出现在其他画像。"""
+    assert "Shenji" in FOREX_XAUUSD.data_sources
+    for profile in (
+        CN_EQUITY_RESEARCH,
+        US_EQUITY_RESEARCH,
+        CRYPTO_BTC,
+        CN_COMMODITY_FUTURES,
+    ):
+        assert "Shenji" not in profile.data_sources, f"{profile.name} 不应含神机源"
 
 
 def test_get_profile_unknown_raises() -> None:

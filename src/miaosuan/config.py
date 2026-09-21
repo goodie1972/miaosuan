@@ -41,6 +41,17 @@ __all__ = [
     "ENV_SHENJI_URL",
     "ENV_SHENJI_TIMEOUT",
     "shenji_backend_config",
+    "ENV_SHENJI_DB_PATH",
+    "ENV_DATA_API_URL",
+    "ENV_DATA_CACHE_DIR",
+    "ENV_DATA_TIMEOUT",
+    "ENV_DATA_SOURCE",
+    "ENV_DUKASCOPY_USER",
+    "ENV_DUKASCOPY_PASS",
+    "DEFAULT_DATA_TIMEOUT",
+    "DataAcquisitionConfig",
+    "data_acquisition_config",
+    "_default_shenji_db_path",
 ]
 
 # ── 子配置（均为 frozen dataclass，不可变、可安全共享）─────────────────────
@@ -312,6 +323,96 @@ def shenji_backend_config(env: Mapping[str, str] | None = None) -> tuple[str, fl
     if timeout <= 0.0:
         timeout = DEFAULT_SHENJI_TIMEOUT
     return base_url, timeout
+
+
+# ── 数据获取（架构 §3.2）────────────────────────────────────────────────────
+#
+# 与 shenji_backend_config 同属「唯一 env 边界」：环境变量只在本模块读取，
+# data/acquisition 通过调用 data_acquisition_config() 注入配置，绝不自行读 env
+# （可执行断言见 tests/test_dependency_direction_adapters.py:
+#  test_os_environ_only_in_config_and_cli）。
+
+#: 数据获取相关环境变量名。
+ENV_SHENJI_DB_PATH: str = "MIAOSUAN_SHENJI_DB_PATH"
+ENV_DATA_API_URL: str = "MIAOSUAN_DATA_API_URL"
+ENV_DATA_CACHE_DIR: str = "MIAOSUAN_DATA_CACHE_DIR"
+ENV_DATA_TIMEOUT: str = "MIAOSUAN_DATA_TIMEOUT"
+ENV_DATA_SOURCE: str = "MIAOSUAN_DATA_SOURCE"
+ENV_DUKASCOPY_USER: str = "MIAOSUAN_DUKASCOPY_USER"
+ENV_DUKASCOPY_PASS: str = "MIAOSUAN_DUKASCOPY_PASS"
+
+#: 默认网络超时（秒）。
+DEFAULT_DATA_TIMEOUT: int = 30
+
+
+@dataclass(frozen=True)
+class DataAcquisitionConfig:
+    """数据获取模块配置（经依赖注入向下传递）。"""
+
+    shenji_db_path: str = ""
+    data_api_url: str = ""
+    cache_dir: str = ""
+    timeout: int = DEFAULT_DATA_TIMEOUT
+    data_source: str = ""
+    dukascopy_user: str = ""
+    dukascopy_password: str = ""
+
+
+def _default_shenji_db_path() -> str:
+    """返回神机本地库默认候选路径中第一个存在的文件，否则空串。
+
+    候选顺序：
+    1. 用户本机神机库固定路径（项目 owner 实测路径，单机「开箱即用」）；
+    2. 若设置 ``MIAOSUAN_SHENJI_ROOT``，则拼接 ``<root>/data/market_data.db``。
+
+    显式环境变量 ``MIAOSUAN_SHENJI_DB_PATH`` 优先级更高（见
+    :func:`data_acquisition_config`）。
+    """
+    candidates: list[str] = [
+        r"D:\backup\BaoBao\PythonProgram\xauusd\data\market_data.db",
+    ]
+    root = os.environ.get("MIAOSUAN_SHENJI_ROOT", "")
+    if root:
+        candidates.append(os.path.join(root, "data", "market_data.db"))
+    for path in candidates:
+        if path and os.path.isfile(path):
+            return path
+    return ""
+
+
+def data_acquisition_config(env: Mapping[str, str] | None = None) -> DataAcquisitionConfig:
+    """读取数据获取相关环境变量（仅本模块可读 env）。
+
+    Args:
+        env: 覆盖用的环境映射（默认读 ``os.environ``，便于测试注入）。
+
+    Returns:
+        :class:`DataAcquisitionConfig`；超时非法或非正数时回落到
+        :data:`DEFAULT_DATA_TIMEOUT`。
+
+        ``shenji_db_path`` 解析优先级：显式 ``MIAOSUAN_SHENJI_DB_PATH`` >
+        默认候选路径（:func:`_default_shenji_db_path`）。
+    """
+    source = os.environ if env is None else env
+    raw_timeout = source.get(ENV_DATA_TIMEOUT, "")
+    try:
+        timeout = int(raw_timeout) if raw_timeout else DEFAULT_DATA_TIMEOUT
+    except ValueError:
+        timeout = DEFAULT_DATA_TIMEOUT
+    if timeout <= 0:
+        timeout = DEFAULT_DATA_TIMEOUT
+    # 神机库路径：显式环境变量优先，否则回落默认候选路径
+    explicit_db = source.get(ENV_SHENJI_DB_PATH, "")
+    shenji_db_path = explicit_db if explicit_db else _default_shenji_db_path()
+    return DataAcquisitionConfig(
+        shenji_db_path=shenji_db_path,
+        data_api_url=source.get(ENV_DATA_API_URL, ""),
+        cache_dir=source.get(ENV_DATA_CACHE_DIR, ""),
+        timeout=timeout,
+        data_source=source.get(ENV_DATA_SOURCE, ""),
+        dukascopy_user=source.get(ENV_DUKASCOPY_USER, ""),
+        dukascopy_password=source.get(ENV_DUKASCOPY_PASS, ""),
+    )
 
 
 # ── 内部工具 ───────────────────────────────────────────────────────────────
