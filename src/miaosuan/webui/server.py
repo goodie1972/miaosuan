@@ -806,9 +806,21 @@ def create_app() -> FastAPI:
 
     @app.get("/api/acquisition/cached")
     def acquisition_cached() -> list[dict[str, Any]]:
-        """列出本地缓存的数据文件。"""
+        """列出本地缓存的数据文件（**含数据起止时间**）。
+
+        时间范围复用 :func:`_peek_time_range`：与 ``/api/data``、``/api/inspect``
+        自动同口径（同一 ``_fmt_utc``），并共享进程内缓存（不重复读盘）。
+        任一项路径缺失 / 文件不存在 / 读失败只让该项为空，**绝不 500**。
+        """
         from ..data.acquisition import list_cached
-        return list_cached()
+
+        rows = list_cached()
+        for row in rows:
+            raw_path = str(row.get("path") or "")
+            rng = _peek_time_range(Path(raw_path)) if raw_path else None
+            row["start"] = rng[0] if rng else ""
+            row["end"] = rng[1] if rng else ""
+        return rows
 
     @app.post("/api/acquisition/fetch")
     def acquisition_fetch(req: FetchRequest) -> dict[str, Any]:

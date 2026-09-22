@@ -630,3 +630,33 @@ def test_api_data_survives_unreadable_file(
     assert broken["start"] == "" and broken["end"] == "", broken
     good = [r for r in rows if r["name"] == "XAUUSD_H1.parquet"][0]
     assert good["start"], good
+
+
+def test_api_acquisition_cached_exposes_start_end(
+    app: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    """本地缓存列表走的是**另一条**接口，同样必须带 start/end 且同口径。
+
+    回归防线：上一轮只补了 ``/api/data``，漏了 ``/api/acquisition/cached``；
+    这条把「第二处列表」也钉住，防止再漏。
+    """
+    p = _tiny_parquet(tmp_path)
+    from miaosuan.data import acquisition as acq_mod
+
+    # 缓存目录指向 tmp：直接替换模块级单例的 _cache_dirs（不碰真实缓存目录）
+    inst = acq_mod.DataAcquisition.__new__(acq_mod.DataAcquisition)
+    inst._cache_dirs = (tmp_path,)
+    monkeypatch.setattr(acq_mod, "_acquisition", inst)
+    # /api/inspect 有目录白名单，同样指过去才能比对口径
+    monkeypatch.setattr(server, "_DATA_DIRS", (tmp_path,))
+    server._TIME_RANGE_CACHE.clear()
+
+    status, rows = _call(app, "GET", "/api/acquisition/cached")
+    assert status == 200
+    assert len(rows) == 1
+    assert rows[0]["start"] and rows[0]["end"], rows[0]
+
+    st2, meta = _call(app, "GET", "/api/inspect?path=" + urllib.parse.quote(str(p)))
+    assert st2 == 200, meta
+    assert rows[0]["start"] == meta["start"], (rows[0], meta)
+    assert rows[0]["end"] == meta["end"], (rows[0], meta)
