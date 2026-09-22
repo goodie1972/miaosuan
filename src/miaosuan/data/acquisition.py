@@ -482,6 +482,58 @@ def _build_default_sources() -> list[DataSource]:
     return sources
 
 
+def _cache_dirs_from_config() -> tuple[Path, ...]:
+    """解析缓存目录（环境变量优先，否则用默认）；与数据**来源能力无关**。
+
+    抽成模块级函数是为了让「只扫目录」的入口（``/api/acquisition/cached``）
+    不必构造 :class:`DataAcquisition`——构造会 build 全部数据源并对网络 fetcher
+    逐个做 TCP 探测，本环境 ``freeserv.dukascopy.com`` / ``api.binance.com``
+    不可达，各卡满 3s 超时 → 首次调用 6s。列缓存文件只扫目录，本不需要这些。
+    """
+    custom = data_acquisition_config().cache_dir
+    if custom:
+        p = Path(custom)
+        p.mkdir(parents=True, exist_ok=True)
+        return (p,)
+    return _DEFAULT_CACHE_DIRS
+
+
+def _scan_cache_dirs(cache_dirs: tuple[Path, ...]) -> list[dict[str, Any]]:
+    """扫描缓存目录列出 parquet / csv——**只做 iterdir + stat，无任何网络行为**。
+
+    Args:
+        cache_dirs: 待扫描目录（顺序即结果顺序）。
+
+    Returns:
+        每项含 ``name`` / ``path`` / ``size_mb`` / ``mtime`` / ``source`` 五个字段
+        （前端与 ``webui/server.py`` 依赖，勿改名）；按文件名跨目录去重，
+        先出现的目录优先。
+    """
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for directory in cache_dirs:
+        if not directory.is_dir():
+            continue
+        for path in sorted(directory.iterdir()):
+            if path.suffix.lower() not in (".parquet", ".csv"):
+                continue
+            key = path.name
+            if key in seen:
+                continue
+            seen.add(key)
+            stat = path.stat()
+            out.append({
+                "name": path.name,
+                "path": str(path),
+                "size_mb": round(stat.st_size / 1e6, 2),
+                "mtime": time.strftime(
+                    "%Y-%m-%d %H:%M", time.localtime(stat.st_mtime)
+                ),
+                "source": "cache",
+            })
+    return out
+
+
 class DataAcquisition:
     """统一数据获取管理器。
 
@@ -503,13 +555,12 @@ class DataAcquisition:
 
     @staticmethod
     def _resolve_cache_dirs() -> tuple[Path, ...]:
-        """确定缓存目录（环境变量优先，否则用默认）。"""
-        custom = data_acquisition_config().cache_dir
-        if custom:
-            p = Path(custom)
-            p.mkdir(parents=True, exist_ok=True)
-            return (p,)
-        return _DEFAULT_CACHE_DIRS
+        """确定缓存目录（环境变量优先，否则用默认）。
+
+        委托模块级 :func:`_cache_dirs_from_config`（单一实现），保留本方法
+        以兼容既有调用方。
+        """
+        return _cache_dirs_from_config()
 
     def _cache_path(self, symbol: str, timeframe: str, note: str | None = None) -> Path:
         """计算缓存文件路径（{symbol}_{timeframe}.parquet；备注非空时追加为 {symbol}_{timeframe}_{note}.parquet）。"""
@@ -676,30 +727,12 @@ class DataAcquisition:
         return None
 
     def list_cached(self) -> list[dict[str, Any]]:
-        """列出本地缓存中已有的数据文件（供 UI 展示）。"""
-        out: list[dict[str, Any]] = []
-        seen: set[str] = set()
-        for directory in self._cache_dirs:
-            if not directory.is_dir():
-                continue
-            for path in sorted(directory.iterdir()):
-                if path.suffix.lower() not in (".parquet", ".csv"):
-                    continue
-                key = path.name
-                if key in seen:
-                    continue
-                seen.add(key)
-                stat = path.stat()
-                out.append({
-                    "name": path.name,
-                    "path": str(path),
-                    "size_mb": round(stat.st_size / 1e6, 2),
-                    "mtime": time.strftime(
-                        "%Y-%m-%d %H:%M", time.localtime(stat.st_mtime)
-                    ),
-                    "source": "cache",
-                })
-        return out
+        """列出本地缓存中已有的数据文件（供 UI 展示）。
+
+        委托 :func:`_scan_cache_dirs`（只扫目录，无网络行为）；本方法保留以
+        兼容既有调用方与测试。
+        """
+        return _scan_cache_dirs(self._cache_dirs)
 
     def list_sources(self, allowed_types: list[str] | None = None) -> list[dict[str, Any]]:
         """列出已配置的数据来源及其可用性（供 UI 展示）。
@@ -747,8 +780,13 @@ def fetch(
 
 
 def list_cached() -> list[dict[str, Any]]:
-    """模块级快捷入口：列出本地缓存。"""
-    return _get_acquisition().list_cached()
+    """模块级快捷入口：列出本地缓存。
+
+    刻意**不**走 :func:`_get_acquisition()`：列缓存文件只是扫目录，构造
+    ``DataAcquisition`` 却会 build 全部数据源并逐个做网络 TCP 探测（不可达
+    主机各卡满超时 → 首次调用 6s）。走 :func:`_scan_cache_dirs` 只做 IO。
+    """
+    return _scan_cache_dirs(_cache_dirs_from_config())
 
 
 def list_sources(allowed_types: list[str] | None = None) -> list[dict[str, Any]]:
