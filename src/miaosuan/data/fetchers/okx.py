@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import json
-import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -45,8 +44,10 @@ class OkxFetcher(BaseFetcher):
     ``data`` 数组（``[ts_ms, open, high, low, close, vol, ...]``），分页拉取
     至多 :data:`_OKX_MAX_BARS` 根，按 ``time`` 升序、剔除未收盘的 forming 根。
 
-    ``instId`` 默认 ``XAUUSD``（调用方可经 ``inst_id`` 覆盖为 OKX 实际标的，
-    如 ``XAU-USDT`` 永续）。公开接口可用，``is_available()`` 恒为 ``True``。
+    ``instId`` 默认 ``XAUUSD``（调用方可经 ``inst_id`` 覆盖）。**取数品种以
+    :meth:`fetch_full` 的入参 ``symbol`` 为优先**，仅当入参为空时才回落
+    ``inst_id``——否则 CRYPTO_BTC 画像下取 ``BTCUSDT`` 会静默返回 XAUUSD 行情。
+    公开接口可用，``is_available()`` 恒为 ``True``。
     """
 
     source_name = "OKX"
@@ -66,7 +67,9 @@ class OkxFetcher(BaseFetcher):
         return True
 
     def describe(self) -> str:
-        return f"OKX: {self._inst_id} (public REST)"
+        # 品种**按调用入参**取（fetch_full 的 symbol 优先），构造期 inst_id 仅作兜底，
+        # 故描述里显式点明，避免被误读成「该源被钉死在 XAUUSD 上」。
+        return f"OKX: public REST（品种按调用入参，默认 {self._inst_id}）"
 
     # ── 内部 ─────────────────────────────────────────────────────────────
 
@@ -82,8 +85,13 @@ class OkxFetcher(BaseFetcher):
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise DataError(f"OKX 返回非 JSON: {url}（{exc}）") from exc
 
-    def _fetch_raw(self, timeframe: str) -> list[list]:
-        """分页拉取原始蜡烛数组（每元素 ``[ts_ms, o, h, l, c, vol, ...]``）。"""
+    def _fetch_raw(self, symbol: str, timeframe: str) -> list[list]:
+        """分页拉取原始蜡烛数组（每元素 ``[ts_ms, o, h, l, c, vol, ...]``）。
+
+        Args:
+            symbol: **实际取数品种**（即 OKX ``instId``），由 :meth:`fetch_full` 传入。
+            timeframe: 妙算周期标识。
+        """
         bar = _OKX_BAR.get(timeframe.upper())
         if bar is None:
             raise DataError(f"OKX 不支持周期: {timeframe}")
@@ -92,7 +100,7 @@ class OkxFetcher(BaseFetcher):
         before: int | None = None
         while len(rows) < self._max_bars:
             params: dict[str, str] = {
-                "instId": self._inst_id,
+                "instId": symbol,
                 "bar": bar,
                 "limit": str(_OKX_PAGE),
             }
@@ -122,10 +130,13 @@ class OkxFetcher(BaseFetcher):
     # ── 接口 ─────────────────────────────────────────────────────────────
 
     def fetch_full(self, symbol: str, timeframe: str) -> pd.DataFrame:
-        _ = symbol  # OKX 用 instId 而非 symbol，见 __init__
-        raw = self._fetch_raw(timeframe)
+        # 入参优先、缺失才回落构造期默认值（与 akshare_src.fetch_full 同一语义）。
+        # 早期版本丢弃 symbol 恒用 self._inst_id，导致 CRYPTO_BTC 下取 BTCUSDT
+        # 却静默返回 XAUUSD 行情——不报错但给错数据，比崩溃更危险。
+        inst = (symbol or "").strip() or self._inst_id
+        raw = self._fetch_raw(inst, timeframe)
         if not raw:
-            raise DataError(f"OKX 无数据：{self._inst_id} {timeframe}")
+            raise DataError(f"OKX 无数据：{inst} {timeframe}")
         out = []
         for item in raw:
             out.append(

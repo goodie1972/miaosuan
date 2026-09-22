@@ -83,7 +83,9 @@ class TradingViewFetcher(BaseFetcher):
     def describe(self) -> str:
         if self.is_available():
             return f"TradingView: tvdatafeed (max_bars={self._max_bars})"
-        return "TradingView: (未安装 tvdatafeed)"
+        # 缺依赖时给**可行动**提示（本包禁止 print，故借 describe 透出给 UI）；
+        # 否则该源在 UI 里凭空消失，用户无从判断是没装包还是网络不通。
+        return "TradingView: 未安装 tvdatafeed（pip install tvdatafeed）"
 
     # ── 代理探测（不读 env）──────────────────────────────────────────────
 
@@ -204,8 +206,14 @@ class TradingViewFetcher(BaseFetcher):
         auth = (p.username, p.password or "") if p.username else None
         try:
             import websocket  # websocket-client
-        except Exception:
-            return
+        except ImportError as exc:
+            # 走到这里说明直连不可达、**必须**走代理（见 _detect_proxy），而代理隧道
+            # 依赖 websocket-client。早期版本静默 return，随后 tvDatafeed 以含混的
+            # 「连接失败」报错，用户无从判断是缺包还是网络问题——故显式抛出可行动错误。
+            raise DataError(
+                "检测到需要代理但缺少 websocket-client，无法为 TradingView 建立隧道"
+                "（pip install websocket-client）"
+            ) from exc
         orig = websocket.create_connection
 
         def patched(url, *args, **kw):

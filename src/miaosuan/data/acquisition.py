@@ -35,7 +35,7 @@ import numpy as np
 import pandas as pd
 
 from ..config import data_acquisition_config
-from ..data.fetchers import BaseFetcher, ShenjiDBFetcher, list_network_sources
+from .fetchers import BaseFetcher, ShenjiDBFetcher, list_network_sources
 from ..errors import DataError
 
 __all__ = [
@@ -245,14 +245,17 @@ class NetworkSource(DataSource):
         return SOURCE_TYPE_OTHER
 
     def fetch_full(self, symbol: str, timeframe: str) -> pd.DataFrame:
+        # 逐个来源收集失败原因：早期版本 ``except Exception: pass/continue`` 把所有
+        # 失败压成一句「无可用网络来源」，用户无法区分「没装包 / 网络不通 / 品种不支持」。
+        failures: list[str] = []
         # 1) 通用 HTTP JSON 接口
         if self._base_url:
             try:
                 df = self._generic_fetch(symbol, timeframe, since_ts=None)
                 if df is not None and len(df) > 0:
                     return self._validate_df(df, symbol=symbol, timeframe=timeframe)
-            except Exception:
-                pass
+            except Exception as exc:
+                failures.append(f"通用HTTP接口({self._base_url}): {exc}")
         # 2) 网络 fetcher 依次尝试
         for src in self._sources:
             if not src.is_available():
@@ -261,24 +264,22 @@ class NetworkSource(DataSource):
                 df = src.fetch_full(symbol, timeframe)
                 if df is not None and len(df) > 0:
                     return self._validate_df(df, symbol=symbol, timeframe=timeframe)
-            except Exception:
-                continue
-        raise DataError(
-            f"无可用网络来源: {symbol} {timeframe}",
-            context={"sources": [s.describe() for s in self._sources]},
-        )
+            except Exception as exc:
+                failures.append(f"{src.describe()}: {exc}")
+        return self._raise_no_source(symbol, timeframe, failures, incremental=False)
 
     def fetch_incremental(
         self, symbol: str, timeframe: str, since_ts: int
     ) -> pd.DataFrame:
         # 通用 HTTP 接口支持 since 参数；网络 fetcher 内部按 since 过滤
+        failures: list[str] = []
         if self._base_url:
             try:
                 df = self._generic_fetch(symbol, timeframe, since_ts=since_ts)
                 if df is not None and len(df) > 0:
                     return self._validate_df(df, symbol=symbol, timeframe=timeframe)
-            except Exception:
-                pass
+            except Exception as exc:
+                failures.append(f"通用HTTP接口({self._base_url}): {exc}")
         for src in self._sources:
             if not src.is_available():
                 continue
@@ -286,11 +287,31 @@ class NetworkSource(DataSource):
                 df = src.fetch_incremental(symbol, timeframe, since_ts)
                 if df is not None and len(df) > 0:
                     return self._validate_df(df, symbol=symbol, timeframe=timeframe)
-            except Exception:
-                continue
+            except Exception as exc:
+                failures.append(f"{src.describe()}: {exc}")
+        return self._raise_no_source(symbol, timeframe, failures, incremental=True)
+
+    def _raise_no_source(
+        self,
+        symbol: str,
+        timeframe: str,
+        failures: list[str],
+        *,
+        incremental: bool,
+    ) -> pd.DataFrame:
+        """抛出「无可用网络来源」并**带上每个来源的失败原因**。
+
+        失败原因同时进错误消息与 ``context["failures"]``：前者让用户立刻看见，
+        后者供 UI / 日志结构化消费。
+        """
+        kind = "无可用网络来源（增量）" if incremental else "无可用网络来源"
+        detail = "；".join(failures) if failures else "无可用来源"
         raise DataError(
-            f"无可用网络来源（增量）: {symbol} {timeframe}",
-            context={"sources": [s.describe() for s in self._sources]},
+            f"{kind}: {symbol} {timeframe}（{detail}）",
+            context={
+                "sources": [s.describe() for s in self._sources],
+                "failures": failures,
+            },
         )
 
     # ── 通用 HTTP JSON 逻辑（复用既有实现）────────────────────────────────
