@@ -643,10 +643,8 @@ def test_api_acquisition_cached_exposes_start_end(
     p = _tiny_parquet(tmp_path)
     from miaosuan.data import acquisition as acq_mod
 
-    # 缓存目录指向 tmp：直接替换模块级单例的 _cache_dirs（不碰真实缓存目录）
-    inst = acq_mod.DataAcquisition.__new__(acq_mod.DataAcquisition)
-    inst._cache_dirs = (tmp_path,)
-    monkeypatch.setattr(acq_mod, "_acquisition", inst)
+    # 缓存目录指向 tmp：该接口已不走单例，直接替换目录解析函数
+    monkeypatch.setattr(acq_mod, "_cache_dirs_from_config", lambda: (tmp_path,))
     # /api/inspect 有目录白名单，同样指过去才能比对口径
     monkeypatch.setattr(server, "_DATA_DIRS", (tmp_path,))
     server._TIME_RANGE_CACHE.clear()

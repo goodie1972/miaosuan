@@ -19,6 +19,7 @@ import os
 import socket
 import sqlite3
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import pytest
@@ -213,3 +214,47 @@ def test_data_acquisition_config_defaults() -> None:
     assert cfg.data_source == ""
     assert cfg.dukascopy_user == ""
     assert cfg.dukascopy_password == ""
+
+
+def test_list_cached_does_not_build_acquisition_singleton(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    """列缓存只扫目录，**不得**构造 ``DataAcquisition`` 单例。
+
+    回归防线：构造单例会 build 全部数据源并对网络 fetcher 逐个 TCP 探测，
+    本环境不可达主机各卡满 3s 超时 → ``/api/acquisition/cached`` 首次 6s。
+    若有人改回 ``_get_acquisition().list_cached()``，这条立刻变红。
+    """
+    import miaosuan.data.acquisition as acq_mod
+
+    monkeypatch.setattr(acq_mod, "_acquisition", None)
+    rows = acq_mod.list_cached()
+    assert acq_mod._acquisition is None, "list_cached() 不应触发单例构造"
+    assert isinstance(rows, list)
+
+    # 与实例方法结果等价（用空 sources 绕过网络探测，只验证目录/去重逻辑一致）
+    inst = acq_mod.DataAcquisition(sources=[])
+    assert inst.list_cached() == acq_mod.list_cached()
+
+
+def test_scan_cache_dirs_returns_stable_fields(tmp_path: Any) -> None:
+    """扫描结果字段结构稳定（前端与 server.py 依赖，勿改名）。"""
+    import pandas as pd
+
+    from miaosuan.data.acquisition import _scan_cache_dirs
+
+    df = pd.DataFrame({
+        "time": [1_700_000_000, 1_700_003_600],
+        "open": [1.0, 2.0], "high": [2.0, 3.0], "low": [0.5, 1.5],
+        "close": [1.5, 2.5], "volume": [10.0, 10.0],
+    })
+    df.to_parquet(tmp_path / "XAUUSD_H1.parquet", index=False)
+    (tmp_path / "notes.txt").write_text("ignored", encoding="utf-8")
+
+    rows = _scan_cache_dirs((tmp_path,))
+    assert len(rows) == 1, "非 .parquet/.csv 应被过滤"
+    assert sorted(rows[0]) == ["mtime", "name", "path", "size_mb", "source"]
+    assert rows[0]["name"] == "XAUUSD_H1.parquet"
+    assert rows[0]["source"] == "cache"
+    # 2 行 parquet 只有 ~1KB，round(KB/1e6, 2) 会取到 0.0，故只断言类型与非负
+    assert isinstance(rows[0]["size_mb"], float) and rows[0]["size_mb"] >= 0
