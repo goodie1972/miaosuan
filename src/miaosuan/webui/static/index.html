@@ -2038,7 +2038,7 @@ function rtSetPolling(on) {
 
 /* ── 数据获取页：神机本地库 / 网络下载 · 增量优先 ─────────────────
    三步同调优：列来源 → 拉缓存 → 触发增量获取（POST 落盘后再刷缓存 + 行情下拉）。 */
-function loadAcqSources(profile) {
+function loadAcqSources(profile, isRetry) {
   var url = "/api/acquisition/sources" + (profile ? ("?profile=" + encodeURIComponent(profile)) : "");
   jfetch(url).then(function (rows) {
     var box = $("acqSources");
@@ -2050,13 +2050,26 @@ function loadAcqSources(profile) {
     }
     var html = '<select id="acqSource">';
     html += '<option value="" selected>请选择单一来源</option>';
+    var pending = false;
     rows.forEach(function (s) {
-      var label = s.source_type + " —— " + s.description + (s.available ? "" : "（不可用）");
-      html += '<option value="' + esc(s.source_type) + '"' + (s.available ? "" : " disabled") + ">" + esc(label) + "</option>";
+      // available === null = 后端尚未探测（接口非阻塞立即返回）。显示为「检测中」
+      // 而非「不可用」，且**不 disabled**——否则用户在探测完成前根本点不了。
+      var unknown = (s.available === null || s.available === undefined);
+      if (unknown) pending = true;
+      var suffix = unknown ? "（检测中…）" : (s.available ? "" : "（不可用）");
+      var dis = (s.available === false) ? " disabled" : "";
+      var label = s.source_type + " —— " + s.description + suffix;
+      html += '<option value="' + esc(s.source_type) + '"' + dis + ">" + esc(label) + "</option>";
     });
     html += "</select>";
     box.className = "";
     box.innerHTML = html;
+    // 探测在后端后台线程进行：延迟 1.5s **只补刷一次**，用真实结果换掉「检测中」。
+    // 刻意不做轮询（isRetry 守卫）；探测最多几秒，一次足够。
+    if (window.__acqProbeTimer) { clearTimeout(window.__acqProbeTimer); window.__acqProbeTimer = 0; }
+    if (pending && !isRetry) {
+      window.__acqProbeTimer = setTimeout(function () { loadAcqSources(profile, true); }, 1500);
+    }
   }).catch(function (e) {
     var box = $("acqSources");
     if (!box) return;
