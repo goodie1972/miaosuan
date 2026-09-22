@@ -7,9 +7,7 @@
 
 from __future__ import annotations
 
-import json
 import urllib.parse
-import urllib.request
 
 import pandas as pd
 
@@ -73,18 +71,6 @@ class OkxFetcher(BaseFetcher):
 
     # ── 内部 ─────────────────────────────────────────────────────────────
 
-    def _http_get(self, url: str) -> dict:
-        req = urllib.request.Request(url, headers={"User-Agent": "MiaoSuan/1.0"})
-        try:
-            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
-                body = resp.read()
-        except Exception as exc:
-            raise DataError(f"OKX 请求失败: {url}（{exc}）") from exc
-        try:
-            return json.loads(body.decode("utf-8"))
-        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-            raise DataError(f"OKX 返回非 JSON: {url}（{exc}）") from exc
-
     def _fetch_raw(self, symbol: str, timeframe: str) -> list[list]:
         """分页拉取原始蜡烛数组（每元素 ``[ts_ms, o, h, l, c, vol, ...]``）。
 
@@ -107,7 +93,10 @@ class OkxFetcher(BaseFetcher):
             if before is not None:
                 params["before"] = str(before)
             url = OKX_BASE + "/api/v5/market/candles?" + urllib.parse.urlencode(params)
-            body = self._http_get(url)
+            # GET + JSON 复用基类 _http_get_json（错误一律向上抛，不静默吞）
+            body = self._http_get_json(url, timeout=self._timeout)
+            if not isinstance(body, dict):
+                raise DataError(f"OKX 返回非对象 JSON: {url}")
             if body.get("code") != "0":
                 raise DataError(
                     f"OKX API 错误 {body.get('code')}: {body.get('msg')}"

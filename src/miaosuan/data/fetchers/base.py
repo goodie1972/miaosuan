@@ -28,6 +28,11 @@
 
 from __future__ import annotations
 
+import json
+import socket
+import urllib.request
+from typing import Any
+
 import pandas as pd
 
 from ...errors import DataError
@@ -107,3 +112,74 @@ class BaseFetcher:
         df = df.sort_values("time").reset_index(drop=True)
         df = df[~df["time"].duplicated(keep="last")].reset_index(drop=True)
         return df[[*_REQUIRED_COLUMNS, "tick_volume"]]
+
+    @staticmethod
+    def _probe_host(host: str, port: int = 443, timeout: float = 3.0) -> bool:
+        """TCP 连通性探测：只解析 IPv4 并连**首个**地址，超时可控、socket 必关闭。
+
+        之所以只取 ``getaddrinfo`` 的第一个 ``AF_INET`` 结果：``create_connection``
+        会依次尝试 IPv6 / IPv4 两个地址族，主机不可达时每个都等满 ``timeout``，
+        实测耗时翻倍。收敛到基类可避免各数据源各自复制出不同（易漏关 socket）的写法。
+
+        Args:
+            host: 探测主机名（如 ``api.binance.com``）。
+            port: 探测端口（默认 443）。
+            timeout: 单次连接超时（秒）。
+
+        Returns:
+            首个 IPv4 地址能否在 ``timeout`` 内建立 TCP 连接。
+        """
+        try:
+            infos = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+        except Exception:
+            return False
+        for info in infos[:1]:
+            sock: socket.socket | None = None
+            try:
+                sock = socket.create_connection(info[4], timeout=timeout)
+                return True
+            except Exception:
+                continue
+            finally:
+                if sock is not None:
+                    try:
+                        sock.close()
+                    except Exception:
+                        pass
+        return False
+
+    @staticmethod
+    def _http_get_json(
+        url: str,
+        timeout: float = 20.0,
+        *,
+        headers: dict[str, str] | None = None,
+    ) -> Any:
+        """``urllib`` GET + JSON 解析；任何失败都包成 :class:`DataError` **向上抛**。
+
+        返回类型刻意声明为 ``Any``：OKX 期望 ``dict``，Dukascopy / Binance 期望
+        ``list``，由调用方按服务商契约自行校验（如 Binance 的 ``isinstance`` 检查）。
+
+        Args:
+            url: 完整请求 URL。
+            timeout: 请求超时（秒）。
+            headers: 额外请求头；缺省使用 ``{"User-Agent": "MiaoSuan/1.0"}``。
+
+        Returns:
+            解析后的 JSON 对象（``dict`` / ``list`` / 其他）。
+
+        Raises:
+            DataError: 网络失败或响应非 JSON（**不**静默返回空值）。
+        """
+        req = urllib.request.Request(
+            url, headers=headers or {"User-Agent": "MiaoSuan/1.0"}
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                body = resp.read()
+        except Exception as exc:
+            raise DataError(f"HTTP GET 失败: {url}（{exc}）") from exc
+        try:
+            return json.loads(body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise DataError(f"HTTP 返回非 JSON: {url}（{exc}）") from exc

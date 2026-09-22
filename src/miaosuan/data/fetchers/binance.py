@@ -15,12 +15,9 @@ Binance 在部分地区 / 网络下不可达，探测失败时优雅隐藏该源
 
 from __future__ import annotations
 
-import json
-import socket
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
+from typing import Any
 
 import pandas as pd
 
@@ -94,28 +91,12 @@ class BinanceFetcher(BaseFetcher):
         """
         if self._avail_cache is not None:
             return self._avail_cache
-        ok = False
-        # 只解析 IPv4 并连第一个地址：``create_connection(host, port)`` 会依次尝试
-        # IPv6 / IPv4 两个地址族，主机不可达时每个都等满 timeout，实测耗时翻倍（6s）。
-        try:
-            infos = socket.getaddrinfo(
-                BINANCE_HOST, 443, socket.AF_INET, socket.SOCK_STREAM
-            )
-        except Exception:
-            infos = []
-        for info in infos[:1]:
-            try:
-                sock = socket.create_connection(info[4], timeout=self._probe_timeout)
-            except Exception:
-                continue
-            ok = True
-            try:
-                sock.close()
-            except Exception:
-                pass
-            break
-        self._avail_cache = ok
-        return ok
+        # 探测实现下沉到基类 _probe_host（只解析 IPv4、连首个地址、超时可控、
+        # socket 必关闭），避免各数据源各写一份易漏关 socket 的副本。
+        self._avail_cache = self._probe_host(
+            BINANCE_HOST, 443, float(self._probe_timeout)
+        )
+        return self._avail_cache
 
     def describe(self) -> str:
         if self.is_available():
@@ -124,19 +105,9 @@ class BinanceFetcher(BaseFetcher):
 
     # ── 内部 ─────────────────────────────────────────────────────────────
 
-    def _http_get(self, url: str) -> list[list]:
-        req = urllib.request.Request(url, headers={"User-Agent": "MiaoSuan/1.0"})
-        try:
-            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
-                body = resp.read()
-        except urllib.error.HTTPError as exc:
-            raise DataError(f"Binance HTTP {exc.code}: {url}") from exc
-        except Exception as exc:
-            raise DataError(f"Binance 请求失败: {url}（{exc}）") from exc
-        try:
-            data = json.loads(body.decode("utf-8"))
-        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-            raise DataError(f"Binance 返回非 JSON: {url}（{exc}）") from exc
+    def _http_get(self, url: str) -> list[Any]:
+        # GET + JSON 复用基类；Binance 特有的「错误响应是 dict 而非数组」校验留在本层。
+        data = self._http_get_json(url, timeout=self._timeout)
         if not isinstance(data, list):
             # Binance 错误响应形如 {"code": ..., "msg": ...}
             raise DataError(f"Binance API 错误: {data}")

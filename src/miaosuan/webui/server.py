@@ -42,6 +42,7 @@ from ..adapters.shenji.realtime import (
     env_config,
     safe_call,
 )
+from ..config import kline_data_dir
 from ..core.vocab import FORMULA_VOCAB, VOCAB_VERSION
 from ..data.loader import load
 from ..ir.provenance import MIAOSUAN_VERSION
@@ -57,8 +58,10 @@ _ARTIFACTS: Path = _REPO_ROOT / "artifacts"
 #: 静态页面。
 _INDEX_HTML: Path = Path(__file__).resolve().parent / "static" / "index.html"
 #: 默认行情数据目录（用户在本机放置 TradingView 拉取的 parquet/csv）。
+#: 首项经 :func:`~miaosuan.config.kline_data_dir` 读取，可用环境变量
+#: ``MIAOSUAN_KLINE_DIR`` 覆盖——**不在本模块直接读 env**（依赖方向铁律）。
 _DATA_DIRS: tuple[Path, ...] = (
-    Path(r"D:\K线数据"),
+    Path(kline_data_dir()),
     _REPO_ROOT / "data",
 )
 
@@ -377,6 +380,9 @@ def create_app() -> FastAPI:
             "n_features": FORMULA_VOCAB.feature_count,
             "n_operators": len(FORMULA_VOCAB.operator_names),
             "n_tokens": FORMULA_VOCAB.size,
+            # 行情目录经 config.kline_data_dir() 解析（可用 MIAOSUAN_KLINE_DIR 覆盖），
+            # 前端据此渲染「文件放哪儿」提示，避免前端再硬编码一份而与环境脱节。
+            "data_dirs": [str(d) for d in _DATA_DIRS],
             "profiles": list(EXPECTED_PROFILE_NAMES),
             "profile_details": {
                 name: {

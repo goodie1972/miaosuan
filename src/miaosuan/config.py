@@ -52,6 +52,9 @@ __all__ = [
     "DataAcquisitionConfig",
     "data_acquisition_config",
     "_default_shenji_db_path",
+    "ENV_KLINE_DIR",
+    "DEFAULT_KLINE_DIR",
+    "kline_data_dir",
 ]
 
 # ── 子配置（均为 frozen dataclass，不可变、可安全共享）─────────────────────
@@ -344,6 +347,11 @@ ENV_DUKASCOPY_PASS: str = "MIAOSUAN_DUKASCOPY_PASS"
 #: 默认网络超时（秒）。
 DEFAULT_DATA_TIMEOUT: int = 30
 
+#: 环境变量名：本地行情数据目录（Web UI 扫描 parquet/csv 的根）。
+ENV_KLINE_DIR: str = "MIAOSUAN_KLINE_DIR"
+#: 默认行情数据目录（用户本机放置 TradingView 拉取结果的固定路径）。
+DEFAULT_KLINE_DIR: str = r"D:\K线数据"
+
 
 @dataclass(frozen=True)
 class DataAcquisitionConfig:
@@ -356,6 +364,23 @@ class DataAcquisitionConfig:
     data_source: str = ""
     dukascopy_user: str = ""
     dukascopy_password: str = ""
+
+
+def kline_data_dir(env: Mapping[str, str] | None = None) -> str:
+    """返回本地行情数据目录（供 Web UI / 数据获取扫描 parquet、csv）。
+
+    与 :func:`shenji_backend_config` 同属「唯一 env 边界」：``webui`` 只调用本
+    函数取目录，**绝不**自行读 env（守护测试
+    ``tests/test_dependency_direction_adapters.py``）。
+
+    Args:
+        env: 覆盖用的环境映射（默认读 ``os.environ``，便于测试注入）。
+
+    Returns:
+        ``MIAOSUAN_KLINE_DIR`` 的值；未设置或为空时回落 :data:`DEFAULT_KLINE_DIR`。
+    """
+    source = os.environ if env is None else env
+    return (source.get(ENV_KLINE_DIR, "") or "").strip() or DEFAULT_KLINE_DIR
 
 
 def _default_shenji_db_path() -> str:

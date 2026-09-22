@@ -47,6 +47,8 @@ _FORBIDDEN_PROFILE_TOKENS: tuple[str, ...] = (
     "CN_EQUITY_RESEARCH",
     "US_EQUITY_RESEARCH",
     "CRYPTO_BTC",
+    # 随画像扩展同步：CN_COMMODITY_FUTURES（国内商品期货）亦属具体产品名
+    "CN_COMMODITY_FUTURES",
 )
 
 #: ``core/`` 中**禁止**依赖的上层包（产品轴实现层）

@@ -1082,6 +1082,8 @@ function loadMeta() {
       + " · " + m.n_tokens + " tokens（" + m.n_features + " 特征 + " + m.n_operators + " 算子）"
       + " · v" + m.miaosuan_version;
     window.__profileDetails = m.profile_details || {};
+    // 行情目录由后端下发（可用 MIAOSUAN_KLINE_DIR 覆盖），前端不再硬编码一份
+    window.__dataDirs = m.data_dirs || [];
     var names = m.profiles || [];
     // 挖掘页画像（共享同一选项列表）
     var sel = $("market");
@@ -1104,7 +1106,12 @@ function loadMeta() {
 function loadData() {
   jfetch("/api/data").then(function (rows) {
     if (!rows.length) {
-      $("data").innerHTML = '<option value="">（未找到行情文件 —— 请将 parquet 放入 D:\\K线数据\\ 或 data\\）</option>';
+      // 目录来自 /api/meta（后端按 MIAOSUAN_KLINE_DIR 解析），取不到时回落字面默认值
+      var dirs = (window.__dataDirs && window.__dataDirs.length)
+        ? window.__dataDirs
+        : ["D:\\K线数据\\"];
+      $("data").innerHTML = '<option value="">（未找到行情文件 —— 请将 parquet 放入 '
+        + esc(dirs.join(" 或 ")) + '）</option>';
       return;
     }
     $("data").innerHTML = rows.map(function (d) {
