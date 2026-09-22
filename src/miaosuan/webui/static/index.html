@@ -1538,7 +1538,8 @@ function loadBacktestOptions() {
       return;
     }
     $("btData").innerHTML = rows.map(function (d) {
-      return '<option value="' + esc(d.path) + '">' + esc(d.name) + " · " + d.size_mb + "MB</option>";
+      return '<option value="' + esc(d.path) + '">' + esc(d.name) + " · "
+        + esc(dataRangeText(d)) + " · " + d.size_mb + "MB</option>";
     }).join("");
   }).catch(function (e) {
     $("btData").innerHTML = '<option value="">（行情列表失败：' + esc(e.message) + "）</option>";
@@ -1721,7 +1722,8 @@ function loadTuneOptions() {
       return;
     }
     $("tuneData").innerHTML = rows.map(function (d) {
-      return '<option value="' + esc(d.path) + '">' + esc(d.name) + " · " + d.size_mb + "MB</option>";
+      return '<option value="' + esc(d.path) + '">' + esc(d.name) + " · "
+        + esc(dataRangeText(d)) + " · " + d.size_mb + "MB</option>";
     }).join("");
   }).catch(function (e) {
     $("tuneData").innerHTML = '<option value="">（行情列表失败：' + esc(e.message) + "）</option>";
@@ -2072,10 +2074,13 @@ function loadAcqCached() {
       return;
     }
     box.className = "";
-    box.innerHTML = '<div class="tbl-wrap"><table><tr><th>文件</th><th>大小</th><th>时间</th></tr>'
+    // 「时间」改名为「更新时间」：它渲染的是文件 mtime，与数据起止范围同名会误读。
+    box.innerHTML = '<div class="tbl-wrap"><table><tr><th>文件</th><th>大小</th>'
+      + "<th>数据范围</th><th>更新时间</th></tr>"
       + rows.map(function (r) {
         return '<tr><td class="mono tiny">' + esc(r.name) + "</td>"
           + "<td>" + (r.size_mb != null ? r.size_mb + "MB" : "—") + "</td>"
+          + '<td class="tiny">' + esc(dataRangeText(r)) + "</td>"
           + '<td class="tiny muted">' + esc(r.mtime || r.updated_at || "") + "</td></tr>";
       }).join("") + "</table></div>";
   }).catch(function (e) {
