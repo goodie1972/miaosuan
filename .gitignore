@@ -18,6 +18,8 @@ dist/
 .dmypy.json
 .ruff_cache/
 .pytest_cache/
+# 自定义 --basetemp 目录（本环境必须指定项目内 basetemp，见 MEMORY.md）
+.pytest_*/
 .hypothesis/
 
 # ── 妙算产物（大文件，不入库；结构见架构 §2）──────────────────────────────
