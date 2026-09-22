@@ -556,3 +556,77 @@ def test_realtime_client_base_url_is_configurable(
     assert server._realtime_client().base_url == "http://127.0.0.1:1783"
     monkeypatch.setenv("MIAOSUAN_SHENJI_URL", "http://10.0.0.9:8080/")
     assert server._realtime_client().base_url == "http://10.0.0.9:8080"
+
+
+# ── /api/data 起止时间（下拉框 / 挖掘区展示）───────────────────────────────
+
+def _tiny_parquet(tmp_path: Any, name: str = "XAUUSD_H1.parquet") -> Any:
+    """造一个仅几行的 parquet，**不**依赖本机 ``D:\\K线数据`` 里的真实文件。"""
+    import pandas as pd
+
+    base = 1_700_000_000  # 2023-11-14 (UTC)
+    n = 5
+    df = pd.DataFrame({
+        "time": [base + i * 3600 for i in range(n)],
+        "open": [1.0 + i for i in range(n)],
+        "high": [2.0 + i for i in range(n)],
+        "low": [0.5 + i for i in range(n)],
+        "close": [1.5 + i for i in range(n)],
+        "volume": [10.0] * n,
+    })
+    p = tmp_path / name
+    df.to_parquet(p, index=False)
+    return p
+
+
+def test_api_data_exposes_start_end(
+    app: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    """/api/data 每项必须带 ``start``/``end``——选文件时就能看到时间范围。"""
+    _tiny_parquet(tmp_path)
+    monkeypatch.setattr(server, "_DATA_DIRS", (tmp_path,))
+    server._TIME_RANGE_CACHE.clear()
+
+    status, rows = _call(app, "GET", "/api/data")
+    assert status == 200
+    assert len(rows) == 1
+    assert "start" in rows[0] and "end" in rows[0], rows[0]
+    assert rows[0]["start"] and rows[0]["end"], rows[0]
+    assert rows[0]["start"] <= rows[0]["end"]
+
+
+def test_api_data_time_range_matches_inspect(
+    app: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    """回归防线：``/api/data`` 与 ``/api/inspect`` 对同一文件必须**同口径**。
+
+    两处若一处用 ``gmtime``、一处用 ``localtime``，同一文件就会差一天——
+    这条最能防住该坑。
+    """
+    p = _tiny_parquet(tmp_path)
+    monkeypatch.setattr(server, "_DATA_DIRS", (tmp_path,))
+    server._TIME_RANGE_CACHE.clear()
+
+    _, rows = _call(app, "GET", "/api/data")
+    status, meta = _call(app, "GET", "/api/inspect?path=" + urllib.parse.quote(str(p)))
+    assert status == 200, meta
+    assert rows[0]["start"] == meta["start"], (rows[0], meta)
+    assert rows[0]["end"] == meta["end"], (rows[0], meta)
+
+
+def test_api_data_survives_unreadable_file(
+    app: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    """容错硬要求：单个文件读不出时间**不能**让整个 ``/api/data`` 挂掉。"""
+    _tiny_parquet(tmp_path)
+    (tmp_path / "BROKEN_H1.parquet").write_bytes(b"not a parquet at all")
+    monkeypatch.setattr(server, "_DATA_DIRS", (tmp_path,))
+    server._TIME_RANGE_CACHE.clear()
+
+    status, rows = _call(app, "GET", "/api/data")
+    assert status == 200
+    assert len(rows) == 2
+    broken = [r for r in rows if r["name"] == "BROKEN_H1.parquet"][0]
+    assert broken["start"] == "" and broken["end"] == "", broken
+    good = [r for r in rows if r["name"] == "XAUUSD_H1.parquet"][0]
+    assert good["start"], good
