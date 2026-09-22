@@ -85,7 +85,8 @@ class AkshareFetcher(BaseFetcher):
     def describe(self) -> str:
         if self.is_available():
             return f"akshare[{self._market}]: {self._symbol}"
-        return "akshare: (未安装 akshare)"
+        # 缺依赖时给可行动提示（本包禁止 print，故借 describe 透出给 UI）
+        return "akshare: 未安装 akshare（pip install akshare）"
 
     @staticmethod
     def _to_unix_seconds(series: pd.Series) -> pd.Series:

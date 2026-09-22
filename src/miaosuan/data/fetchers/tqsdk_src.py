@@ -65,7 +65,8 @@ class TqsdkFetcher(BaseFetcher):
     def describe(self) -> str:
         if self.is_available():
             return f"tqsdk: {self._symbol}"
-        return "tqsdk: (未安装 tqsdk)"
+        # 缺依赖时给可行动提示（本包禁止 print，故借 describe 透出给 UI）
+        return "tqsdk: 未安装 tqsdk（pip install tqsdk）"
 
     @staticmethod
     def _to_unix_seconds(series: pd.Series) -> pd.Series:
