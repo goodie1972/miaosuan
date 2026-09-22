@@ -7,7 +7,8 @@
 #     详见 README「已知差异」小节。
 #
 # 常用命令：
-#   pip install -e ".[dev]"     开发安装
+#   pip install -e ".[dev,web,datasource]"  开发安装（含 Web UI 与可选数据源）
+#   pip install -e ".[tune]"                 模式 B 参数寻优（Optuna）
 #   pytest                      运行全部测试（含 tests/parity 对拍）
 #   ruff check . && mypy        静态检查
 
@@ -36,7 +37,9 @@ classifiers = [
 
 # 运行时核心依赖（纯 numpy 栈，无 torch）
 dependencies = [
-    "numpy>=1.26",
+    # 上界 <3：给 numpy 3.x 的破坏性变更留缓冲；**不写 <2.1** —— 本机实际为
+    # numpy 2.5.3（3.13 无 numpy 1.26 wheel），写 <2.1 会让当前环境不满足约束。
+    "numpy>=1.26,<3",
     "pandas>=2.1,<3.0",   # 锁 2.x，规避 pandas 3.0 API 变更（架构 §8）
     "pyarrow>=14.0",
     "scipy>=1.11",
@@ -47,10 +50,22 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# 模式 B（T05）依赖
-tune = ["TA-Lib>=0.4.0", "optuna>=3.4"]
+# 模式 B（T05）依赖。
+# 注：原声明含 ``TA-Lib>=0.4.0``，但全项目 Grep 无任何 import（仅注释提及），
+# 且 TA-Lib 无 cp313 wheel、会让 ``pip install -e ".[tune]"`` 直接失败，故移除。
+tune = ["optuna>=3.4"]
 # 仅 tests/parity 使用：加载冻结的基准作对拍 Oracle，不进生产依赖
 oracle = ["torch>=2.0"]
+# Web UI：``webui/server.py`` 在**模块级** import fastapi，``cli.py`` 惰性 import
+# uvicorn；README 把 ``miaosuan ui`` 列为标准工作流，故必须有独立 extra。
+web = ["fastapi>=0.115", "uvicorn>=0.30"]
+# 可选网络数据源（fetchers 惰性导入，缺失时 describe() 会提示安装）
+datasource = [
+    "tvdatafeed>=2.1",
+    "akshare>=1.18",
+    "tqsdk",
+    "websocket-client>=1.9",
+]
 # 开发工具
 dev = [
     "pytest>=8.0",

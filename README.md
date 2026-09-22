@@ -23,6 +23,9 @@
 两种模式通过**统一的产物 IR（`StrategySpec`）** 打通：模式 A 的导出物可直接作为模式 B 的输入，
 形成 `mine → export → tune → export v2 → tune …` 的闭环。
 
+> **模式 B 额外依赖**：参数寻优走 Optuna，位于 `tune` extra 且**默认不安装**。
+> 使用 `miaosuan tune` 前先执行 `pip install -e ".[tune]"`。
+
 ## 2. 为什么用纯 Numpy（不用 Torch）？
 
 | 维度 | 纯 numpy 方案 | torch 方案 |
@@ -128,7 +131,10 @@ CLI  ──►  Pipeline  ──►  {search(GA) | tune(Optuna)}  ──►  cor
 ### 轻量化、可复现、无 Torch 依赖
 
 - 完全基于 **pure NumPy** 实现，避免 GPU/CPU 版本冲突，确保跨平台结果一致。
-- `requirements.lock` 锁定依赖版本，`pyproject.toml` 声明 `requires-python = ">=3.11"`，在任意环境 `pip install -r requirements.txt` 即可部署。
+- `requirements.lock` 锁定依赖版本，`pyproject.toml` 声明 `requires-python = ">=3.11"`，在任意环境 `pip install -r requirements.lock` 即可部署。
+
+  > 注：本机锁文件名为 **`requirements.lock`**（不存在 `requirements.txt`）。完整开发安装（含 Web UI 与可选数据源）：
+  > `pip install -e ".[dev,web,datasource]"`。
 
 ---
 
@@ -236,7 +242,7 @@ miaosuan ui --port 8686
 
 | 项 | 架构目标 | 本机实际情况 | 处理 |
 |---|---|---|---|
-| **Python 版本** | **3.11** | 本机仅有 3.13.12 与 3.14.3，无 3.11 | 降级用 **3.13** 开发验证；`requires-python = ">=3.11"` |
+| **Python 版本** | **3.11** | 本机仅有 3.13.14 与 3.14.3，无 3.11 | 降级用 **3.13** 开发验证；`requires-python = ">=3.11"` |
 | **numpy 版本** | `>=1.26,<2.1` | numpy 1.26 无 cp313 wheel；3.13 需 `numpy>=2.1` | `requirements.lock` 按 **3.13 可安装**的实际版本锁定 |
 | **算子数量** | 66 个 | 实际 **62 个**（44 基础 + 3 跨截面 + 8 Task3.3 + 7 Task3.4） | 以实测为准 = 62；`VOCAB_VERSION` 用 62 个算子派生 |
 
