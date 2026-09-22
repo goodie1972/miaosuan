@@ -7,12 +7,9 @@
 
 from __future__ import annotations
 
-import json
-import socket
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
+from typing import Any
 
 import pandas as pd
 
@@ -88,26 +85,12 @@ class DukascopyFetcher(BaseFetcher):
         """
         if self._avail_cache is not None:
             return self._avail_cache
-        ok = False
-        try:
-            infos = socket.getaddrinfo(
-                DUKASCOPY_HOST, 443, socket.AF_INET, socket.SOCK_STREAM
-            )
-        except Exception:
-            infos = []
-        for info in infos[:1]:
-            try:
-                sock = socket.create_connection(info[4], timeout=self._probe_timeout)
-            except Exception:
-                continue
-            ok = True
-            try:
-                sock.close()
-            except Exception:
-                pass
-            break
-        self._avail_cache = ok
-        return ok
+        # 探测实现下沉到基类 _probe_host（只解析 IPv4、连首个地址、超时可控、
+        # socket 必关闭），避免各数据源各写一份易漏关 socket 的副本。
+        self._avail_cache = self._probe_host(
+            DUKASCOPY_HOST, 443, float(self._probe_timeout)
+        )
+        return self._avail_cache
 
     def describe(self) -> str:
         if not self.is_available():
@@ -117,17 +100,12 @@ class DukascopyFetcher(BaseFetcher):
 
     # ── 内部 ─────────────────────────────────────────────────────────────
 
-    def _http_get(self, url: str) -> list:
-        req = urllib.request.Request(url, headers={"User-Agent": "MiaoSuan/1.0"})
-        try:
-            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
-                body = resp.read()
-        except Exception as exc:
-            raise DataError(f"Dukascopy 请求失败: {url}（{exc}）") from exc
-        try:
-            return json.loads(body.decode("utf-8"))
-        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-            raise DataError(f"Dukascopy 返回非 JSON: {url}（{exc}）") from exc
+    def _http_get(self, url: str) -> Any:
+        """GET + JSON 解析；复用基类 :meth:`BaseFetcher._http_get_json`。
+
+        保留本薄封装是为了让 ``_fetch_raw`` 的调用点保持单一、便于测试替换。
+        """
+        return self._http_get_json(url, timeout=self._timeout)
 
     @staticmethod
     def _symbol_to_duk(symbol: str) -> str:
