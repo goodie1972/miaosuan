@@ -123,6 +123,83 @@ def _resolve_data_file(path: str) -> Path:
     )
 
 
+# ── 起止时间轻量探查 ────────────────────────────────────────────────────────
+
+#: 时间展示格式。**必须与 /api/inspect 同口径**（``%Y-%m-%d`` + UTC），
+#: 否则同一文件在下拉框和「读取元信息」里会差一天。
+_TIME_FMT = "%Y-%m-%d"
+
+
+def _fmt_utc(stamp: int) -> str:
+    """把 Unix 秒格式化为 UTC 日期（与 :data:`_TIME_FMT` 绑定）。"""
+    return time.strftime(_TIME_FMT, time.gmtime(int(stamp)))
+
+
+def _range_from_table(table: Any) -> tuple[str, str] | None:
+    """从只含 ``time`` 列的 Arrow 表取 min/max，格式化为 ``(start, end)``。"""
+    import pyarrow.compute as pc
+
+    if table.num_rows == 0:
+        return None
+    col = table.column("time")
+    lo = pc.min(col).as_py()
+    hi = pc.max(col).as_py()
+    if lo is None or hi is None:
+        return None
+    return _fmt_utc(int(lo)), _fmt_utc(int(hi))
+
+
+def _read_time_range_uncached(path: Path) -> tuple[str, str] | None:
+    """实际读盘取时间范围；**任何异常一律降级为 ``None``**（不向上抛）。
+
+    * ``.parquet``：用 pyarrow **只读 ``time`` 一列**，再走向量化 min/max。
+      刻意不走 :func:`~miaosuan.data.loader.load`（那是 ``/api/inspect`` 的重路径，
+      会全量加载并算指纹），否则文件一多 ``/api/data`` 会被拖垮。
+    * ``.csv``：尽力而为——同样只读 ``time`` 列；若列名不叫 ``time``（或值是
+      日期字符串而非 Unix 秒）则拿不到，返回 ``None``（前端显示 ``—``）。
+      取舍说明：CSV 不是主格式（生产落盘一律 parquet），为它引入额外探测
+      逻辑不划算，宁可显示 ``—`` 也不给错的时间。
+    """
+    suffix = path.suffix.lower()
+    try:
+        if suffix == ".parquet":
+            import pyarrow.parquet as pq
+
+            return _range_from_table(pq.read_table(str(path), columns=["time"]))
+        if suffix == ".csv":
+            import pyarrow.csv as pa_csv
+
+            opts = pa_csv.ConvertOptions(include_columns=["time"])
+            return _range_from_table(pa_csv.read_csv(str(path), convert_options=opts))
+    except Exception:  # noqa: BLE001 - 单文件读失败绝不能让 /api/data 整体 500
+        return None
+    return None
+
+
+#: 进程内缓存：``(路径, mtime_ns, size) -> (start, end) | None``。
+#: 文件没变（mtime + size 均未变）就不重读 parquet——``/api/data`` 会被前端
+#: 频繁调用（挖掘完成 / 数据获取后自动刷新），每次全量读一遍列不划算。
+_TIME_RANGE_CACHE: dict[tuple[str, int, int], tuple[str, str] | None] = {}
+#: 缓存上限，超出整体清空（简单兜底，避免目录巨多时无限增长）。
+_TIME_RANGE_CACHE_MAX = 512
+
+
+def _peek_time_range(path: Path) -> tuple[str, str] | None:
+    """读取行情文件起止时间（带进程内缓存），失败返回 ``None``。"""
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    key = (str(path), int(stat.st_mtime_ns), int(stat.st_size))
+    if key in _TIME_RANGE_CACHE:
+        return _TIME_RANGE_CACHE[key]
+    value = _read_time_range_uncached(path)
+    if len(_TIME_RANGE_CACHE) >= _TIME_RANGE_CACHE_MAX:
+        _TIME_RANGE_CACHE.clear()
+    _TIME_RANGE_CACHE[key] = value
+    return value
+
+
 def _strategy_magic(source: str) -> str:
     """从策略源码里取 ``STRATEGY_MAGIC`` 常量值；取不到返回空串。
 
@@ -364,11 +441,16 @@ def create_app() -> FastAPI:
             for path in sorted(directory.iterdir()):
                 if path.suffix.lower() not in _DATA_SUFFIXES:
                     continue
+                stat = path.stat()
+                # 起止时间：轻量只读 time 列（失败降级为 ""，绝不 500）
+                rng = _peek_time_range(path)
                 out.append({
                     "path": str(path),
                     "name": path.name,
-                    "size_mb": round(path.stat().st_size / 1e6, 2),
-                    "mtime": time.strftime("%Y-%m-%d %H:%M", time.localtime(path.stat().st_mtime)),
+                    "size_mb": round(stat.st_size / 1e6, 2),
+                    "mtime": time.strftime("%Y-%m-%d %H:%M", time.localtime(stat.st_mtime)),
+                    "start": rng[0] if rng else "",
+                    "end": rng[1] if rng else "",
                 })
         return out
 
@@ -418,8 +500,10 @@ def create_app() -> FastAPI:
             "years": round(span / (365.25 * 86400), 2),
             "fingerprint": panel.fingerprint,
             "market_profile": panel.market_profile_name,
-            "start": time.strftime(fmt, time.gmtime(int(stamps[0]))) if len(stamps) else "",
-            "end": time.strftime(fmt, time.gmtime(int(stamps[-1]))) if len(stamps) else "",
+        # 复用 _fmt_utc：与 /api/data 的 start/end 保证同一 UTC 口径
+        # （两处若一个用 gmtime 一个用 localtime，同一文件会差一天）。
+        "start": _fmt_utc(int(stamps[0])) if len(stamps) else "",
+        "end": _fmt_utc(int(stamps[-1])) if len(stamps) else "",
         }
 
     @app.get("/api/specs")

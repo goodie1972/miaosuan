@@ -348,6 +348,8 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
           <select id="market"></select></div>
         <div style="flex:0"><button id="btnMine" class="primary">开始挖掘</button></div>
       </div>
+      <!-- 当前所选数据文件的时间范围：随 01 的 data 下拉选择实时更新（不发新请求） -->
+      <div class="tiny muted" id="mineDataHint" style="margin-top:8px">当前数据：未选择</div>
     </section>
 
     <section class="card">
@@ -1103,8 +1105,32 @@ function loadMeta() {
 }
 
 /* ── 数据文件 ─────────────────────────────────────────────────────── */
-function loadData() {
+/* 时间范围文案：取不到就显示 —（绝不露出 null / undefined） */
+function dataRangeText(d) {
+  return (d && d.start && d.end) ? (d.start + " → " + d.end) : "—";
+}
+
+/* 挖掘区那行「当前数据」提示：直接用 loadData 已拿到的 rows，不发新请求 */
+function updateMineDataHint() {
+  var el = $("mineDataHint");
+  if (!el) return;
+  var p = $("data").value;
+  if (!p) { el.textContent = "当前数据：未选择数据文件"; return; }
+  var rows = window.__dataRows || [];
+  var hit = null;
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].path === p) { hit = rows[i]; break; }
+  }
+  var name = String(p).split(/[\\/]/).pop();
+  el.textContent = "当前数据：" + name + " · " + dataRangeText(hit);
+}
+
+/* prefer：刷新后优先选中的路径（数据获取刚落盘的新文件用它）。
+   否则保留刷新前的选中——挖完发现选中的文件没了，体验很差。 */
+function loadData(prefer) {
+  var prev = prefer || $("data").value;
   jfetch("/api/data").then(function (rows) {
+    window.__dataRows = rows || [];
     if (!rows.length) {
       // 目录来自 /api/meta（后端按 MIAOSUAN_KLINE_DIR 解析），取不到时回落字面默认值
       var dirs = (window.__dataDirs && window.__dataDirs.length)
@@ -1112,13 +1138,24 @@ function loadData() {
         : ["D:\\K线数据\\"];
       $("data").innerHTML = '<option value="">（未找到行情文件 —— 请将 parquet 放入 '
         + esc(dirs.join(" 或 ")) + '）</option>';
+      updateMineDataHint();
       return;
     }
     $("data").innerHTML = rows.map(function (d) {
-      return '<option value="' + esc(d.path) + '">' + esc(d.name) + " · " + d.size_mb + "MB · " + esc(d.mtime) + "</option>";
+      return '<option value="' + esc(d.path) + '">' + esc(d.name) + " · "
+        + esc(dataRangeText(d)) + " · " + d.size_mb + "MB · " + esc(d.mtime) + "</option>";
     }).join("");
+    // 原选中文件若仍在列表中，重新选中（刷新不能清空用户选择）
+    if (prev) {
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].path === prev) { $("data").value = prev; break; }
+      }
+    }
+    updateMineDataHint();
   }).catch(function (e) {
+    window.__dataRows = [];
     $("data").innerHTML = '<option value="">（行情列表加载失败：' + esc(e.message) + "）</option>";
+    updateMineDataHint();
   });
 }
 
@@ -1351,6 +1388,8 @@ function fillProgress(st, running) {
 }
 
 function finishJob(s) {
+  // 挖掘结束刷新文件列表：重算并重绘每个文件的时间范围（保留原选中）
+  loadData();
   // 训练曲线：读 CLI 落盘的逐代历史 sidecar（机器可读，不污染 stdout 日志）。
   if (s.returncode === 0 && s.history_out) {
     jfetch("/api/history?name=" + encodeURIComponent(s.history_out)).then(function (h) {
@@ -2076,7 +2115,7 @@ function startAcqFetch() {
     showModal("数据获取成功", msg, "ok");
     $("acqStatus").textContent = "完成：" + (r.path || "");
     loadAcqCached();
-    loadData(); // 刷新 01 的行情下拉
+    loadData(r.path || ""); // 刷新 01 的行情下拉，并优先选中刚落盘的文件
   }).catch(function (e) {
     showModal("数据获取失败", esc(e.message), "err");
     $("acqStatus").textContent = "获取失败：" + e.message;
@@ -2134,7 +2173,7 @@ function bind() {
     })(btns[i]);
   }
   $("btnInspect").onclick = inspect;
-  $("data").onchange = inspect;
+  $("data").onchange = function () { inspect(); updateMineDataHint(); };
   $("btnMine").onclick = startMine;
   $("btnCopy").onclick = copyFormula;
   $("btnVerify").onclick = runVerify;
