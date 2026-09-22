@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -35,7 +36,7 @@ import numpy as np
 import pandas as pd
 
 from ..config import data_acquisition_config
-from .fetchers import BaseFetcher, ShenjiDBFetcher, list_network_sources
+from .fetchers import BaseFetcher, ShenjiDBFetcher, all_network_sources, list_network_sources
 from ..errors import DataError
 
 __all__ = [
@@ -130,6 +131,12 @@ class DataSource(ABC):
         """
         ...
 
+    #: 可用性判定是否**瞬时可得**（本地文件 / 配置判定，无任何网络往返）。
+    #: 为 ``True`` 时 :meth:`DataAcquisition.list_sources` 会同步判定并直接给出
+    #: 真实值；网络来源保持 ``False``，走后台异步探测——否则请求线程会被不可达
+    #: 主机（各卡满 3s 超时）拖住，切换画像就卡 6 秒。
+    local_probe: bool = False
+
     # ── 内部工具 ───────────────────────────────────────────────────
 
     @staticmethod
@@ -165,6 +172,9 @@ class ShenjiLocalSource(DataSource):
         cfg = data_acquisition_config()
         db_path = db_path or cfg.shenji_db_path or None
         self._fetcher = ShenjiDBFetcher(db_path) if db_path else None
+
+    #: 可用性 = 本地 DB 文件是否存在（``os.path.isfile``），瞬时可得、无网络往返。
+    local_probe = True
 
     def is_available(self) -> bool:
         return self._fetcher is not None and self._fetcher.is_available()
@@ -403,6 +413,9 @@ class GenericHttpSource(DataSource):
         self._base_url = (base_url or "").rstrip("/")
         self._timeout = timeout
 
+    #: 可用性 = 是否配置了 base_url（纯字符串判定），瞬时可得。
+    local_probe = True
+
     def source_type(self) -> str:
         return SOURCE_TYPE_OTHER
 
@@ -468,18 +481,155 @@ def _build_default_sources() -> list[DataSource]:
 
     * 神机本地库 → ``Shenji``
     * 通用 HTTP 接口（若配置） → ``其他``
-    * 每个可用网络 fetcher → 各自独立来源（TradingView / OKX / Dukascopy / 其他）
+    * 每个网络 fetcher → 各自独立来源（TradingView / OKX / Dukascopy / 其他）
+
+    **不做可用性探测**：这里用 :func:`all_network_sources` 而非
+    :func:`list_network_sources`——后者会逐个 ``is_available()``，Binance /
+    Dukascopy 走 TCP 探测，主机不可达时各卡满 3s 超时（实测列来源 6s）。
+    可用性改由 :meth:`DataAcquisition.list_sources` 走缓存 + 后台线程判定。
     """
     cfg = data_acquisition_config()
     sources: list[DataSource] = [ShenjiLocalSource()]
     if cfg.data_api_url:
         sources.append(GenericHttpSource(base_url=cfg.data_api_url, timeout=cfg.timeout))
-    for fetcher in list_network_sources(
+    for fetcher in all_network_sources(
         dukascopy_user=cfg.dukascopy_user or None,
         dukascopy_password=cfg.dukascopy_password or None,
     ):
         sources.append(TypedNetworkSource(fetcher))
     return sources
+
+
+# ── 可用性：进程内缓存 + 后台探测（**绝不阻塞请求线程**）────────────────────
+
+#: 可用性探测结果的缓存有效期（秒）。
+#: 依据：可用性本质是「某主机 / 依赖能否连通」，分钟级稳定；取 5 分钟既能让
+#: 切换画像瞬时响应，又不会在网络环境变化后长期锁死旧结果。
+_AVAILABILITY_TTL = 300.0
+
+#: 进程内可用性缓存：``key -> (available, 探测时刻 monotonic)``。
+_AVAILABILITY_CACHE: dict[str, tuple[bool, float]] = {}
+#: 正在后台探测中的 key（避免并发请求对同一源重复起线程）。
+_AVAILABILITY_INFLIGHT: set[str] = set()
+_AVAILABILITY_LOCK = threading.Lock()
+#: 后台探测得到的真实描述（未探测时用占位，避免请求线程调 describe() 触发探测）。
+_DESCRIPTION_CACHE: dict[str, str] = {}
+
+
+def _availability_key(src: DataSource) -> str:
+    """可用性缓存 key：**按数据源类型 + 包装类名（+ 内层 fetcher）**，不按实例身份。
+
+    可用性的本质是「某一类数据源能不能连」，与具体实例无关；按实例（id()）
+    做 key 会让每次新建对象都重新探测，缓存形同虚设。
+
+    ⚠ 必须带上内层 fetcher 的类名：``TypedNetworkSource`` 把多个 fetcher 包装
+    成同一个类，而 :data:`_FETCHER_TYPE_MAP` 对未登记的实现一律回落到
+    ``其他``——只按「类型 + 包装类名」做 key 会让两个互不相关的 fetcher 共用
+    一份可用性缓存（互相污染）。当前仅 ``TqsdkFetcher`` 落在这个回落分支上，
+    但新增任何未登记的 fetcher 都会踩到，故在此一并消除隐患。
+    """
+    key = f"{src.source_type()}|{type(src).__name__}"
+    inner = getattr(src, "_fetcher", None)
+    if inner is not None:
+        key = f"{key}|{type(inner).__name__}"
+    return key
+
+
+def _availability_from_cache(src: DataSource) -> bool | None:
+    """取缓存中的可用性；**未探测或已过期返回 ``None``**（不是 False）。"""
+    key = _availability_key(src)
+    with _AVAILABILITY_LOCK:
+        hit = _AVAILABILITY_CACHE.get(key)
+    if hit is None:
+        return None
+    available, ts = hit
+    if (time.monotonic() - ts) > _AVAILABILITY_TTL:
+        return None
+    return available
+
+
+def _probe_sync(src: DataSource) -> bool:
+    """**同步**探测并写缓存——只允许用于 :attr:`DataSource.local_probe` 的本地来源。
+
+    网络来源禁止走这里（会把请求线程卡在不可达主机上），请用
+    :func:`_probe_in_background`。
+    """
+    key = _availability_key(src)
+    try:
+        available = bool(src.is_available())
+    except Exception:  # noqa: BLE001 - 探测异常一律视为不可用
+        available = False
+    try:
+        description = src.describe()
+    except Exception:  # noqa: BLE001 - 描述取不到用类型名兜底
+        description = src.source_type()
+    with _AVAILABILITY_LOCK:
+        _AVAILABILITY_CACHE[key] = (available, time.monotonic())
+        _DESCRIPTION_CACHE[key] = description
+    return available
+
+
+def _probe_one(src: DataSource, key: str) -> None:
+    """后台线程：探测单个源（含描述），把结果写入缓存。
+
+    ``describe()`` 也在这里一并取：Dukascopy / Binance 的 ``describe()`` 内部
+    会调 ``is_available()``，放在后台取可避免请求线程被拖住。
+
+    ``key`` 由调用方（请求线程）算好传入，这样本函数即使出现任何意外，
+    ``finally`` 也能把 inflight 标记摘掉——否则该源会永远停在「检测中」。
+    """
+    try:
+        try:
+            available = bool(src.is_available())
+        except Exception:  # noqa: BLE001 - 探测异常一律视为不可用，不能让后台线程炸掉
+            available = False
+        try:
+            description = src.describe()
+        except Exception:  # noqa: BLE001 - 描述取不到不影响可用性判定
+            description = src.source_type()
+    except Exception:  # noqa: BLE001 - 极端兜底：保证 finally 里变量已绑定
+        available = False
+        description = key
+    finally:
+        with _AVAILABILITY_LOCK:
+            _AVAILABILITY_CACHE[key] = (available, time.monotonic())
+            _DESCRIPTION_CACHE[key] = description
+            _AVAILABILITY_INFLIGHT.discard(key)
+
+
+def _description_for(src: DataSource) -> str:
+    """取来源描述；未探测时返回 ``"（检测中…）"`` 占位，**不触发探测**。"""
+    key = _availability_key(src)
+    with _AVAILABILITY_LOCK:
+        return _DESCRIPTION_CACHE.get(key, f"{src.source_type()}（检测中…）")
+
+
+def _probe_in_background(sources: list[DataSource]) -> None:
+    """对「未探测 / 已过期」的源**并行**发起后台探测，不阻塞当前请求。
+
+    只探测传入的源——即已按市场画像 ``allowed_types`` 过滤过的，不再出现
+    「先探测全部、再过滤画像」导致的无谓等待。用 daemon 线程：进程退出时
+    不会被未完成的探测挂住。
+    """
+    pending: list[tuple[DataSource, str]] = []
+    now = time.monotonic()
+    with _AVAILABILITY_LOCK:
+        for src in sources:
+            key = _availability_key(src)
+            hit = _AVAILABILITY_CACHE.get(key)
+            if hit is not None and (now - hit[1]) <= _AVAILABILITY_TTL:
+                continue
+            if key in _AVAILABILITY_INFLIGHT:
+                continue
+            _AVAILABILITY_INFLIGHT.add(key)
+            pending.append((src, key))
+    for src, key in pending:
+        threading.Thread(
+            target=_probe_one,
+            args=(src, key),
+            daemon=True,
+            name=f"probe-{key}",
+        ).start()
 
 
 def _cache_dirs_from_config() -> tuple[Path, ...]:
@@ -737,20 +887,36 @@ class DataAcquisition:
     def list_sources(self, allowed_types: list[str] | None = None) -> list[dict[str, Any]]:
         """列出已配置的数据来源及其可用性（供 UI 展示）。
 
+        可用性**绝不阻塞请求**：命中进程内缓存直接返回已知值；未探测 / 已过期
+        则返回 ``None``（前端显示「检测中」）并**后台并行探测**，结果写入缓存
+        供下一次请求使用。因此切换市场画像是瞬时的，即使有主机不可达。
+
+        乐观展示会不会害用户点到不可用的源？不会——:meth:`fetch` 会收集每个
+        来源的 ``failures`` 并透传到错误消息（见 ``NetworkSource.fetch_full`` /
+        ``_try_fetch_*``），用户点下去拿到的是明确的失败原因，而非静默错误数据。
+
         Args:
             allowed_types: 仅返回这些「数据源类型」的来源（按市场画像过滤用）。
+                先按本参数过滤、再只探测留下的源——不做无谓的探测。
         """
         out: list[dict[str, Any]] = []
+        selected: list[DataSource] = []
         for src in self._sources:
             st = src.source_type()
             if allowed_types is not None and st not in allowed_types:
                 continue
+            selected.append(src)
+            known = _availability_from_cache(src)
+            if known is None and getattr(src, "local_probe", False):
+                # 本地来源（文件 / 配置判定）瞬时可得 → 同步判定，当场给真实值
+                known = _probe_sync(src)
             out.append({
                 "name": type(src).__name__,
                 "source_type": st,
-                "description": src.describe(),
-                "available": src.is_available(),
+                "description": _description_for(src),
+                "available": known,  # None = 尚未探测（前端显示「检测中」）
             })
+        _probe_in_background(selected)
         return out
 
 
