@@ -104,7 +104,7 @@ class FrozenMarketProfile:
         （取值为 ``Shenji`` / ``TradingView`` / ``OKX`` / ``Binance`` / ``Dukascopy``
         / ``AkShare`` / ``其他``）。
         不同市场的数据源相互独立、互不相同；UI 仅展示该列表内的来源，杜绝跨市场串用。
-        注：神机（``Shenji``）库仅存 XAUUSD 单一品种，故只归属 FOREX_XAUUSD。
+        注：妙算（``Shenji``）库仅存 XAUUSD 单一品种，故只归属 FOREX_XAUUSD。
     """
 
     name: str
@@ -206,7 +206,7 @@ FOREX_XAUUSD = FrozenMarketProfile(
     limit_pct=None,
     symbols=["XAUUSD"],
     timeframes=["D1", "H1", "H4", "M15", "M30", "M5", "W1"],
-    data_sources=["Shenji", "TradingView", "Dukascopy"],
+    data_sources=["Shenji", "TradingView", "Dukascopy", "MT4"],
 )
 
 #: A 股研究（**占位**）：只做多、T+1、涨跌停 ±10%、卖出印花税。
