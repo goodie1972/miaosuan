@@ -42,7 +42,7 @@ from ..adapters.shenji.realtime import (
     env_config,
     safe_call,
 )
-from ..config import kline_data_dir
+from ..config import is_bundled, kline_data_dir
 from ..core.vocab import FORMULA_VOCAB, VOCAB_VERSION
 from ..data.loader import load
 from ..ir.provenance import MIAOSUAN_VERSION
@@ -86,7 +86,14 @@ def _safe_name(name: str, *, suffixes: set[str] | None = None) -> Path:
 
 
 def _cli_process(*args: str) -> list[str]:
-    """构造 CLI 子进程命令（用当前解释器，保证与 venv 一致）。"""
+    """构造 CLI 子进程命令（用当前解释器，保证与 venv 一致）。
+
+    PyInstaller bundle 模式（``is_bundled()`` 为 True）下：
+    ``sys.executable`` 指向 launcher exe 本身，需直接传递子命令参数，
+    由 launcher.main 的 ``_run_cli()`` 接管路由。
+    """
+    if is_bundled():
+        return [sys.executable, *args]
     return [sys.executable, "-m", "miaosuan.cli", *args]
 
 
@@ -251,12 +258,12 @@ def _validate_market_choice(symbol: str, market: str) -> None:
     )
 
 
-# ── 实时页：神机 后端**只读**代理 ───────────────────────────────────────
+# ── 实时页：妙算 后端**只读**代理 ───────────────────────────────────────
 
 def _realtime_client() -> ShenjiReadOnlyClient:
     """构造只读客户端（地址/超时每次读环境变量，便于运维改配置）。
 
-    默认 ``http://127.0.0.1:1783``（神机 dashboard），超时 3 秒。
+    默认 ``http://127.0.0.1:1783``（妙算 dashboard），超时 3 秒。
     **只读**白名单在客户端层强制（见 :mod:`miaosuan.adapters.shenji.realtime`）。
     """
     base_url, timeout = env_config()
@@ -549,7 +556,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/strategies")
     def list_strategies() -> list[dict[str, Any]]:
-        """列出已导出的 神机 策略 .py（按修改时间倒序）。
+        """列出已导出的 妙算 策略 .py（按修改时间倒序）。
 
         只认**带** ``STRATEGY_MAGIC`` 的文件：该常量由导出模板强制写入，是"这
         是导出产物"的准确判据。否则 artifacts 下的临时脚本也会被当成策略列出
@@ -802,6 +809,7 @@ def create_app() -> FastAPI:
                 allowed = list(get_profile(profile).data_sources)
             except Exception:
                 allowed = None
+        # 确保所有数据源都能正确显示 source_type，即使是 TypedNetworkSource
         return list_sources(allowed_types=allowed)
 
     @app.get("/api/acquisition/cached")
