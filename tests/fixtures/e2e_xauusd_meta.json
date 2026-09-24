@@ -18,36 +18,37 @@
     103
   ],
   "formula_decoded": "TRIX_15 → RET_ENTROPY_20 → MA_DIFF → MOMENTUM_5 → GATE → SQRT → JUMP → SCALE",
-  "bars": 8000,
+  "bars": 8203,
   "feature_shape": [
     1,
     65,
-    8000
+    8203
   ],
   "factor_shape": [
     1,
-    8000
+    8203
   ],
   "am_stats": {
-    "mean": 0.2589587867259979,
-    "std": 0.8117551803588867,
+    "mean": 0.255410373210907,
+    "std": 0.8071770071983337,
     "min": -1.4055795669555664,
     "max": 3.0,
-    "in_market_ratio": 0.920625
+    "in_market_ratio": 0.922223576740217
   },
   "data_facts": {
-    "rows_raw": 8000,
-    "rows_used": 8000,
+    "rows_raw": 8203,
+    "rows_used": 8203,
     "columns": [
       "time",
       "open",
       "high",
       "low",
       "close",
-      "volume"
+      "volume",
+      "tick_volume"
     ],
     "time_min": 1746442800,
-    "time_max": 1788962400,
-    "has_tick_volume": false
+    "time_max": 1790071200,
+    "has_tick_volume": true
   }
 }
