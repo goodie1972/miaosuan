@@ -59,7 +59,7 @@ def _synthetic_raw(n: int = 1400, seed: int = 7) -> dict[str, np.ndarray]:
 
 @pytest.fixture
 def shenji_stubs() -> Any:
-    """注入 神机 SDK 占位模块，使导出文件可被 import。"""
+    """注入 妙算 SDK 占位模块，使导出文件可被 import。"""
     created = install_stub_modules(PLATFORM_SPEC)
     try:
         yield
@@ -231,7 +231,7 @@ def test_generate_signal_matches_shenji_contract(
 ) -> None:
     """P0 回归：``generate_signal`` 必须**无参**，且返回 OrderType 六元组。
 
-    神机 ``BaseStrategy.on_tick`` 先 ``refresh_data()`` 灌 ``self.candles``，
+    妙算 ``BaseStrategy.on_tick`` 先 ``refresh_data()`` 灌 ``self.candles``，
     再**无参**调用 ``generate_signal()``，随后读 ``signal.value``。以前模板生成的是
     ``generate_signal(self, candles) -> dict``，平台侧一调用就 TypeError，
     导出策略根本加载不起来。
@@ -270,7 +270,7 @@ def test_generate_signal_matches_shenji_contract(
     assert isinstance(score_long, int) and isinstance(score_short, int)
     assert isinstance(factors_long, list) and isinstance(factors_short, list)
     assert isinstance(indicators, dict)
-    # 多头信号时分数记在多头侧，空头侧为 0（与 神机 既有策略一致）
+    # 多头信号时分数记在多头侧，空头侧为 0（与 妙算 既有策略一致）
     if signal.value == "BUY":
         assert score_long > 0 and score_short == 0 and factors_long
     else:
@@ -298,10 +298,10 @@ def test_exported_class_is_concrete_not_abstract(tmp_path: Path, shenji_stubs: N
 
     背景：模板曾写成 ``class X(BaseStrategy, MT4BridgeBase)``，而 MT4BridgeBase 有
     9 个抽象方法（connect/disconnect/open_order/...）一个都没实现，导致导出类是
-    抽象类，神机 实例化时直接 TypeError，策略根本加载不起来。
+    抽象类，妙算 实例化时直接 TypeError，策略根本加载不起来。
 
     这里的桩**如实还原**了两个基类的抽象面（见 ``contract.stub_abstracts``），
-    所以不需要依赖外部 神机 仓库也能在 CI 里抓到这类问题。
+    所以不需要依赖外部 妙算 仓库也能在 CI 里抓到这类问题。
     """
     module, _path = _export_module(FORMULAS["am_best"], tmp_path, "concrete")
     cls = _exported_strategy_class(module)
@@ -344,7 +344,7 @@ def test_class_name_attribute_matches_strategy_name(
 def test_exported_class_inherits_only_base_strategy(
     tmp_path: Path, shenji_stubs: None
 ) -> None:
-    """基类列表必须只有 BaseStrategy（与 神机 现网 27 个策略一致）。"""
+    """基类列表必须只有 BaseStrategy（与 妙算 现网 27 个策略一致）。"""
     module, _path = _export_module(FORMULAS["am_best"], tmp_path, "bases")
     cls = _exported_strategy_class(module)
     base_names = [base.__name__ for base in cls.__mro__[1:] if base.__name__ != "object"]

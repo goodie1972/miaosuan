@@ -98,7 +98,7 @@ def test_cn_commodity_futures_semantics() -> None:
 
 
 def test_shenji_only_for_forex_xauusd() -> None:
-    """神机库仅存 XAUUSD 单一品种，故只归属 FOREX_XAUUSD，不得出现在其他画像。"""
+    """妙算库仅存 XAUUSD 单一品种，故只归属 FOREX_XAUUSD，不得出现在其他画像。"""
     assert "Shenji" in FOREX_XAUUSD.data_sources
     for profile in (
         CN_EQUITY_RESEARCH,
@@ -106,7 +106,7 @@ def test_shenji_only_for_forex_xauusd() -> None:
         CRYPTO_BTC,
         CN_COMMODITY_FUTURES,
     ):
-        assert "Shenji" not in profile.data_sources, f"{profile.name} 不应含神机源"
+        assert "Shenji" not in profile.data_sources, f"{profile.name} 不应含妙算源"
 
 
 def test_get_profile_unknown_raises() -> None:

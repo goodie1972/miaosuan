@@ -6,7 +6,7 @@
 """数据获取器抽象基类（与 :class:`~miaosuan.data.acquisition.DataSource` 平级的鸭子类型）。
 
 本模块定义 :class:`BaseFetcher`，供 ``acquisition.py`` 的 ``DataSource`` 委托。
-各具体实现（神机本地库、TradingView、akshare、tqsdk、OKX、Dukascopy）都继承它，
+各具体实现（妙算本地库、TradingView、akshare、tqsdk、OKX、Dukascopy）都继承它，
 对外暴露统一接口：
 
 * ``is_available()`` —— 当前环境是否可用（依赖 / 凭据就绪）；

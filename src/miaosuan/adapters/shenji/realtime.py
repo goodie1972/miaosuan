@@ -3,7 +3,7 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""神机 后端**只读**客户端（03 实时页）。
+"""妙算 后端**只读**客户端（03 实时页）。
 
 红线（用户明确要求，且其 MT4 正在跑实盘）
 ----------------------------------------
@@ -18,7 +18,7 @@
 
 架构与依赖
 ----------
-妙算 WebUI 后端 → 本客户端 → 神机 dashboard 后端（默认
+妙算 WebUI 后端 → 本客户端 → 妙算 dashboard 后端（默认
 ``http://127.0.0.1:1783``，见其 ``dashboard/backend/main.py:332``）。
 只用标准库 :mod:`urllib`（环境未安装 ``httpx``，不引入新依赖）。
 """
@@ -51,7 +51,7 @@ __all__ = [
     "safe_call",
 ]
 
-#: 默认后端地址（神机 dashboard；可用环境变量覆盖）。
+#: 默认后端地址（妙算 dashboard；可用环境变量覆盖）。
 #: 见 :func:`miaosuan.config.shenji_backend_config`（env 的唯一读取点）。
 DEFAULT_BASE_URL: str = DEFAULT_SHENJI_URL
 
@@ -157,7 +157,7 @@ def safe_call(func: Any, /, *args: Any, **kwargs: Any) -> RealtimeOutcome:
 
 @dataclass
 class ShenjiReadOnlyClient:
-    """神机 后端只读客户端。
+    """妙算 后端只读客户端。
 
     Attributes:
         base_url: 后端根地址（末尾斜杠会被去掉）。

@@ -117,7 +117,7 @@ def test_af004_ignores_formulas_without_gate_token() -> None:
 def test_af005_flags_generate_signal_with_candles_arg() -> None:
     """P0 回归：``generate_signal(self, candles)`` 必须被拦成 ERROR。
 
-    神机 基类 ``on_tick`` 以**无参**方式调用它，带形参会在平台侧
+    妙算 基类 ``on_tick`` 以**无参**方式调用它，带形参会在平台侧
     直接 TypeError，导出策略加载不起来。
     """
     source = (

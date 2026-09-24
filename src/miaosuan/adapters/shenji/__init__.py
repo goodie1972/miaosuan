@@ -3,7 +3,7 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""神机 目标平台适配器（M15 / M16）。
+"""妙算 目标平台适配器（M15 / M16）。
 
 提供：
 
