@@ -3,7 +3,7 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""03 实时页：神机 后端**只读**客户端测试。
+"""03 实时页：妙算 后端**只读**客户端测试。
 
 重点证明"不下单"是**可被测试证明**的，而不是写在注释里：
 越界（非 GET / 非白名单路径 / 非法查询参数）时 ``_open``（唯一 socket 出口）

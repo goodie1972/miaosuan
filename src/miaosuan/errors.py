@@ -146,6 +146,6 @@ class LintError(MiaoSuanError):
 
 
 class TargetPortError(MiaoSuanError):
-    """目标平台适配层（神机）双向编译错误。"""
+    """目标平台适配层（妙算）双向编译错误。"""
 
     code = "E-TARGETPORT"

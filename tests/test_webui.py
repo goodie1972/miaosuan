@@ -190,7 +190,7 @@ def test_specs_lists_spec_without_spec_id_key(app: Any, tmp_path: Any) -> None:
     assert row["n_tokens"] == 3
 
 
-# ── T07：神机 双主题改造后的新契约 ──────────────────────────────────────
+# ── T07：妙算 双主题改造后的新契约 ──────────────────────────────────────
 
 def test_meta_exposes_real_frozen_vocab(app: Any) -> None:
     """/api/meta 必须回报**真实**冻结词表，页头不能写死数字。
@@ -357,7 +357,7 @@ def test_index_html_is_single_file_zero_cdn_dual_theme() -> None:
     # 回测页已实装（不再是占位）：有运行入口、走 /api/backtest，且带口径警告
     assert '/api/backtest' in html
     assert "运行回测" in html
-    # 03 实时页已实装（不再是占位）：只读接入 神机 后端，占位说明已移除
+    # 03 实时页已实装（不再是占位）：只读接入 妙算 后端，占位说明已移除
     assert "待接入 · 计划中" not in html
     assert "只读接入" in html
     assert "绝不下单" in html            # 红线声明必须留在页面上

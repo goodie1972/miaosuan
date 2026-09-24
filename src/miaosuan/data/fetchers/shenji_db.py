@@ -3,9 +3,9 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for full license text.
 
-"""神机本地 SQLite 数据库读取器（只读）。
+"""妙算本地 SQLite 数据库读取器（只读）。
 
-读取神机落库的 ``ohlcv`` 表（列：``timeframe, timestamp, open, high, low,
+读取妙算落库的 ``ohlcv`` 表（列：``timeframe, timestamp, open, high, low,
 close, volume``）。**该库不存品种列**——它只保存单一品种（默认 XAUUSD），
 因此 :meth:`fetch_full` / :meth:`fetch_incremental` 的 ``symbol`` 参数被
 **显式忽略**并在文档中说明，调用方无需、也无法按品种区分。
@@ -27,15 +27,15 @@ __all__ = ["ShenjiDBFetcher"]
 
 
 class ShenjiDBFetcher(BaseFetcher):
-    """神机平台本地 SQLite 行情库读取器（只读）。"""
+    """妙算平台本地 SQLite 行情库读取器（只读）。"""
 
-    source_name = "神机_SQLite"
+    source_name = "妙算_SQLite"
 
     def __init__(self, db_path: str | None) -> None:
         """初始化。
 
         Args:
-            db_path: 神机 SQLite 数据库文件路径；为 ``None`` 或不存在时视为不可用。
+            db_path: 妙算 SQLite 数据库文件路径；为 ``None`` 或不存在时视为不可用。
         """
         self._db_path: str | None = db_path
 
@@ -52,7 +52,7 @@ class ShenjiDBFetcher(BaseFetcher):
     def _connect(self) -> sqlite3.Connection:
         if not self.is_available():
             raise DataError(
-                f"神机本地数据库不可用: {self._db_path!r}",
+                f"妙算本地数据库不可用: {self._db_path!r}",
                 context={"db_path": self._db_path},
             )
         # 只读 URI 打开，防止任何写操作（架构 §3.2 硬约束）
@@ -77,7 +77,7 @@ class ShenjiDBFetcher(BaseFetcher):
         return self._finalize(df)
 
     def fetch_full(self, symbol: str, timeframe: str) -> pd.DataFrame:
-        # 注意：神机库不含 symbol 列，symbol 被有意忽略（库仅存单一品种）。
+        # 注意：妙算库不含 symbol 列，symbol 被有意忽略（库仅存单一品种）。
         _ = symbol
         return self._query(timeframe, None)
 

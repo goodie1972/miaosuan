@@ -7,7 +7,7 @@
 
 号段规则：``66`` + 两位序号 + 两位版本号（如 ``661801`` = 序号 18 / 版本 1）。
 
-magic 一律以 ``int`` 表示与落盘：神机 侧是 ``magic: int``
+magic 一律以 ``int`` 表示与落盘：妙算 侧是 ``magic: int``
 （``core/bridge.py:40`` / ``config/settings.py:249`` ``MAGIC_NUMBER = 660706``），
 字符串会导致 ``p.magic == magic`` 永不相等，接管不到旧仓并产生孤儿单。
 历史账本里的字符串记录在**读取时**自动迁移为 int，老 magic 不会失效也不会被重复分配。
@@ -104,7 +104,7 @@ def known_magics() -> dict[str, str]:
 def _magic_int(value: Any) -> int | None:
     """把 magic 归一成 ``int``；无法解析时返回 ``None``。
 
-    神机 侧 magic 是 ``int``（``core/bridge.py:40`` ``magic: int``、
+    妙算 侧 magic 是 ``int``（``core/bridge.py:40`` ``magic: int``、
     ``config/settings.py:249`` ``MAGIC_NUMBER = 660706``），导出文件也必须是裸 int，
     否则 ``p.magic == magic`` 永远不相等 → 接管不到旧仓、产生孤儿单。
 
@@ -287,7 +287,7 @@ def allocate_magic(
         note: 备注。
 
     Returns:
-        6 位 magic（``int``，与 神机 侧 ``magic: int`` 一致）。
+        6 位 magic（``int``，与 妙算 侧 ``magic: int`` 一致）。
     """
     return MagicLedger(ledger_path).allocate(
         name, version, allocated_at=allocated_at, note=note

@@ -3,7 +3,7 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""妙算（MiaoSuan）—— 去 torch 的声明式因子挖掘 + 神机 策略调优引擎。
+"""妙算（MiaoSuan）—— 去 torch 的声明式因子挖掘 + 妙算 策略调优引擎。
 
 本包在 import 时**不产生任何副作用**（不读环境变量、不做文件 IO、不建连接），
 保证「导入即安全」。真正的重活由显式的 ``load_config`` / ``configure_logging``

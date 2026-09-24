@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>妙算 · 因子挖掘中心</title>
 <!--
-  配色与尺寸**逐值取自 神机 前端源码**（已人工复核，非二手转述）：
+  配色与尺寸**逐值取自 妙算 前端源码**（已人工复核，非二手转述）：
     dashboard/frontend/src/style.css:3-28   主题变量
     dashboard/frontend/src/style.css:67-69  涨绿 #0ecb81 / 跌红 #f6465d / 金 #f0b90b
     dashboard/frontend/src/style.css:155-163 侧边栏激活项 3px 金色左指示条
@@ -143,7 +143,7 @@ nav button {
   padding: 12px 18px; color: var(--ink-2); font-size: var(--fs-small);
 }
 nav button:hover { color: var(--ink); background: transparent; border-color: transparent; }
-/* 神机 侧边栏活跃项金色指示条（style.css:155） */
+/* 妙算 侧边栏活跃项金色指示条（style.css:155） */
 nav button.active { color: var(--gold); font-weight: 600; background: rgba(240, 185, 11, .12); }
 nav button.active::before {
   content: ''; position: absolute; left: 0; top: 4px; bottom: 4px;
@@ -269,7 +269,7 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
     <span class="mark"><img src="/static/logo.png" alt="妙算"></span>
     <div>
       <h1 id="pageTitle">妙算 · 因子挖掘中心</h1>
-      <div class="sub" id="pageSubtitle">MiaoSuan · 声明式因子挖掘 → 神机 策略导出</div>
+      <div class="sub" id="pageSubtitle">MiaoSuan · 声明式因子挖掘 → 妙算 策略导出</div>
     </div>
   </div>
   <span class="pill" id="statusPill"><span class="dot"></span><span id="statusText">空闲</span></span>
@@ -423,7 +423,7 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
         <div id="specList" class="empty">加载中…</div>
       </section>
       <section class="card">
-        <h2>⑨ 已导出策略（神机 .py）</h2>
+        <h2>⑨ 已导出策略（妙算 .py）</h2>
         <div id="stratList" class="empty">加载中…</div>
       </section>
     </div>
@@ -518,7 +518,7 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
     </section>
   </div>
 
-  <!-- ══ 03 实时（神机 后端**只读**接入）════════════════════════ -->
+  <!-- ══ 03 实时（妙算 后端**只读**接入）════════════════════════ -->
   <div class="view" id="view-live">
     <section class="card">
       <div class="banner warn" id="rtBanner">
@@ -631,7 +631,7 @@ var LANG_KEY = "miaosuan-lang";
 var TRANSLATIONS = {
   zh: {
     title: "妙算 · 因子挖掘中心",
-    subtitle: "MiaoSuan · 声明式因子挖掘 → 神机 策略导出",
+    subtitle: "MiaoSuan · 声明式因子挖掘 → 妙算 策略导出",
     statusIdle: "空闲",
     statusMining: "挖掘中",
     cfgMeta: "词表 — · tokens —",
@@ -688,7 +688,7 @@ var TRANSLATIONS = {
     lFp: "数据指纹",
     btnVerify: "校验",
     step8Title: "⑧ 历史 Spec",
-    step9Title: "⑨ 已导出策略（神机 .py）",
+    step9Title: "⑨ 已导出策略（妙算 .py）",
     loading: "加载中…",
     noSpec: "（还没有 spec —— 先跑一次挖掘）",
     noStrategy: "（还没有导出策略）",
@@ -1829,8 +1829,8 @@ function loadTuneHistory() {
   });
 }
 
-/* ── 03 实时：神机 后端**只读**接入 ─────────────────────────────
-   本页只对妙算后端发 GET（/api/realtime/*），妙算后端再只读转发到 神机。
+/* ── 03 实时：妙算 后端**只读**接入 ─────────────────────────────
+   本页只对妙算后端发 GET（/api/realtime/*），妙算后端再只读转发到 妙算。
    后端不可达 / 超时 / 桥接离线三种情况都在顶部横幅**醒目提示**，并把数据区
    显示为「不可用」，绝不显示 0 或空表让用户误读成真实行情。 */
 var RT = { timer: null, busy: false, everyMs: 2000 };
@@ -2036,7 +2036,7 @@ function rtSetPolling(on) {
   }
 }
 
-/* ── 数据获取页：神机本地库 / 网络下载 · 增量优先 ─────────────────
+/* ── 数据获取页：妙算本地库 / 网络下载 · 增量优先 ─────────────────
    三步同调优：列来源 → 拉缓存 → 触发增量获取（POST 落盘后再刷缓存 + 行情下拉）。 */
 function loadAcqSources(profile, isRetry) {
   var url = "/api/acquisition/sources" + (profile ? ("?profile=" + encodeURIComponent(profile)) : "");

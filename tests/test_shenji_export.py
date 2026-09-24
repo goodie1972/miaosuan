@@ -3,7 +3,7 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""M15/M16：神机 导出 —— 命名、magic、契约常量、门禁降级标注。"""
+"""M15/M16：妙算 导出 —— 命名、magic、契约常量、门禁降级标注。"""
 
 from __future__ import annotations
 
@@ -89,7 +89,7 @@ def test_magic_is_rendered_as_bare_int_not_string() -> None:
 def test_strategy_declares_name_equal_to_pool_key() -> None:
     """P0 回归：策略类必须声明 ``name``，且等于策略名（STRATEGY_POOL 的 key）。
 
-    依据（已核 神机 源码，非转述）：
+    依据（已核 妙算 源码，非转述）：
       docs/strategy_dev_guide.md:28   ``name = "my_strategy"  # settings.STRATEGY_POOL 的 key``
       engine_standalone/main.py:106   ``cls = scan_strategies().get(name)``
       engine_standalone/main.py:529   同上；查不到就 ``Unknown strategy, skip``

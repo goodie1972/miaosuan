@@ -79,7 +79,7 @@ def test_used_includes_builtin_magics(tmp_path: Path) -> None:
 def test_legacy_string_ledger_is_migrated_and_respected(tmp_path: Path) -> None:
     """老账本（magic 存成字符串）必须照常工作：不失效、不被重复分配。
 
-    神机 侧 ``magic: int``，改成 int 后若不做兼容，已导出策略（老 magic 是
+    妙算 侧 ``magic: int``，改成 int 后若不做兼容，已导出策略（老 magic 是
     字符串）会既查不到、又可能被重新分配给别的策略 —— 实盘事故级。
     """
     path = tmp_path / "magic.json"

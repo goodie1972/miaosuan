@@ -6,7 +6,7 @@
 """数据获取器测试（``data/fetchers`` + acquisition 接入）。
 
 设计目标：
-* 神机库读取用「**真实库优先、合成库兜底**」的 fixture 验证（列契约 / 升序 /
+* 妙算库读取用「**真实库优先、合成库兜底**」的 fixture 验证（列契约 / 升序 /
   无重复 / 只读）——无论如何都会真跑一遍断言，不再因本机无 DB 而**静默 0 覆盖**；
 * 网络 fetcher 的 TCP 可达性探测一律用 monkeypatch 在 **socket 层**打桩，
   **不发任何真实网络请求**，与机器网络状态解耦（范式同 ``test_dukascopy_probe.py``）；
@@ -74,18 +74,18 @@ def tcp_reachable(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-# ── 装置二：神机库（真实优先，合成兜底）──────────────────────────────────
+# ── 装置二：妙算库（真实优先，合成兜底）──────────────────────────────────
 
 
 def _real_shenji_db() -> str:
-    """返回神机库真实路径（不存在则空串）。"""
+    """返回妙算库真实路径（不存在则空串）。"""
     return _default_shenji_db_path()
 
 
 def _make_synthetic_shenji_db(directory: Path) -> str:
-    """在临时目录造一个**合成**神机库（**绝不触碰**真实 ``market_data.db``）。
+    """在临时目录造一个**合成**妙算库（**绝不触碰**真实 ``market_data.db``）。
 
-    表结构与神机落库一致：
+    表结构与妙算落库一致：
     ``ohlcv(timeframe, timestamp, open, high, low, close, volume)``。
     """
     db_path = str(directory / "synthetic_market_data.db")
@@ -120,7 +120,7 @@ def _make_synthetic_shenji_db(directory: Path) -> str:
 
 @pytest.fixture
 def shenji_db(tmp_path: Path) -> str:
-    """真实神机库优先；不存在时用合成库兜底。
+    """真实妙算库优先；不存在时用合成库兜底。
 
     早期版本在无 DB 的机器上直接 ``pytest.skip``，这些用例于是**静默 0 覆盖**——
     看起来绿，其实一条断言都没跑。兜底后无论有没有真实库都会真验证一遍。
