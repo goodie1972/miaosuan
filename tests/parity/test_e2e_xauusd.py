@@ -28,9 +28,10 @@
 ``StackVM`` 的 ``GATE`` 属「双线性」算子：其分支由条件特征（本公式为 ``feat33 = TRIX_15``）
 的**符号**决定。当该条件在某一根 bar 上恰好穿越 0 时，torch 与 numpy 因 **float32 归约顺序**
 差异可能得到 1-ULP 相反的符号（如 ``0.0`` vs ``+9.4e-4``），从而选中不同分支，使该点因子出现
-O(1) 跳变。这是「双线性算子在零点的不连续」的固有性质，**不是移植 bug**：全序列 7999/8000
-点吻合（p99.9 = 4.3e-3），聚合统计量逐位吻合。本测试如实披露并对其做有界、可定位的判定，
-而非放宽容差掩盖。
+O(1) 跳变。这是「双线性算子在零点的不连续」的固有性质，**不是移植 bug**：全序列仅该处附近
+个别点不吻合（p99.9 = 4.3e-3），聚合统计量逐位吻合。本测试如实披露并对其做有界、可定位的判定，
+而非放宽容差掩盖。基线由 ``gen_e2e_xauusd_baseline.py`` 随数据源行数再生成（当前 8203 根），
+bar 数一律从 ``e2e_meta`` 动态断言，不硬编码。
 """
 
 from __future__ import annotations
@@ -103,7 +104,9 @@ def _build_raw_from_parquet(parquet: str) -> dict[str, np.ndarray]:
     }
 
 
-def _load_factor(e2e_npz: dict, e2e_meta: dict, raw: dict[str, np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
+def _load_factor(
+    e2e_npz: dict, e2e_meta: dict, raw: dict[str, np.ndarray]
+) -> tuple[np.ndarray, np.ndarray]:
     """跑妙算全链路，返回 ``(feat, factor)``。"""
     feat = compute_features(raw)
     factor = StackVM().execute(list(e2e_meta["formula"]), feat)
@@ -138,8 +141,9 @@ def test_e2e_data_path(e2e_npz: dict, e2e_meta: dict, e2e_raw: dict) -> None:
         got = e2e_raw[field]
         exp = e2e_npz[f"raw_{field}"]
         assert got.shape == exp.shape, f"raw_{field} 形状不一致 {got.shape} vs {exp.shape}"
-        assert np.array_equal(got, exp), f"raw_{field} 面板与基准不逐位一致"
-    assert e2e_meta["bars"] == e2e_raw["open"].shape[1] == 8000
+        # volume 存在前段 NaN（tick_volume 缺口），NaN==NaN 应视为同位置一致
+        assert np.array_equal(got, exp, equal_nan=True), f"raw_{field} 面板与基准不逐位一致"
+    assert e2e_meta["bars"] == e2e_raw["open"].shape[1] == e2e_npz["raw_open"].shape[1]
     assert e2e_meta["vocab_version"] == "v9217a2c0d91a"
 
 
@@ -150,7 +154,7 @@ def test_e2e_feature_parity(e2e_npz: dict, e2e_run: tuple[np.ndarray, np.ndarray
     """65 维特征逐点 max|Δ| 记录并断言。"""
     feat, _factor = e2e_run
     exp = e2e_npz["feat"]
-    assert feat.shape == exp.shape == (1, 65, 8000)
+    assert feat.shape == exp.shape == (1, 65, e2e_npz["raw_open"].shape[1])
 
     per_feat = np.abs(feat.astype(np.float64) - exp.astype(np.float64)).reshape(65, -1).max(axis=1)
     worst_idx = int(np.argmax(per_feat))
@@ -212,7 +216,7 @@ def test_e2e_factor_pointwise(
     """逐点 max|Δ| 判定：分位容差 + 有界、可定位的双线性离群。"""
     feat, factor = e2e_run
     exp = e2e_npz["factor"]
-    assert factor.shape == exp.shape == (1, 8000)
+    assert factor.shape == exp.shape == (1, e2e_meta["bars"])
 
     d = np.abs(factor.astype(np.float64) - exp.astype(np.float64)).reshape(-1)
 
@@ -263,6 +267,6 @@ def test_e2e_factor_report_artifact(
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     assert out.is_file()
     # 回到内存断言，避免「只写不验」
-    assert report["bars"] == 8000
+    assert report["bars"] == e2e_meta["bars"]
     assert abs(report["delta"]["mean"]) <= _AGG_ATOL
     assert abs(report["delta"]["in_market_ratio"]) <= _INMARKET_ATOL
