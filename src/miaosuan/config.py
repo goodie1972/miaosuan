@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) 2026 MiaoSuan Team
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
@@ -55,6 +54,8 @@ __all__ = [
     "ENV_KLINE_DIR",
     "DEFAULT_KLINE_DIR",
     "kline_data_dir",
+    "ENV_BUNDLED",
+    "is_bundled",
 ]
 
 # ── 子配置（均为 frozen dataclass，不可变、可安全共享）─────────────────────
@@ -289,13 +290,13 @@ class AppConfig:
         return base.with_overrides(**overrides)
 
 
-# ── 神机 后端（03 实时页「只读接入」）────────────────────────────────────
+# ── 妙算 后端（03 实时页「只读接入」）────────────────────────────────────
 #
 # 与 AppConfig.from_env 同属「唯一 env 边界」：环境变量**只在本模块读取**，
 # adapters / webui 通过调用 shenji_backend_config() 注入配置，绝不自行读 env
 # （可执行断言见 tests/test_dependency_direction_adapters.py）。
 
-#: 03 实时页默认后端地址（神机 dashboard）。
+#: 03 实时页默认后端地址（妙算 dashboard）。
 DEFAULT_SHENJI_URL: str = "http://127.0.0.1:1783"
 
 #: 03 实时页默认请求超时（秒）。**必须短**：后端卡住不能把页面拖死。
@@ -343,14 +344,36 @@ ENV_DATA_TIMEOUT: str = "MIAOSUAN_DATA_TIMEOUT"
 ENV_DATA_SOURCE: str = "MIAOSUAN_DATA_SOURCE"
 ENV_DUKASCOPY_USER: str = "MIAOSUAN_DUKASCOPY_USER"
 ENV_DUKASCOPY_PASS: str = "MIAOSUAN_DUKASCOPY_PASS"
+ENV_MT4_BRIDGE_HOST: str = "MIAOSUAN_MT4_BRIDGE_HOST"
+ENV_MT4_BRIDGE_PORT: str = "MIAOSUAN_MT4_BRIDGE_PORT"
+ENV_MT4_TIME_BASE: str = "MIAOSUAN_MT4_TIME_BASE"
 
 #: 默认网络超时（秒）。
 DEFAULT_DATA_TIMEOUT: int = 30
+
+#: MT4 Bridge（FreeMT4Bridge EA）默认监听地址与端口。
+DEFAULT_MT4_BRIDGE_HOST: str = "127.0.0.1"
+DEFAULT_MT4_BRIDGE_PORT: int = 23232
+
+#: MT4 输出时间戳口径默认值（``"utc"`` 符合 panel 契约）。
+DEFAULT_MT4_TIME_BASE: str = "utc"
 
 #: 环境变量名：本地行情数据目录（Web UI 扫描 parquet/csv 的根）。
 ENV_KLINE_DIR: str = "MIAOSUAN_KLINE_DIR"
 #: 默认行情数据目录（用户本机放置 TradingView 拉取结果的固定路径）。
 DEFAULT_KLINE_DIR: str = r"D:\K线数据"
+
+
+def _int_or_default(raw: str, default: int) -> int:
+    """把环境变量串解析为整数；空 / 非法 / 非正数一律回落 ``default``。"""
+    raw = (raw or "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
 
 
 @dataclass(frozen=True)
@@ -364,6 +387,9 @@ class DataAcquisitionConfig:
     data_source: str = ""
     dukascopy_user: str = ""
     dukascopy_password: str = ""
+    mt4_bridge_host: str = DEFAULT_MT4_BRIDGE_HOST
+    mt4_bridge_port: int = DEFAULT_MT4_BRIDGE_PORT
+    mt4_time_base: str = DEFAULT_MT4_TIME_BASE
 
 
 def kline_data_dir(env: Mapping[str, str] | None = None) -> str:
@@ -383,11 +409,33 @@ def kline_data_dir(env: Mapping[str, str] | None = None) -> str:
     return (source.get(ENV_KLINE_DIR, "") or "").strip() or DEFAULT_KLINE_DIR
 
 
+#: launcher（PyInstaller bundle）标记：置 "1" 时 ``sys.executable`` 即 launcher 本身。
+ENV_BUNDLED: str = "MIAOSUAN_BUNDLED"
+
+
+def is_bundled(env: Mapping[str, str] | None = None) -> bool:
+    """是否运行在 PyInstaller 打包的 launcher exe 内。
+
+    与 :func:`kline_data_dir` 同属「唯一 env 边界」：``webui`` 只调用本函数，
+    **绝不**自行读 env（守护测试 ``tests/test_dependency_direction_adapters.py``）。
+
+    Args:
+        env: 覆盖用的环境映射（默认读 ``os.environ``，便于测试注入）。
+
+    Returns:
+        ``MIAOSUAN_BUNDLED == "1"`` 时为 ``True``——此时 ``_cli_process``
+        需以 ``[sys.executable, *args]`` 形式 spawn（由 launcher 路由 CLI），
+        而非 ``[sys.executable, "-m", "miaosuan.cli", *args]``。
+    """
+    source = os.environ if env is None else env
+    return (source.get(ENV_BUNDLED, "") or "").strip() == "1"
+
+
 def _default_shenji_db_path() -> str:
-    """返回神机本地库默认候选路径中第一个存在的文件，否则空串。
+    """返回妙算本地库默认候选路径中第一个存在的文件，否则空串。
 
     候选顺序：
-    1. 用户本机神机库固定路径（项目 owner 实测路径，单机「开箱即用」）；
+    1. 用户本机妙算库固定路径（项目 owner 实测路径，单机「开箱即用」）；
     2. 若设置 ``MIAOSUAN_SHENJI_ROOT``，则拼接 ``<root>/data/market_data.db``。
 
     显式环境变量 ``MIAOSUAN_SHENJI_DB_PATH`` 优先级更高（见
@@ -426,7 +474,7 @@ def data_acquisition_config(env: Mapping[str, str] | None = None) -> DataAcquisi
         timeout = DEFAULT_DATA_TIMEOUT
     if timeout <= 0:
         timeout = DEFAULT_DATA_TIMEOUT
-    # 神机库路径：显式环境变量优先，否则回落默认候选路径
+    # 妙算库路径：显式环境变量优先，否则回落默认候选路径
     explicit_db = source.get(ENV_SHENJI_DB_PATH, "")
     shenji_db_path = explicit_db if explicit_db else _default_shenji_db_path()
     return DataAcquisitionConfig(
@@ -437,6 +485,12 @@ def data_acquisition_config(env: Mapping[str, str] | None = None) -> DataAcquisi
         data_source=source.get(ENV_DATA_SOURCE, ""),
         dukascopy_user=source.get(ENV_DUKASCOPY_USER, ""),
         dukascopy_password=source.get(ENV_DUKASCOPY_PASS, ""),
+        mt4_bridge_host=(source.get(ENV_MT4_BRIDGE_HOST, "") or "").strip()
+        or DEFAULT_MT4_BRIDGE_HOST,
+        mt4_bridge_port=_int_or_default(
+            source.get(ENV_MT4_BRIDGE_PORT, ""), DEFAULT_MT4_BRIDGE_PORT
+        ),
+        mt4_time_base=(source.get(ENV_MT4_TIME_BASE, "") or "").strip() or DEFAULT_MT4_TIME_BASE,
     )
 
 

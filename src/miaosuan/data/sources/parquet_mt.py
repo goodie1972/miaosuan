@@ -25,7 +25,10 @@ __all__ = ["ParquetMTDataSource"]
 
 
 class ParquetMTDataSource(BaseDataSource):
-    """MT4/MT5 导出的 Parquet 行情源。
+    """MT4/MT5 导出的 Parquet 行情源（架构 §2 "每产品一个源"）。
+
+    负责加载 ``{symbol}_{timeframe}.parquet`` 文件，包括来自 **MT4 Bridge** 的实时数据
+    （如 ``XAUUSD_H1_mt4_live.parquet``）和传统网络来源的缓存数据。
 
     :param path: ``{symbol}_{timeframe}.parquet`` 文件路径。
     :param symbols: 品种名（``None`` → 从文件名推断）。

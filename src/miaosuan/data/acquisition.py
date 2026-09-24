@@ -5,7 +5,7 @@
 
 """统一数据获取模块（架构 §3.2）。
 
-将两类数据来源——**神机本地数据库**与**网络下载**——统一封装在
+将两类数据来源——**妙算本地数据库**与**网络下载**——统一封装在
 ``fetch(symbol, timeframe, since=None)`` 接口背后。上层（loader、CLI、
 纸面交易）只调用 ``fetch()``，不感知来源细节。
 
@@ -16,7 +16,7 @@
 
 职责边界：
 * 本模块**只负责取数**——统一抽象来源、处理认证、缓存落地、增量 / 全量决策；
-* **不**做特征计算、**不**碰策略逻辑、**不**写回神机；
+* **不**做特征计算、**不**碰策略逻辑、**不**写回妙算；
 * 取回的原始数据统一落盘为 parquet（沿用 ``loader`` 的 ``infer_symbol_timeframe``
   命名约定），后续由 ``loader.load()`` 加载为 ``Panel``。
 """
@@ -72,6 +72,7 @@ SOURCE_TYPE_OKX = "OKX"
 SOURCE_TYPE_DUKASCOPY = "Dukascopy"
 SOURCE_TYPE_BINANCE = "Binance"
 SOURCE_TYPE_AKSHARE = "AkShare"
+SOURCE_TYPE_MT4 = "MT4"
 SOURCE_TYPE_OTHER = "其他"
 
 #: fetcher 类名 → 数据源类型。新增 fetcher 只需在此登记。
@@ -82,6 +83,7 @@ _FETCHER_TYPE_MAP: dict[str, str] = {
     "DukascopyFetcher": SOURCE_TYPE_DUKASCOPY,
     "BinanceFetcher": SOURCE_TYPE_BINANCE,
     "AkshareFetcher": SOURCE_TYPE_AKSHARE,
+    "MT4BridgeFetcher": SOURCE_TYPE_MT4,
     "TqsdkFetcher": SOURCE_TYPE_OTHER,
 }
 
@@ -160,9 +162,9 @@ class DataSource(ABC):
 
 
 class ShenjiLocalSource(DataSource):
-    """神机本地数据库数据源（委托给 :class:`ShenjiDBFetcher`）。
+    """妙算本地数据库数据源（委托给 :class:`ShenjiDBFetcher`）。
 
-    通过神机落库的只读 SQLite 读取行情。``db_path`` 解析优先级：
+    通过妙算落库的只读 SQLite 读取行情。``db_path`` 解析优先级：
     构造参数 > ``DataAcquisitionConfig.shenji_db_path``（含默认候选路径）。
     实际读库逻辑全部在 :class:`~miaosuan.data.fetchers.ShenjiDBFetcher`，
     本类仅做配置解析与「不可用即报错」的兼容处理（保持 ``DataSource`` 契约）。
@@ -189,7 +191,7 @@ class ShenjiLocalSource(DataSource):
 
     def fetch_full(self, symbol: str, timeframe: str) -> pd.DataFrame:
         if self._fetcher is None or not self._fetcher.is_available():
-            raise DataError("神机本地数据库不可用：未配置 db_path")
+            raise DataError("妙算本地数据库不可用：未配置 db_path")
         df = self._fetcher.fetch_full(symbol, timeframe)
         return self._validate_df(df, symbol=symbol, timeframe=timeframe)
 
@@ -197,7 +199,7 @@ class ShenjiLocalSource(DataSource):
         self, symbol: str, timeframe: str, since_ts: int
     ) -> pd.DataFrame:
         if self._fetcher is None or not self._fetcher.is_available():
-            raise DataError("神机本地数据库不可用：未配置 db_path")
+            raise DataError("妙算本地数据库不可用：未配置 db_path")
         df = self._fetcher.fetch_incremental(symbol, timeframe, since_ts)
         if df is None or len(df) == 0:
             return pd.DataFrame()
@@ -223,6 +225,9 @@ class NetworkSource(DataSource):
         timeout: int | None = None,
         dukascopy_user: str | None = None,
         dukascopy_password: str | None = None,
+        mt4_bridge_host: str | None = None,
+        mt4_bridge_port: int | None = None,
+        mt4_time_base: str | None = None,
     ) -> None:
         cfg = data_acquisition_config()
         self._base_url: str | None = (
@@ -233,6 +238,11 @@ class NetworkSource(DataSource):
         self._sources: list[BaseFetcher] = list_network_sources(
             dukascopy_user=dukascopy_user or cfg.dukascopy_user or None,
             dukascopy_password=dukascopy_password or cfg.dukascopy_password or None,
+            mt4_bridge_host=mt4_bridge_host
+            if mt4_bridge_host is not None
+            else (cfg.mt4_bridge_host or None),
+            mt4_bridge_port=mt4_bridge_port or cfg.mt4_bridge_port,
+            mt4_time_base=mt4_time_base or cfg.mt4_time_base or None,
         )
 
     def is_available(self) -> bool:
@@ -479,7 +489,7 @@ class GenericHttpSource(DataSource):
 def _build_default_sources() -> list[DataSource]:
     """构造默认数据源注册表：每个数据源按类型**独立**成项。
 
-    * 神机本地库 → ``Shenji``
+    * 妙算本地库 → ``Shenji``
     * 通用 HTTP 接口（若配置） → ``其他``
     * 每个网络 fetcher → 各自独立来源（TradingView / OKX / Dukascopy / 其他）
 
@@ -495,6 +505,9 @@ def _build_default_sources() -> list[DataSource]:
     for fetcher in all_network_sources(
         dukascopy_user=cfg.dukascopy_user or None,
         dukascopy_password=cfg.dukascopy_password or None,
+        mt4_bridge_host=cfg.mt4_bridge_host or None,
+        mt4_bridge_port=cfg.mt4_bridge_port,
+        mt4_time_base=cfg.mt4_time_base or None,
     ):
         sources.append(TypedNetworkSource(fetcher))
     return sources
@@ -687,7 +700,7 @@ def _scan_cache_dirs(cache_dirs: tuple[Path, ...]) -> list[dict[str, Any]]:
 class DataAcquisition:
     """统一数据获取管理器。
 
-    按优先级尝试已配置的来源（神机本地库优先 > 网络下载），
+    按优先级尝试已配置的来源（妙算本地库优先 > 网络下载），
     自动完成增量 / 全量决策，结果落盘为 parquet 缓存。
 
     Usage::
