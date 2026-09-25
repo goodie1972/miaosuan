@@ -13,3 +13,4 @@
   基线：939 passed / 3 skipped / 0 failed。
 - 本项目的系统性弱点是**静默失败**：已三度踩坑——Dukascopy `except DataError: break` 把网络不通报成"无数据"；`acquisition.py` 四处 `except Exception: pass/continue` 丢光失败原因；OKX `fetch_full` 丢弃入参 symbol 恒用默认品种（取到错数据且不报错）。**新增数据源/错误分支时，务必让失败可见**：错误向上抛、原因进消息、依赖缺失要提示怎么装。
 - 依赖纪律：`fastapi`/`uvicorn` 属于 `web` extra，`tvdatafeed`/`akshare`/`tqsdk`/`websocket-client` 属于 `datasource` extra，均在 pyproject 显式声明；惰性 import 缺失时 `describe()` 必须给可行动提示，禁止静默返回 False。env 读取只允许在 `config.py`/`cli.py`，新增硬编码路径要配套 accessor（如 `MIAOSUAN_KLINE_DIR`）。
+- **Spec 管理方案**（2026-09-25 设计，文档 `docs/spec-management.md`）：核心设计为新增 `SpecRegistry`（`artifacts/spec_registry.json`）作为独立索引层，不侵入 spec 四段结构。Provenance 计划新增 `parent_spec_id`/`lineage`/`derivation` 三字段（向后兼容）。当前缺口：无 spec 索引/注册表、无谱系追踪、无 spec↔.py 反向映射、tune 不产出派生 spec。实施分四阶段：registry 基础 → 谱系追踪 → 回测/tune 记录 → 导出策略与自动化。
