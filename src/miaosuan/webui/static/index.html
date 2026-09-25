@@ -24,10 +24,10 @@
   --down: #f6465d;
   --warn: #f0a020;
   --info: #1e70bf;
-  /* 字号 */
-  --fs-base: 15px;
-  --fs-small: 13px;
-  --fs-tiny: 12px;
+  /* 字号（+2px 统一放大） */
+  --fs-base: 17px;
+  --fs-small: 15px;
+  --fs-tiny: 14px;
   /* 圆角 */
   --r-card: 12px;
   --r-btn: 8px;
@@ -96,6 +96,7 @@ header {
   position: sticky; top: 0; z-index: 50;
   background: var(--panel); border-bottom: 1px solid var(--line);
   padding: 12px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  font-weight: 600;
 }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand .mark {
@@ -137,6 +138,7 @@ button.ghost { background: transparent; }
 nav {
   position: relative; display: flex; gap: 4px;
   background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 24px;
+  font-weight: 600;
 }
 nav button {
   position: relative; border: 0; border-radius: 0; background: transparent;
@@ -260,6 +262,20 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
   .modal-title.err { color:var(--down); }
   .modal-body { font-size:13px; line-height:1.7; word-break:break-all; }
   .modal-foot { margin-top:16px; text-align:right; }
+  /* ── Spec 管理：谱系树 ── */
+  .lineage-tree { font-size: var(--fs-small); line-height: 1.8; }
+  .lineage-node {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 12px; border-radius: var(--r-ctrl);
+    background: var(--surface); border: 1px solid var(--line);
+    margin: 4px 0;
+  }
+  .lineage-node.current { border-color: var(--gold); background: rgba(240,185,11,.12); }
+  .lineage-node.clickable { cursor: pointer; }
+  .lineage-node.clickable:hover { border-color: var(--gold); }
+  .lineage-arrow { color: var(--ink-3); padding: 0 6px; }
+  .lineage-detail { color: var(--ink-2); font-size: var(--fs-tiny); margin-left: 8px; }
+  .lineage-children { margin-left: 28px; border-left: 2px solid var(--line-subtle); padding-left: 12px; }
 </style>
 </head>
 <body>
@@ -284,6 +300,7 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
   <button data-view="backtest"><span class="step-no">02</span>回测</button>
   <button data-view="live"><span class="step-no">03</span>实时</button>
   <button data-view="tune"><span class="step-no">04</span>调优</button>
+  <button data-view="specs"><span class="step-no">05</span>Spec 管理</button>
 </nav>
 
 <main>
@@ -399,7 +416,7 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
     </section>
 
     <section class="card">
-      <h2>⑦ 门禁与谱系 <span class="hint">— 妙算相对 AM 的差异优势</span></h2>
+      <h2>⑦ 门禁与谱系 <span class="hint">— 门禁结论与溯源信息</span></h2>
       <div class="kv" id="lineageKv">
         <div><div class="k">门禁结论</div><div class="v" id="lGate">—</div></div>
         <div><div class="k">触发原因</div><div class="v" id="lReasons">—</div></div>
@@ -605,6 +622,124 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
       <div id="tuneHistory" class="empty">加载中…</div>
     </section>
   </div>
+
+  <!-- ══ 05 Spec 管理 ════════════════════════════════════════════════ -->
+  <div class="view" id="view-specs">
+
+    <!-- ① 概览统计 -->
+    <section class="card">
+      <h2>① 概览 <span class="hint">— Spec 全景统计</span></h2>
+      <div class="kv" id="spmSummary">
+        <div><div class="k">Spec 总数</div><div class="v" id="spmTotalSpecs">—</div></div>
+        <div><div class="k">导出策略数</div><div class="v" id="spmTotalStrategies">—</div></div>
+        <div><div class="k">回测次数</div><div class="v" id="spmTotalBacktests">—</div></div>
+        <div><div class="k">寻优次数</div><div class="v" id="spmTotalTunes">—</div></div>
+        <div><div class="k">DEPLOYABLE</div><div class="v up" id="spmDeployable">—</div></div>
+        <div><div class="k">BLOCKED</div><div class="v down" id="spmBlocked">—</div></div>
+        <div><div class="k">RESEARCH_ONLY</div><div class="v gold" id="spmResearch">—</div></div>
+        <div><div class="k">已导出 Spec</div><div class="v" id="spmExported">—</div></div>
+      </div>
+    </section>
+
+    <!-- ② Spec 列表 -->
+    <section class="card">
+      <h2>② Spec 列表 <span class="hint">— 点击查看详情 / 谱系 / 关联</span></h2>
+      <div class="row" style="margin-bottom:10px">
+        <div style="flex:2"><label>搜索（名称 / spec_id / 文件）</label><input id="spmSearch" placeholder="输入关键字过滤…"></div>
+        <div style="flex:1"><label>门禁筛选</label>
+          <select id="spmFilter">
+            <option value="">全部</option>
+            <option value="DEPLOYABLE">DEPLOYABLE</option>
+            <option value="BLOCKED">BLOCKED</option>
+            <option value="RESEARCH_ONLY">RESEARCH_ONLY</option>
+            <option value="exported">已导出</option>
+            <option value="not_exported">未导出</option>
+          </select>
+        </div>
+        <div style="flex:0"><button id="btnSpmRefresh" class="ghost">刷新</button></div>
+      </div>
+      <div id="spmList" class="empty">加载中…</div>
+    </section>
+
+    <!-- ③ Spec 详情（选中后显示） -->
+    <div id="spmDetailContainer" style="display:none">
+
+      <!-- 四段结构 -->
+      <section class="card">
+        <h2>③ Spec 详情 <span class="hint" id="spmDetailTitle">— </span></h2>
+
+        <!-- Payload -->
+        <div style="margin-top:12px"><div class="k" style="margin-bottom:6px">Payload（因子体）</div></div>
+        <div class="kv">
+          <div><div class="k">spec_id</div><div class="v mono" id="spmSpecId">—</div></div>
+          <div><div class="k">token 数</div><div class="v" id="spmNTokens">—</div></div>
+          <div style="grid-column:1/-1"><div class="k">公式（可读形式）</div><div class="v formula-box" id="spmFormula" style="min-height:40px">—</div></div>
+          <div><div class="k">词表版本</div><div class="v mono" id="spmVocab">—</div></div>
+          <div><div class="k">文件路径</div><div class="v mono tiny" id="spmFile">—</div></div>
+        </div>
+
+        <!-- Semantics -->
+        <div style="margin-top:14px"><div class="k" style="margin-bottom:6px">Semantics（语义）</div></div>
+        <div class="kv">
+          <div><div class="k">仓位函数</div><div class="v" id="spmPosFn">—</div></div>
+          <div><div class="k">中性带</div><div class="v" id="spmNeutralBand">—</div></div>
+          <div><div class="k">多空开关</div><div class="v" id="spmLongShort">—</div></div>
+          <div><div class="k">预热根数</div><div class="v" id="spmWarmup">—</div></div>
+          <div><div class="k">周期</div><div class="v" id="spmTimeframe">—</div></div>
+          <div><div class="k">滚动窗口</div><div class="v" id="spmRollWindow">—</div></div>
+        </div>
+
+        <!-- Evidence -->
+        <div style="margin-top:14px"><div class="k" style="margin-bottom:6px">Evidence（证据）</div></div>
+        <div class="kv">
+          <div><div class="k">门禁结论</div><div class="v" id="spmGate">—</div></div>
+          <div><div class="k">触发原因</div><div class="v" id="spmGateReasons">—</div></div>
+          <div><div class="k">val_score</div><div class="v" id="spmValScore">—</div></div>
+          <div><div class="k">DSR</div><div class="v" id="spmDsr">—</div></div>
+          <div><div class="k">试验次数</div><div class="v" id="spmNTrials">—</div></div>
+          <div><div class="k">WF 折数</div><div class="v" id="spmWfFolds">—</div></div>
+          <div><div class="k">hold-out 夏普</div><div class="v" id="spmHoldout">—</div></div>
+          <div style="grid-column:1/-1"><div class="k">成本敏感度</div><div class="v mono tiny" id="spmCostSensitivity">—</div></div>
+        </div>
+
+        <!-- Provenance -->
+        <div style="margin-top:14px"><div class="k" style="margin-bottom:6px">Provenance（溯源）</div></div>
+        <div class="kv">
+          <div><div class="k">生成时刻</div><div class="v" id="spmCreatedAt">—</div></div>
+          <div><div class="k">git sha</div><div class="v mono" id="spmGitSha">—</div></div>
+          <div><div class="k">数据指纹</div><div class="v mono tiny" id="spmDataFp">—</div></div>
+          <div><div class="k">随机种子</div><div class="v" id="spmSeed">—</div></div>
+          <div><div class="k">市场画像</div><div class="v" id="spmMarket">—</div></div>
+          <div><div class="k">预算档位</div><div class="v" id="spmBudget">—</div></div>
+        </div>
+      </section>
+
+      <!-- 谱系树 -->
+      <section class="card">
+        <h2>④ 谱系 <span class="hint">— 派生关系链</span></h2>
+        <div id="spmLineage" class="empty">当前 Spec 为根节点（mine 产出，无父 Spec）。</div>
+      </section>
+
+      <!-- 导出记录 -->
+      <section class="card">
+        <h2>⑤ 导出记录 <span class="hint">— 该 Spec 产出的所有 .py 策略</span></h2>
+        <div id="spmExports" class="empty">无导出记录。</div>
+      </section>
+
+      <!-- 回测记录 -->
+      <section class="card">
+        <h2>⑥ 回测记录 <span class="hint">— 该 Spec 的所有回测结果</span></h2>
+        <div id="spmBacktests" class="empty">无回测记录。</div>
+      </section>
+
+      <!-- 寻优记录 -->
+      <section class="card">
+        <h2>⑦ 寻优记录 <span class="hint">— 该 Spec 的所有调优试验</span></h2>
+        <div id="spmTunes" class="empty">无寻优记录。</div>
+      </section>
+
+    </div>
+  </div>
 </main>
 
 <script>
@@ -678,7 +813,7 @@ var TRANSLATIONS = {
     formulaDefault: "（尚无结果）",
     btnCopy: "复制公式",
     step7Title: "⑦ 门禁与谱系",
-    step7Hint: "— 妙算相对 AM 的差异优势",
+    step7Hint: "— 门禁结论与溯源信息",
     lGate: "门禁结论",
     lReasons: "触发原因",
     lGit: "git sha",
@@ -776,6 +911,34 @@ var TRANSLATIONS = {
     helpBlockedDesc: "未通过实盘门禁：导出文件会被强制打上 <span class=\"mono\">RESEARCH_ONLY</span> 警示块、",
     helpVocab: "词表冻结锁（VOCAB_VERSION）的作用",
     helpVocabDesc: "token 只在<b>同一词表</b>下有意义。导出文件内嵌 <span class=\"mono\">VOCAB_VERSION</span>，",
+    // Spec 管理
+    navSpecs: "Spec 管理",
+    spmOverviewTitle: "① 概览",
+    spmOverviewHint: "— Spec 全景统计",
+    spmListTitle: "② Spec 列表",
+    spmListHint: "— 点击查看详情 / 谱系 / 关联",
+    spmDetailTitle: "③ Spec 详情",
+    spmLineageTitle: "④ 谱系",
+    spmLineageHint: "— 派生关系链",
+    spmExportsTitle: "⑤ 导出记录",
+    spmExportsHint: "— 该 Spec 产出的所有 .py 策略",
+    spmBacktestsTitle: "⑥ 回测记录",
+    spmBacktestsHint: "— 该 Spec 的所有回测结果",
+    spmTunesTitle: "⑦ 寻优记录",
+    spmTunesHint: "— 该 Spec 的所有调优试验",
+    spmTotalSpecs: "Spec 总数",
+    spmTotalStrategies: "导出策略数",
+    spmTotalBacktests: "回测次数",
+    spmTotalTunes: "寻优次数",
+    spmSearchPlaceholder: "输入关键字过滤…",
+    spmNoExports: "无导出记录",
+    spmNoBacktests: "无回测记录",
+    spmNoTunes: "无寻优记录",
+    spmLineageRoot: "当前 Spec 为根节点（mine 产出，无父 Spec）",
+    spmPayload: "Payload（因子体）",
+    spmSemantics: "Semantics（语义）",
+    spmEvidence: "Evidence（证据）",
+    spmProvenance: "Provenance（溯源）",
   },
   en: {
     title: "MiaoSuan · Factor Mining Center",
@@ -826,7 +989,7 @@ var TRANSLATIONS = {
     formulaDefault: "(No result yet)",
     btnCopy: "Copy Formula",
     step7Title: "⑦ Gate & Provenance",
-    step7Hint: "— MiaoSuan vs AM differentiation",
+    step7Hint: "— Gate verdict & provenance",
     lGate: "Gate Verdict",
     lReasons: "Trigger Reasons",
     lGit: "Git SHA",
@@ -924,6 +1087,34 @@ var TRANSLATIONS = {
     helpBlockedDesc: "Failed live gate: exported file gets <span class=\"mono\">RESEARCH_ONLY</span> tag,",
     helpVocab: "Vocab frozen lock (VOCAB_VERSION)",
     helpVocabDesc: "Tokens only make sense under the <b>same vocabulary</b>. Exported files embed <span class=\"mono\">VOCAB_VERSION</span>,",
+    // Spec Management
+    navSpecs: "Specs",
+    spmOverviewTitle: "① Overview",
+    spmOverviewHint: "— Spec panorama statistics",
+    spmListTitle: "② Spec List",
+    spmListHint: "— Click for details / lineage / relations",
+    spmDetailTitle: "③ Spec Detail",
+    spmLineageTitle: "④ Lineage",
+    spmLineageHint: "— Derivation chain",
+    spmExportsTitle: "⑤ Export Records",
+    spmExportsHint: "— All .py strategies from this spec",
+    spmBacktestsTitle: "⑥ Backtest Records",
+    spmBacktestsHint: "— All backtests for this spec",
+    spmTunesTitle: "⑦ Tune Records",
+    spmTunesHint: "— All tuning trials for this spec",
+    spmTotalSpecs: "Total Specs",
+    spmTotalStrategies: "Exported Strategies",
+    spmTotalBacktests: "Backtests",
+    spmTotalTunes: "Tunes",
+    spmSearchPlaceholder: "Filter by keyword…",
+    spmNoExports: "No exports",
+    spmNoBacktests: "No backtests",
+    spmNoTunes: "No tunes",
+    spmLineageRoot: "Root node (mine output, no parent)",
+    spmPayload: "Payload (Factor)",
+    spmSemantics: "Semantics",
+    spmEvidence: "Evidence",
+    spmProvenance: "Provenance",
   }
 };
 
@@ -972,6 +1163,7 @@ function applyLanguage() {
     if (view === "backtest") btn.innerHTML = '<span class="step-no">02</span>' + t("navBacktest");
     if (view === "live") btn.innerHTML = '<span class="step-no">03</span>' + t("navLive");
     if (view === "tune") btn.innerHTML = '<span class="step-no">04</span>' + t("navTune");
+    if (view === "specs") btn.innerHTML = '<span class="step-no">05</span>' + t("navSpecs");
   });
   // KV labels
   var kvPairs = document.querySelectorAll(".kv .k");
@@ -1038,7 +1230,7 @@ function initTheme() {
 /* ── 视图切换 ─────────────────────────────────────────────────────── */
 function setView(v) {
   state.view = v;
-  ["mine", "backtest", "live", "tune"].forEach(function (name) {
+  ["mine", "backtest", "live", "tune", "specs"].forEach(function (name) {
     var el = $("view-" + name);
     if (el) { el.className = "view" + (name === v ? " active" : ""); }
   });
@@ -1049,6 +1241,8 @@ function setView(v) {
   }
   // 03 实时页只在可见时轮询后端（不可见则停，避免空转干扰平台）。
   if (v === "live") { rtSetPolling($("rtPoll").checked); } else { rtSetPolling(false); }
+  // 05 Spec 管理：进入时刷新数据
+  if (v === "specs") { loadSpecMgmt(); }
 }
 
 /* ── 请求封装 ─────────────────────────────────────────────────────── */
@@ -2178,6 +2372,337 @@ function hideModal() {
   $("modal").classList.remove("show");
 }
 
+/* ── 05 Spec 管理 ─────────────────────────────────────────────────── */
+var spmData = { specs: [], strategies: [], backtests: [], tunes: [], summary: {} };
+var spmSelectedFile = null;
+
+function loadSpecMgmt() {
+  jfetch("/api/specs/detail").then(function (data) {
+    spmData = data;
+    renderSpmSummary();
+    renderSpmList();
+  }).catch(function (e) {
+    $("spmList").className = "empty";
+    $("spmList").textContent = "加载失败：" + e.message;
+  });
+}
+
+function renderSpmSummary() {
+  var s = spmData.summary || {};
+  $("spmTotalSpecs").textContent = s.total_specs || 0;
+  $("spmTotalStrategies").textContent = s.total_strategies || 0;
+  $("spmTotalBacktests").textContent = s.total_backtests || 0;
+  $("spmTotalTunes").textContent = s.total_tunes || 0;
+  $("spmDeployable").textContent = s.deployable_count || 0;
+  $("spmBlocked").textContent = s.blocked_count || 0;
+  $("spmResearch").textContent = s.research_only_count || 0;
+  $("spmExported").textContent = s.exported_count || 0;
+}
+
+function renderSpmList() {
+  var search = ($("spmSearch").value || "").toLowerCase().trim();
+  var filter = $("spmFilter").value;
+  var specs = spmData.specs.filter(function (s) {
+    // 搜索过滤
+    if (search) {
+      var haystack = ((s.name || "") + " " + (s.spec_id || "") + " " + (s.file || "") + " " + (s.symbol || "")).toLowerCase();
+      if (haystack.indexOf(search) === -1) return false;
+    }
+    // 门禁/导出过滤
+    if (filter === "DEPLOYABLE" && s.gate_verdict !== "DEPLOYABLE") return false;
+    if (filter === "BLOCKED" && s.gate_verdict !== "BLOCKED") return false;
+    if (filter === "RESEARCH_ONLY" && s.gate_verdict !== "RESEARCH_ONLY") return false;
+    if (filter === "exported" && !(s.exports && s.exports.length)) return false;
+    if (filter === "not_exported" && (s.exports && s.exports.length)) return false;
+    return true;
+  });
+
+  if (!specs.length) {
+    $("spmList").className = "empty";
+    $("spmList").textContent = "（无匹配的 Spec）";
+    return;
+  }
+  $("spmList").className = "";
+  var html = '<div class="tbl-wrap"><table>'
+    + '<tr><th>文件</th><th>名称</th><th>spec_id</th><th>品种</th><th>周期</th>'
+    + '<th>val</th><th>DSR</th><th>门禁</th><th>导出</th><th>回测</th><th>寻优</th>'
+    + '<th>时间</th><th></th></tr>';
+  specs.forEach(function (s) {
+    var nExp = (s.exports && s.exports.length) || 0;
+    var nBt = (s.backtests && s.backtests.length) || 0;
+    var nTu = (s.tunes && s.tunes.length) || 0;
+    html += '<tr>'
+      + '<td class="mono tiny">' + esc(s.file) + '</td>'
+      + '<td>' + esc(s.name || "-") + '</td>'
+      + '<td class="mono tiny">' + esc(s.spec_id ? s.spec_id.substring(0, 12) : "-") + '</td>'
+      + '<td>' + esc(s.symbol || "-") + '</td>'
+      + '<td>' + esc(s.timeframe || "-") + '</td>'
+      + '<td>' + (s.val_score === null || s.val_score === undefined ? "-" : Number(s.val_score).toFixed(4)) + '</td>'
+      + '<td>' + (s.deflated_sharpe === null || s.deflated_sharpe === undefined ? "-" : Number(s.deflated_sharpe).toFixed(4)) + '</td>'
+      + '<td>' + verdictChip(s.gate_verdict) + '</td>'
+      + '<td>' + (nExp ? '<span class="chip ok">' + nExp + '</span>' : '<span class="muted">0</span>') + '</td>'
+      + '<td>' + (nBt ? '<span class="chip">' + nBt + '</span>' : '<span class="muted">0</span>') + '</td>'
+      + '<td>' + (nTu ? '<span class="chip">' + nTu + '</span>' : '<span class="muted">0</span>') + '</td>'
+      + '<td class="tiny muted">' + esc(s.mtime || "") + '</td>'
+      + '<td><button class="ghost" data-spm-file="' + esc(s.file) + '">详情</button></td>'
+      + '</tr>';
+  });
+  html += '</table></div>';
+  $("spmList").innerHTML = html;
+}
+
+function showSpecDetail(file) {
+  spmSelectedFile = file;
+  $("spmDetailContainer").style.display = "";
+  var spec = null;
+  for (var i = 0; i < spmData.specs.length; i++) {
+    if (spmData.specs[i].file === file) { spec = spmData.specs[i]; break; }
+  }
+  if (!spec) return;
+
+  $("spmDetailTitle").textContent = "— " + (spec.name || spec.file);
+
+  // Payload
+  $("spmSpecId").textContent = spec.spec_id || "—";
+  $("spmNTokens").textContent = spec.n_tokens || "—";
+  $("spmFormula").textContent = spec.formula || "—";
+  $("spmVocab").textContent = spec.vocab_version || "—";
+  $("spmFile").textContent = spec.file || "—";
+
+  // Semantics
+  var sem = spec.semantics || {};
+  $("spmPosFn").textContent = sem.position_fn || "—";
+  $("spmNeutralBand").textContent = sem.neutral_band !== undefined ? sem.neutral_band : "—";
+  $("spmLongShort").textContent = sem.long_short ? "是（多空双向）" : "否（仅多头）";
+  $("spmWarmup").textContent = sem.warmup_bars !== undefined ? sem.warmup_bars : "—";
+  $("spmTimeframe").textContent = sem.timeframe || "—";
+  $("spmRollWindow").textContent = sem.roll_window !== undefined ? sem.roll_window : "—";
+
+  // Evidence
+  var ev = spec.evidence || {};
+  $("spmGate").innerHTML = verdictChip(ev.gate_verdict);
+  var reasons = ev.gate_reasons || [];
+  $("spmGateReasons").textContent = reasons.length ? reasons.join(" / ") : "（无）";
+  $("spmValScore").textContent = ev.val_score !== undefined && ev.val_score !== null ? Number(ev.val_score).toFixed(4) : "—";
+  $("spmDsr").textContent = ev.deflated_sharpe !== undefined && ev.deflated_sharpe !== null ? Number(ev.deflated_sharpe).toFixed(4) : "—";
+  $("spmNTrials").textContent = ev.n_trials || "—";
+  $("spmWfFolds").textContent = ev.wf_folds || "—";
+  $("spmHoldout").textContent = ev.holdout_sharpe !== undefined && ev.holdout_sharpe !== null ? Number(ev.holdout_sharpe).toFixed(4) : "未消费";
+  // 成本敏感度
+  var cs = ev.cost_sensitivity || {};
+  var csText = Object.keys(cs).map(function (k) {
+    return k + "x → Sharpe " + Number(cs[k]).toFixed(2);
+  }).join("   |   ");
+  $("spmCostSensitivity").textContent = csText || "—";
+
+  // Provenance
+  var pv = spec.provenance || {};
+  $("spmCreatedAt").textContent = pv.created_at || "—";
+  $("spmGitSha").textContent = pv.git_sha || "—";
+  $("spmDataFp").textContent = pv.data_fingerprint || "—";
+  $("spmSeed").textContent = pv.seed !== undefined && pv.seed !== null ? pv.seed : "—";
+  $("spmMarket").textContent = pv.market || "—";
+  $("spmBudget").textContent = pv.budget || "—";
+
+  // 谱系
+  renderSpmLineage(spec);
+
+  // 导出记录
+  renderSpmExports(spec.exports || []);
+
+  // 回测记录
+  renderSpmBacktests(spec.backtests || []);
+
+  // 寻优记录
+  renderSpmTunes(spec.tunes || []);
+
+  // 滚动到详情区
+  $("spmDetailContainer").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderSpmLineage(spec) {
+  var lineage = spec.lineage || [];
+  var derivation = spec.derivation || "mine";
+  var parent = spec.parent_spec_id;
+
+  if (!parent && (!lineage || !lineage.length)) {
+    // 根节点：查找是否有子 spec（其他 spec 的 parent 指向当前）
+    var children = [];
+    if (spmData.specs) {
+      spmData.specs.forEach(function (s) {
+        if (s.parent_spec_id && s.parent_spec_id === spec.spec_id) {
+          children.push(s);
+        }
+      });
+    }
+    if (!children.length) {
+      $("spmLineage").className = "empty";
+      $("spmLineage").textContent = "当前 Spec 为根节点（mine 产出，无父 Spec，无派生子 Spec）。";
+      return;
+    }
+    // 有子 spec：渲染树
+    $("spmLineage").className = "";
+    var html = '<div class="lineage-tree">';
+    html += '<div class="lineage-node current">'
+      + '<span class="mono">' + esc(spec.name || spec.file) + '</span>'
+      + '<span class="lineage-detail">spec_id: ' + esc((spec.spec_id || "").substring(0, 12)) + '</span>'
+      + verdictChip(spec.gate_verdict)
+      + ' <span class="lineage-detail">(' + esc(derivation) + ')</span>'
+      + '</div>';
+    html += renderSpmChildren(spec, 1);
+    html += '</div>';
+    $("spmLineage").innerHTML = html;
+    return;
+  }
+
+  // 有父 spec：渲染谱系链
+  $("spmLineage").className = "";
+  var html = '<div class="lineage-tree">';
+  if (lineage && lineage.length) {
+    lineage.forEach(function (parentId) {
+      var parentSpec = findSpecById(parentId);
+      html += '<div class="lineage-node' + (parentSpec ? ' clickable' : '') + '"'
+        + (parentSpec ? ' data-spm-file="' + esc(parentSpec.file) + '"' : '') + '>'
+        + '<span class="mono">' + esc(parentSpec ? parentSpec.name : parentId.substring(0, 12)) + '</span>'
+        + (parentSpec ? verdictChip(parentSpec.gate_verdict) : '')
+        + '</div>';
+      html += '<div class="lineage-arrow">↓</div>';
+    });
+  }
+  html += '<div class="lineage-node current">'
+    + '<span class="mono">' + esc(spec.name || spec.file) + '</span>'
+    + '<span class="lineage-detail">spec_id: ' + esc((spec.spec_id || "").substring(0, 12)) + '</span>'
+    + verdictChip(spec.gate_verdict)
+    + ' <span class="lineage-detail">(' + esc(derivation) + ')</span>'
+    + '</div>';
+  // 查找子 spec
+  html += renderSpmChildren(spec, 1);
+  html += '</div>';
+  $("spmLineage").innerHTML = html;
+}
+
+function renderSpmChildren(parentSpec, depth) {
+  if (depth > 10) return ""; // 防止无限递归
+  var children = [];
+  if (spmData.specs) {
+    spmData.specs.forEach(function (s) {
+      if (s.parent_spec_id && s.parent_spec_id === parentSpec.spec_id) {
+        children.push(s);
+      }
+    });
+  }
+  if (!children.length) return "";
+  var html = '<div class="lineage-children">';
+  children.forEach(function (child) {
+    html += '<div class="lineage-node clickable" data-spm-file="' + esc(child.file) + '">'
+      + '<span class="mono">' + esc(child.name || child.file) + '</span>'
+      + '<span class="lineage-detail">spec_id: ' + esc((child.spec_id || "").substring(0, 12)) + '</span>'
+      + verdictChip(child.gate_verdict)
+      + ' <span class="lineage-detail">(' + esc(child.derivation || "mine") + ')</span>'
+      + '</div>';
+    html += renderSpmChildren(child, depth + 1);
+  });
+  html += '</div>';
+  return html;
+}
+
+function findSpecById(specId) {
+  if (!specId || !spmData.specs) return null;
+  for (var i = 0; i < spmData.specs.length; i++) {
+    if (spmData.specs[i].spec_id && spmData.specs[i].spec_id.substring(0, 12) === specId.substring(0, 12)) {
+      return spmData.specs[i];
+    }
+  }
+  return null;
+}
+
+function renderSpmExports(exports) {
+  if (!exports || !exports.length) {
+    $("spmExports").className = "empty";
+    $("spmExports").textContent = "无导出记录。";
+    return;
+  }
+  $("spmExports").className = "";
+  var html = '<div class="tbl-wrap"><table>'
+    + '<tr><th>文件</th><th>magic</th><th>策略名</th><th>可部署</th><th>lint</th><th>大小</th><th>时间</th><th></th></tr>';
+  exports.forEach(function (e) {
+    var l = '<span class="chip ' + (e.lint_errors ? "bad" : "ok") + '">'
+      + e.lint_errors + "E / " + e.lint_warnings + "W</span>";
+    var dep = e.deployable ? '<span class="chip ok">是</span>' : '<span class="chip bad">否</span>';
+    html += '<tr>'
+      + '<td class="mono tiny">' + esc(e.file) + '</td>'
+      + '<td class="mono">' + esc(e.magic) + '</td>'
+      + '<td>' + esc(e.strategy_name || "-") + '</td>'
+      + '<td>' + dep + '</td>'
+      + '<td>' + l + '</td>'
+      + '<td>' + esc(e.size_kb + "KB") + '</td>'
+      + '<td class="tiny muted">' + esc(e.mtime) + '</td>'
+      + '<td><a href="/api/file/' + encodeURIComponent(e.file) + '" download>下载</a></td>'
+      + '</tr>';
+  });
+  html += '</table></div>';
+  $("spmExports").innerHTML = html;
+}
+
+function renderSpmBacktests(backtests) {
+  if (!backtests || !backtests.length) {
+    $("spmBacktests").className = "empty";
+    $("spmBacktests").textContent = "无回测记录。";
+    return;
+  }
+  $("spmBacktests").className = "";
+  var html = '<div class="tbl-wrap"><table>'
+    + '<tr><th>文件</th><th>品种</th><th>周期</th><th>bar数</th><th>Sharpe</th>'
+    + '<th>累计收益</th><th>最大回撤</th><th>Sortino</th><th>交易数</th><th>胜率</th><th>时间</th></tr>';
+  backtests.forEach(function (bt) {
+    html += '<tr>'
+      + '<td class="mono tiny">' + esc(bt.file) + '</td>'
+      + '<td>' + esc(bt.symbol || "-") + '</td>'
+      + '<td>' + esc(bt.timeframe || "-") + '</td>'
+      + '<td>' + esc(bt.n_bars || "-") + '</td>'
+      + '<td>' + Number(bt.sharpe || 0).toFixed(4) + '</td>'
+      + '<td>' + (Number(bt.total_return || 0) * 100).toFixed(2) + '%</td>'
+      + '<td class="down">' + (Number(bt.max_drawdown || 0) * 100).toFixed(2) + '%</td>'
+      + '<td>' + Number(bt.sortino || 0).toFixed(4) + '</td>'
+      + '<td>' + esc(bt.n_trades || "-") + '</td>'
+      + '<td>' + (Number(bt.win_rate || 0) * 100).toFixed(1) + '%</td>'
+      + '<td class="tiny muted">' + esc(bt.mtime) + '</td>'
+      + '</tr>';
+  });
+  html += '</table></div>';
+  $("spmBacktests").innerHTML = html;
+}
+
+function renderSpmTunes(tunes) {
+  if (!tunes || !tunes.length) {
+    $("spmTunes").className = "empty";
+    $("spmTunes").textContent = "无寻优记录。";
+    return;
+  }
+  $("spmTunes").className = "";
+  var html = '<div class="tbl-wrap"><table>'
+    + '<tr><th>文件</th><th>result_id</th><th>试验数</th><th>最优评分</th><th>耗时</th>'
+    + '<th>目标</th><th>最优参数</th><th>时间</th></tr>';
+  tunes.forEach(function (tu) {
+    var params = tu.best_params || {};
+    var paramStr = Object.keys(params).map(function (k) {
+      return k + "=" + (typeof params[k] === "number" ? Number(params[k]).toFixed(4) : params[k]);
+    }).join(", ");
+    html += '<tr>'
+      + '<td class="mono tiny">' + esc(tu.file) + '</td>'
+      + '<td class="mono tiny">' + esc(tu.result_id || "-") + '</td>'
+      + '<td>' + esc(tu.n_trials || "-") + '</td>'
+      + '<td>' + Number(tu.best_score || 0).toFixed(4) + '</td>'
+      + '<td>' + esc((tu.elapsed_sec || 0) + "s") + '</td>'
+      + '<td>' + esc(tu.metric || "-") + '</td>'
+      + '<td class="mono tiny">' + esc(paramStr || "-") + '</td>'
+      + '<td class="tiny muted">' + esc(tu.mtime) + '</td>'
+      + '</tr>';
+  });
+  html += '</table></div>';
+  $("spmTunes").innerHTML = html;
+}
+
 /* ── 绑定 ─────────────────────────────────────────────────────────── */
 function bind() {
   $("btnTheme").onclick = function () {
@@ -2220,6 +2745,21 @@ function bind() {
     $("btnDebug").textContent = state.debug ? "隐藏调试信息" : "显示调试信息";
     if (state.debug) { $("dbgOut").textContent = state.trace.join("\n") || "（暂无记录）"; }
   };
+  // 05 Spec 管理
+  $("btnSpmRefresh").onclick = loadSpecMgmt;
+  $("spmSearch").oninput = renderSpmList;
+  $("spmFilter").onchange = renderSpmList;
+  $("spmList").addEventListener("click", function (ev) {
+    var btn = (ev.target && ev.target.closest) ? ev.target.closest("button[data-spm-file]") : null;
+    if (btn) { showSpecDetail(btn.getAttribute("data-spm-file")); }
+  });
+  $("spmLineage").addEventListener("click", function (ev) {
+    var node = (ev.target && ev.target.closest) ? ev.target.closest(".lineage-node.clickable") : null;
+    if (node) {
+      var file = node.getAttribute("data-spm-file");
+      if (file) { showSpecDetail(file); }
+    }
+  });
   window.onerror = function (msg, src, ln) {
     state.errors.push("JS: " + msg + " @" + src + ":" + ln);
     dbg("JS ERROR " + msg + " @" + src + ":" + ln);
@@ -2239,6 +2779,7 @@ function boot() {
   loadBacktestOptions();   // 02 回测页的下拉（spec / 行情 / 画像）
   loadTuneOptions();       // 04 调优页的下拉（spec / 行情 / 历史）
   loadAcqCached();         // ①ᵇ 数据获取：本地缓存列表（来源在选定画像后加载）
+  loadSpecMgmt();           // 05 Spec 管理：首屏加载全部 spec 数据
   startPolling();
 }
 boot();

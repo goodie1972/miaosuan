@@ -99,10 +99,30 @@ def _cli_process(*args: str) -> list[str]:
 
 
 def _spec_id(path: Path) -> str:
-    """从文件内容派生稳定短 id（spec JSON 本身不携带 spec_id 键）。"""
+    """从 spec 文件内容派生稳定短 id（内容寻址：payload + semantics 的 SHA256 前 16 位）。
+
+    与 :data:`StrategySpec.spec_id` 一致：对 payload + semantics + spec_version
+    做 JSON 规范序列化后取哈希，而非对文件字节取哈希。这样导出的 .py
+    里内嵌的 spec_id 才能与注册表里的条目匹配。
+    """
     import hashlib
 
-    return hashlib.sha256(path.read_bytes()).hexdigest()[:12]
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        # 兜底：文件读不出来或解析失败时退回文件哈希
+        return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+    payload = data.get("payload") or {}
+    semantics = data.get("semantics") or {}
+    spec_version = data.get("spec_version", "1.0")
+    core = {
+        "payload": payload,
+        "semantics": semantics,
+        "spec_version": spec_version,
+    }
+    return hashlib.sha256(
+        json.dumps(core, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    ).hexdigest()[:16]
 
 
 #: 可选市场画像提示（唯一来源 :data:`EXPECTED_PROFILE_NAMES`，此处不复制字符串）。
@@ -762,6 +782,12 @@ def create_app() -> FastAPI:
         payload: dict[str, Any] = json.loads(out_path.read_text(encoding="utf-8"))
         payload["output"] = output
         payload["file"] = out_path.name
+        # 记录回测所用的 spec 文件名，便于 Spec 管理模块关联
+        meta = payload.get("meta") or {}
+        meta["spec_file"] = req.spec
+        payload["meta"] = meta
+        # 同时更新落盘的文件（持久化关联关系）
+        out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         return payload
 
     @app.get("/api/backtests")
@@ -998,5 +1024,312 @@ def create_app() -> FastAPI:
             except (OSError, json.JSONDecodeError):
                 continue
         return out
+
+    # ── Spec 管理模块（谱系 / 映射 / 生命周期）────────────────────────────
+
+    def _extract_py_spec_id(source: str) -> str:
+        """从 .py 源码注释中提取 spec_id（`IR spec id：xxxx`）。"""
+        for line in source.splitlines():
+            if "spec id" in line.lower() or "spec_id" in line.lower():
+                # 匹配 "IR spec id：5d0841b6db9fdca2" 格式
+                for sep in ("：", ":"):
+                    if sep in line:
+                        val = line.rsplit(sep, 1)[-1].strip().strip("*").strip()
+                        if val and all(c in "0123456789abcdef" for c in val[:16]):
+                            return val[:16]
+        return ""
+
+    def _extract_py_name(source: str) -> str:
+        """从 .py 源码提取 STRATEGY_NAME 常量值。"""
+        for line in source.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("STRATEGY_NAME"):
+                val = stripped.partition("=")[2].strip()
+                return val.strip('"').strip("'")
+        return ""
+
+    def _extract_py_deployable(source: str) -> bool:
+        """从 .py 源码提取 DEPLOYABLE 常量值。"""
+        for line in source.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("DEPLOYABLE"):
+                val = stripped.partition("=")[2].strip()
+                return val in ("True", "true", "1")
+        return False
+
+    def _scan_all_specs() -> list[dict[str, Any]]:
+        """扫描 artifacts/ 下所有 spec JSON，返回含 spec_id 的完整列表。"""
+        result: list[dict[str, Any]] = []
+        if not _ARTIFACTS.is_dir():
+            return result
+        for path in sorted(
+            _ARTIFACTS.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True
+        ):
+            if path.name in _EXCLUDED_JSON:
+                continue
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not (isinstance(data, dict) and "payload" in data and "spec_version" in data):
+                continue
+            payload = data.get("payload") or {}
+            tokens = payload.get("tokens") or []
+            evidence = data.get("evidence") or {}
+            provenance = data.get("provenance") or {}
+            semantics = data.get("semantics") or {}
+            snapshot = provenance.get("config_snapshot") or {}
+            # 使用内容寻址 spec_id（与 StrategySpec.spec_id 一致），
+            # 而非文件哈希——这样才能与 .py 内嵌的 spec_id 匹配。
+            core = {
+                "payload": payload,
+                "semantics": semantics,
+                "spec_version": data.get("spec_version", "1.0"),
+            }
+            import hashlib as _hl
+            spec_id = _hl.sha256(
+                json.dumps(core, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+            ).hexdigest()[:16]
+            result.append({
+                "file": path.name,
+                "spec_id": spec_id,
+                "name": data.get("name", ""),
+                "n_tokens": len(tokens),
+                "formula": readable_formula([int(t) for t in tokens][:12]) if tokens else "",
+                "val_score": evidence.get("val_score"),
+                "deflated_sharpe": evidence.get("deflated_sharpe"),
+                "gate_verdict": evidence.get("gate_verdict", ""),
+                "gate_reasons": evidence.get("gate_reasons", []),
+                "vocab_version": payload.get("vocab_version", ""),
+                "symbol": str(snapshot.get("symbol") or ""),
+                "timeframe": str(semantics.get("timeframe") or ""),
+                "created_at": str(provenance.get("created_at") or ""),
+                "market": str(provenance.get("market") or ""),
+                "budget": str(provenance.get("budget") or ""),
+                "git_sha": str(provenance.get("git_sha") or ""),
+                "seed": provenance.get("seed"),
+                "data_fingerprint": str(provenance.get("data_fingerprint") or ""),
+                "mtime": time.strftime("%Y-%m-%d %H:%M", time.localtime(path.stat().st_mtime)),
+                "payload": payload,
+                "semantics": semantics,
+                "evidence": evidence,
+                "provenance": provenance,
+                "notes": data.get("notes", ""),
+            })
+        return result
+
+    def _scan_all_strategies() -> list[dict[str, Any]]:
+        """扫描 artifacts/ + shenji-strategies/ 下所有 .py 策略文件。"""
+        result: list[dict[str, Any]] = []
+        search_dirs = [_ARTIFACTS, _REPO_ROOT / "shenji-strategies"]
+        seen: set[Path] = set()
+        for directory in search_dirs:
+            if not directory.is_dir():
+                continue
+            for path in sorted(
+                directory.glob("*.py"), key=lambda p: p.stat().st_mtime, reverse=True
+            ):
+                if path in seen:
+                    continue
+                seen.add(path)
+                try:
+                    source = path.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    continue
+                magic = _strategy_magic(source)
+                if not magic:
+                    continue
+                issues = lint_source(source)
+                spec_id = _extract_py_spec_id(source)
+                str_name = _extract_py_name(source)
+                deployable = _extract_py_deployable(source)
+                # 相对路径
+                try:
+                    rel = str(path.relative_to(_REPO_ROOT)).replace("\\", "/")
+                except ValueError:
+                    rel = path.name
+                result.append({
+                    "file": path.name,
+                    "rel_path": rel,
+                    "magic": magic,
+                    "spec_id": spec_id,
+                    "strategy_name": str_name,
+                    "deployable": deployable,
+                    "lint_errors": sum(1 for i in issues if i.severity.value == "ERROR"),
+                    "lint_warnings": sum(1 for i in issues if i.severity.value == "WARNING"),
+                    "size_kb": round(path.stat().st_size / 1024, 1),
+                    "mtime": time.strftime("%Y-%m-%d %H:%M", time.localtime(path.stat().st_mtime)),
+                    "dir": "shenji-strategies" if "shenji-strategies" in str(path) else "artifacts",
+                })
+        return result
+
+    def _scan_all_backtests() -> list[dict[str, Any]]:
+        """扫描 artifacts/ 下所有回测结果。"""
+        result: list[dict[str, Any]] = []
+        if not _ARTIFACTS.is_dir():
+            return result
+        for path in sorted(
+            _ARTIFACTS.glob("backtest_*.json"), key=lambda p: p.stat().st_mtime, reverse=True
+        ):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            meta = payload.get("meta", {}) if isinstance(payload.get("meta"), dict) else {}
+            summary = payload.get("summary", {}) if isinstance(payload.get("summary"), dict) else {}
+            # 尝试从 meta.spec_file 反查 spec_id
+            spec_file = str(meta.get("spec_file") or meta.get("spec") or "")
+            result.append({
+                "file": path.name,
+                "spec_file": spec_file,
+                "symbol": str(meta.get("symbol", "")),
+                "timeframe": str(meta.get("timeframe", "")),
+                "n_bars": int(meta.get("n_bars", 0) or 0),
+                "sharpe": float(summary.get("sharpe", 0.0) or 0.0),
+                "total_return": float(summary.get("total_return", 0.0) or 0.0),
+                "max_drawdown": float(summary.get("max_drawdown", 0.0) or 0.0),
+                "sortino": float(summary.get("sortino", 0.0) or 0.0),
+                "n_trades": int(summary.get("n_trades", 0) or 0),
+                "win_rate": float(summary.get("win_rate", 0.0) or 0.0),
+                "mtime": time.strftime("%Y-%m-%d %H:%M", time.localtime(path.stat().st_mtime)),
+            })
+        return result
+
+    def _scan_all_tunes() -> list[dict[str, Any]]:
+        """扫描 artifacts/tune/ 下所有寻优结果。"""
+        result: list[dict[str, Any]] = []
+        tune_dir = _ARTIFACTS / "tune"
+        if not tune_dir.is_dir():
+            return result
+        for path in sorted(
+            tune_dir.glob("tune_*.json"), key=lambda p: p.stat().st_mtime, reverse=True
+        ):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            config = data.get("config", {}) if isinstance(data.get("config"), dict) else {}
+            result.append({
+                "file": path.name,
+                "result_id": data.get("result_id", ""),
+                "spec_path": str(config.get("spec_path") or ""),
+                "n_trials": data.get("n_trials", 0),
+                "best_score": float(data.get("best", {}).get("score", 0.0) or 0.0),
+                "elapsed_sec": float(data.get("elapsed_sec", 0) or 0),
+                "best_params": dict(data.get("best", {}).get("params", {})),
+                "metric": str(config.get("metric") or ""),
+                "mtime": time.strftime("%Y-%m-%d %H:%M", time.localtime(path.stat().st_mtime)),
+            })
+        return result
+
+    @app.get("/api/specs/detail")
+    def specs_detail() -> dict[str, Any]:
+        """Spec 管理总览：所有 spec + 所有策略 + 所有回测 + 所有寻优 + 映射关系。"""
+        specs = _scan_all_specs()
+        strategies = _scan_all_strategies()
+        backtests = _scan_all_backtests()
+        tunes = _scan_all_tunes()
+
+        # 构建映射：spec_id → 关联的策略 / 回测 / 寻优
+        for spec in specs:
+            sid = spec["spec_id"]
+            spec_file = spec["file"]
+            # 关联导出的 .py
+            spec["exports"] = [
+                s for s in strategies
+                if s.get("spec_id") == sid or _spec_matches_file(s.get("spec_id", ""), sid, spec_file)
+            ]
+            # 关联回测
+            spec["backtests"] = [
+                bt for bt in backtests
+                if bt.get("spec_file") == spec_file
+            ]
+            # 关联寻优
+            spec["tunes"] = [
+                tu for tu in tunes
+                if spec_file in tu.get("spec_path", "")
+            ]
+            # 谱系信息（从 provenance 提取，当前为空，预留）
+            prov = spec.get("provenance") or {}
+            spec["parent_spec_id"] = prov.get("parent_spec_id")
+            spec["lineage"] = prov.get("lineage", [])
+            spec["derivation"] = prov.get("derivation", "mine")
+
+        # 统计摘要
+        summary = {
+            "total_specs": len(specs),
+            "total_strategies": len(strategies),
+            "total_backtests": len(backtests),
+            "total_tunes": len(tunes),
+            "deployable_count": sum(1 for s in specs if s.get("gate_verdict") == "DEPLOYABLE"),
+            "blocked_count": sum(1 for s in specs if s.get("gate_verdict") == "BLOCKED"),
+            "research_only_count": sum(1 for s in specs if s.get("gate_verdict") == "RESEARCH_ONLY"),
+            "exported_count": sum(1 for s in specs if s.get("exports")),
+        }
+
+        return {
+            "specs": specs,
+            "strategies": strategies,
+            "backtests": backtests,
+            "tunes": tunes,
+            "summary": summary,
+        }
+
+    def _spec_matches_file(py_spec_id: str, registry_spec_id: str, spec_file: str) -> bool:
+        """判断 .py 内嵌的 spec_id 是否匹配某个 spec 文件。"""
+        if py_spec_id and registry_spec_id:
+            # 如果 .py 有 spec_id，比较前 12 位（_spec_id 返回 12 位）
+            return py_spec_id[:12] == registry_spec_id[:12]
+        return False
+
+    @app.get("/api/specs/{spec_file}/relations")
+    def spec_relations(spec_file: str) -> dict[str, Any]:
+        """单个 spec 的完整关系视图：关联的导出 / 回测 / 寻优 / 谱系。"""
+        path = _safe_name(spec_file, suffixes={".json"})
+        try:
+            data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise HTTPException(status_code=400, detail=f"spec 解析失败：{exc}") from exc
+
+        spec_id = _spec_id(path)
+        all_strategies = _scan_all_strategies()
+        all_backtests = _scan_all_backtests()
+        all_tunes = _scan_all_tunes()
+
+        exports = [
+            s for s in all_strategies
+            if s.get("spec_id")[:12] == spec_id[:12]
+        ]
+        backtests = [
+            bt for bt in all_backtests
+            if bt.get("spec_file") == spec_file
+        ]
+        tunes = [
+            tu for tu in all_tunes
+            if spec_file in tu.get("spec_path", "")
+        ]
+
+        # 谱系（当前 provenance 没有 lineage 字段，预留）
+        prov = data.get("provenance") or {}
+        parent_spec_id = prov.get("parent_spec_id")
+        lineage = prov.get("lineage", [])
+        derivation = prov.get("derivation", "mine")
+
+        return {
+            "spec_file": spec_file,
+            "spec_id": spec_id,
+            "name": data.get("name", ""),
+            "exports": exports,
+            "backtests": backtests,
+            "tunes": tunes,
+            "parent_spec_id": parent_spec_id,
+            "lineage": lineage,
+            "derivation": derivation,
+        }
+
+    @app.get("/api/specs/{name}")
+    def get_spec_plural(name: str) -> dict[str, Any]:
+        """向后兼容：复数形式 /api/specs/{name} 重定向到单数形式逻辑。"""
+        return get_spec(name)
 
     return app
