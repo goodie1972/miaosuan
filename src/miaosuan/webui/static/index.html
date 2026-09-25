@@ -276,6 +276,22 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
   .lineage-arrow { color: var(--ink-3); padding: 0 6px; }
   .lineage-detail { color: var(--ink-2); font-size: var(--fs-tiny); margin-left: 8px; }
   .lineage-children { margin-left: 28px; border-left: 2px solid var(--line-subtle); padding-left: 12px; }
+
+  /* Spec 列表：最多 10 行、超出滚动；选中行黄底 */
+  #spmList .tbl-wrap { max-height: 380px; overflow-y: auto; }
+  #spmList table { width: 100%; }
+  #spmList tr.spm-selected {
+    background: var(--gold) !important;
+  }
+  #spmList tr.spm-selected td,
+  #spmList tr.spm-selected th {
+    color: #0d1117 !important;
+    background: var(--gold) !important;
+  }
+  #spmList tr.spm-selected .chip.ok { color: #0d1117; border-color: #0d1117; }
+  #spmList tr.spm-selected .chip.bad { color: #0d1117; border-color: #0d1117; }
+  #spmList tr.spm-selected .chip { color: #0d1117; border-color: #0d1117; }
+  #spmList tr.spm-selected .muted { color: rgba(13,17,23,.7) !important; }
 </style>
 </head>
 <body>
@@ -2431,7 +2447,9 @@ function renderSpmList() {
     var nExp = (s.exports && s.exports.length) || 0;
     var nBt = (s.backtests && s.backtests.length) || 0;
     var nTu = (s.tunes && s.tunes.length) || 0;
-    html += '<tr>'
+    var isSelected = spmSelectedFile && s.file === spmSelectedFile;
+    var rowClass = isSelected ? ' class="spm-selected"' : '';
+    html += '<tr' + rowClass + '>'
       + '<td class="mono tiny">' + esc(s.file) + '</td>'
       + '<td>' + esc(s.name || "-") + '</td>'
       + '<td class="mono tiny">' + esc(s.spec_id ? s.spec_id.substring(0, 12) : "-") + '</td>'
@@ -2460,7 +2478,7 @@ function showSpecDetail(file) {
   }
   if (!spec) return;
 
-  $("spmDetailTitle").textContent = "— " + (spec.name || spec.file);
+  $("spmDetailTitle").innerHTML = "— <strong>" + esc(spec.name || spec.file) + "</strong>";
 
   // Payload
   $("spmSpecId").textContent = spec.spec_id || "—";
@@ -2515,6 +2533,9 @@ function showSpecDetail(file) {
 
   // 寻优记录
   renderSpmTunes(spec.tunes || []);
+
+  // 刷新列表以高亮选中行
+  renderSpmList();
 
   // 滚动到详情区
   $("spmDetailContainer").scrollIntoView({ behavior: "smooth", block: "start" });
