@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import socket
 import ssl
+from typing import Any
 
 import pandas as pd
 
@@ -139,10 +140,7 @@ class TradingViewFetcher(BaseFetcher):
         except Exception:
             return False
         try:
-            req = (
-                f"CONNECT {TV_HOST}:{TV_PORT} HTTP/1.1\r\n"
-                f"Host: {TV_HOST}:{TV_PORT}\r\n\r\n"
-            )
+            req = f"CONNECT {TV_HOST}:{TV_PORT} HTTP/1.1\r\nHost: {TV_HOST}:{TV_PORT}\r\n\r\n"
             s.sendall(req.encode())
             resp = s.recv(4096)
             head = resp.split(b"\r\n", 1)[0]
@@ -160,7 +158,7 @@ class TradingViewFetcher(BaseFetcher):
         """从 Windows 系统代理注册表读取代理（不读环境变量）。"""
         cands: list[str] = []
         try:
-            import winreg  # type: ignore
+            import winreg
         except Exception:
             return cands
         try:
@@ -187,9 +185,7 @@ class TradingViewFetcher(BaseFetcher):
             return self._proxy
         if self._tls_ok(self._timeout):
             return None
-        candidates: list[str] = [
-            f"http://127.0.0.1:{port}" for port in _PROXY_PORTS
-        ]
+        candidates: list[str] = [f"http://127.0.0.1:{port}" for port in _PROXY_PORTS]
         candidates.extend(self._system_proxy_candidates())
         for cand in candidates:
             if self._proxy_tunnel_ok(cand, self._timeout):
@@ -216,7 +212,7 @@ class TradingViewFetcher(BaseFetcher):
             ) from exc
         orig = websocket.create_connection
 
-        def patched(url, *args, **kw):
+        def patched(url: str, *args: Any, **kw: Any) -> Any:
             kw.setdefault("http_proxy_host", ph)
             kw.setdefault("http_proxy_port", pp)
             if auth:
@@ -231,7 +227,7 @@ class TradingViewFetcher(BaseFetcher):
     # ── 拉取 ─────────────────────────────────────────────────────────────
 
     @staticmethod
-    def _import_tv():
+    def _import_tv() -> tuple[Any, Any]:
         try:
             from tvDatafeed import Interval, TvDatafeed
         except ImportError as exc:
@@ -283,9 +279,7 @@ class TradingViewFetcher(BaseFetcher):
                 break
 
         if df_raw is None or df_raw.empty:
-            raise DataError(
-                f"TradingView 无数据：{symbol}（可用 EXCHANGE:CODE 指定交易所）"
-            )
+            raise DataError(f"TradingView 无数据：{symbol}（可用 EXCHANGE:CODE 指定交易所）")
 
         out = []
         for row in df_raw.itertuples(index=True):

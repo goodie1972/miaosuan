@@ -93,9 +93,7 @@ class BinanceFetcher(BaseFetcher):
             return self._avail_cache
         # 探测实现下沉到基类 _probe_host（只解析 IPv4、连首个地址、超时可控、
         # socket 必关闭），避免各数据源各写一份易漏关 socket 的副本。
-        self._avail_cache = self._probe_host(
-            BINANCE_HOST, 443, float(self._probe_timeout)
-        )
+        self._avail_cache = self._probe_host(BINANCE_HOST, 443, float(self._probe_timeout))
         return self._avail_cache
 
     def describe(self) -> str:
@@ -113,13 +111,13 @@ class BinanceFetcher(BaseFetcher):
             raise DataError(f"Binance API 错误: {data}")
         return data
 
-    def _fetch_raw(self, symbol: str, timeframe: str) -> list[list]:
+    def _fetch_raw(self, symbol: str, timeframe: str) -> list[list[Any]]:
         """分页拉取原始蜡烛数组。"""
         interval = _BINANCE_INTERVAL.get(timeframe.upper())
         if interval is None:
             raise DataError(f"Binance 不支持周期: {timeframe}")
 
-        rows: list[list] = []
+        rows: list[list[Any]] = []
         seen: set[int] = set()
         start_ms: int | None = None
         while len(rows) < self._max_bars:
