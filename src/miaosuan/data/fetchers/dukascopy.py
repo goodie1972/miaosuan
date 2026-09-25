@@ -87,9 +87,7 @@ class DukascopyFetcher(BaseFetcher):
             return self._avail_cache
         # 探测实现下沉到基类 _probe_host（只解析 IPv4、连首个地址、超时可控、
         # socket 必关闭），避免各数据源各写一份易漏关 socket 的副本。
-        self._avail_cache = self._probe_host(
-            DUKASCOPY_HOST, 443, float(self._probe_timeout)
-        )
+        self._avail_cache = self._probe_host(DUKASCOPY_HOST, 443, float(self._probe_timeout))
         return self._avail_cache
 
     def describe(self) -> str:
@@ -117,12 +115,12 @@ class DukascopyFetcher(BaseFetcher):
             return s[:3] + "/" + s[3:]
         return s
 
-    def _fetch_raw(self, symbol: str, width: int) -> list[dict]:
+    def _fetch_raw(self, symbol: str, width: int) -> list[dict[str, Any]]:
         duk_sym = self._symbol_to_duk(symbol)
         end_ms = int(time.time() * 1000)
         start_ms = end_ms - int(self._window_days) * 86400 * 1000
         chunk_ms = int(_DUK_CHUNK_DAYS) * 86400 * 1000
-        rows: list[dict] = []
+        rows: list[dict[str, Any]] = []
         cursor = start_ms
         while cursor < end_ms and len(rows) < self._max_bars:
             nxt = min(cursor + chunk_ms, end_ms)
@@ -137,9 +135,7 @@ class DukascopyFetcher(BaseFetcher):
             except DataError as exc:
                 # HTTP 失败**如实向上抛**，不再静默 break——否则网络不通会被
                 # 误报成「无数据」，与「该窗口真的没行情」难以区分。
-                raise DataError(
-                    f"Dukascopy 拉取中断（窗口 {cursor}~{nxt}）: {exc}"
-                ) from exc
+                raise DataError(f"Dukascopy 拉取中断（窗口 {cursor}~{nxt}）: {exc}") from exc
             if not data:
                 cursor = nxt + 1
                 continue

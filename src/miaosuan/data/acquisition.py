@@ -105,9 +105,7 @@ class DataSource(ABC):
         ...
 
     @abstractmethod
-    def fetch_incremental(
-        self, symbol: str, timeframe: str, since_ts: int
-    ) -> pd.DataFrame:
+    def fetch_incremental(self, symbol: str, timeframe: str, since_ts: int) -> pd.DataFrame:
         """增量获取：只拉取 ``since_ts``（Unix 秒）之后的数据。
 
         Returns:
@@ -195,9 +193,7 @@ class ShenjiLocalSource(DataSource):
         df = self._fetcher.fetch_full(symbol, timeframe)
         return self._validate_df(df, symbol=symbol, timeframe=timeframe)
 
-    def fetch_incremental(
-        self, symbol: str, timeframe: str, since_ts: int
-    ) -> pd.DataFrame:
+    def fetch_incremental(self, symbol: str, timeframe: str, since_ts: int) -> pd.DataFrame:
         if self._fetcher is None or not self._fetcher.is_available():
             raise DataError("妙算本地数据库不可用：未配置 db_path")
         df = self._fetcher.fetch_incremental(symbol, timeframe, since_ts)
@@ -288,9 +284,7 @@ class NetworkSource(DataSource):
                 failures.append(f"{src.describe()}: {exc}")
         return self._raise_no_source(symbol, timeframe, failures, incremental=False)
 
-    def fetch_incremental(
-        self, symbol: str, timeframe: str, since_ts: int
-    ) -> pd.DataFrame:
+    def fetch_incremental(self, symbol: str, timeframe: str, since_ts: int) -> pd.DataFrame:
         # 通用 HTTP 接口支持 since 参数；网络 fetcher 内部按 since 过滤
         failures: list[str] = []
         if self._base_url:
@@ -343,7 +337,7 @@ class NetworkSource(DataSource):
         import urllib.request
 
         url = (
-            self._base_url.rstrip("/")
+            (self._base_url or "").rstrip("/")
             + f"/candles?symbol={urllib.parse.quote(symbol)}"
             + f"&timeframe={urllib.parse.quote(timeframe)}"
         )
@@ -362,9 +356,10 @@ class NetworkSource(DataSource):
         except Exception as exc:
             raise DataError(f"网络请求失败: {url}（{exc}）") from exc
         try:
-            return json.loads(body.decode("utf-8"))
+            data: dict[str, Any] = json.loads(body.decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise DataError(f"网络返回非 JSON: {url}（{exc}）") from exc
+        return data
 
     @staticmethod
     def _parse_json(raw: dict[str, Any]) -> pd.DataFrame:
@@ -404,9 +399,7 @@ class TypedNetworkSource(DataSource):
         df = self._fetcher.fetch_full(symbol, timeframe)
         return self._validate_df(df, symbol=symbol, timeframe=timeframe)
 
-    def fetch_incremental(
-        self, symbol: str, timeframe: str, since_ts: int
-    ) -> pd.DataFrame:
+    def fetch_incremental(self, symbol: str, timeframe: str, since_ts: int) -> pd.DataFrame:
         df = self._fetcher.fetch_incremental(symbol, timeframe, since_ts)
         if df is None or len(df) == 0:
             return pd.DataFrame()
@@ -445,9 +438,10 @@ class GenericHttpSource(DataSource):
         except Exception as exc:
             raise DataError(f"网络请求失败: {url}（{exc}）") from exc
         try:
-            return json.loads(body.decode("utf-8"))
+            data: dict[str, Any] = json.loads(body.decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise DataError(f"网络返回非 JSON: {url}（{exc}）") from exc
+        return data
 
     @staticmethod
     def _parse_json(raw: dict[str, Any]) -> pd.DataFrame:
@@ -685,15 +679,15 @@ def _scan_cache_dirs(cache_dirs: tuple[Path, ...]) -> list[dict[str, Any]]:
                 continue
             seen.add(key)
             stat = path.stat()
-            out.append({
-                "name": path.name,
-                "path": str(path),
-                "size_mb": round(stat.st_size / 1e6, 2),
-                "mtime": time.strftime(
-                    "%Y-%m-%d %H:%M", time.localtime(stat.st_mtime)
-                ),
-                "source": "cache",
-            })
+            out.append(
+                {
+                    "name": path.name,
+                    "path": str(path),
+                    "size_mb": round(stat.st_size / 1e6, 2),
+                    "mtime": time.strftime("%Y-%m-%d %H:%M", time.localtime(stat.st_mtime)),
+                    "source": "cache",
+                }
+            )
     return out
 
 
@@ -833,7 +827,12 @@ class DataAcquisition:
         available = " / ".join(s.describe() for s in sources)
         raise DataError(
             f"无法获取 {symbol} {timeframe} 的行情数据: 无可用来源或来源均失败",
-            context={"symbol": symbol, "timeframe": timeframe, "source": source, "sources": available},
+            context={
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "source": source,
+                "sources": available,
+            },
         )
 
     def _select_sources(
@@ -923,12 +922,14 @@ class DataAcquisition:
             if known is None and getattr(src, "local_probe", False):
                 # 本地来源（文件 / 配置判定）瞬时可得 → 同步判定，当场给真实值
                 known = _probe_sync(src)
-            out.append({
-                "name": type(src).__name__,
-                "source_type": st,
-                "description": _description_for(src),
-                "available": known,  # None = 尚未探测（前端显示「检测中」）
-            })
+            out.append(
+                {
+                    "name": type(src).__name__,
+                    "source_type": st,
+                    "description": _description_for(src),
+                    "available": known,  # None = 尚未探测（前端显示「检测中」）
+                }
+            )
         _probe_in_background(selected)
         return out
 

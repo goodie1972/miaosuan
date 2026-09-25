@@ -61,9 +61,7 @@ class BaseFetcher:
         """全量获取 ``symbol`` + ``timeframe`` 的历史数据。"""
         raise NotImplementedError(f"{type(self).__name__} 未实现 fetch_full")
 
-    def fetch_incremental(
-        self, symbol: str, timeframe: str, since_ts: int
-    ) -> pd.DataFrame:
+    def fetch_incremental(self, symbol: str, timeframe: str, since_ts: int) -> pd.DataFrame:
         """增量获取 ``since_ts``（Unix 秒）之后的数据。
 
         默认实现：拉全量后过滤（多数网络源不支持服务端 since）。具体子类
@@ -136,7 +134,12 @@ class BaseFetcher:
         for info in infos[:1]:
             sock: socket.socket | None = None
             try:
-                sock = socket.create_connection(info[4], timeout=timeout)
+                addr = info[4]
+                # info[4] 类型为 tuple[str, int] | tuple[str, int, int, int] | tuple[int, bytes]，
+                # create_connection 只接受 (host, port) 二元组；AF_INET 下 addr[0] 恒为 str。
+                conn_host = str(addr[0])
+                conn_port = int(addr[1])
+                sock = socket.create_connection((conn_host, conn_port), timeout=timeout)
                 return True
             except Exception:
                 continue
@@ -171,9 +174,7 @@ class BaseFetcher:
         Raises:
             DataError: 网络失败或响应非 JSON（**不**静默返回空值）。
         """
-        req = urllib.request.Request(
-            url, headers=headers or {"User-Agent": "MiaoSuan/1.0"}
-        )
+        req = urllib.request.Request(url, headers=headers or {"User-Agent": "MiaoSuan/1.0"})
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 body = resp.read()

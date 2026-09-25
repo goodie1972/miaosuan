@@ -53,7 +53,7 @@ from .ir.schema import FactorPayload, StrategySpec
 from .market.profiles import get_profile
 from .pipeline import run_mine
 from .report.equity import run_full_backtest
-from .tune import TuneConfig, TuneEngine, load_param_space_from_spec
+from .tune import TuneConfig, TuneEngine, load_param_space_from_spec, save_tune_result
 
 __all__ = ["app", "backtest", "export", "mine", "report", "tune", "ui", "verify"]
 
@@ -138,9 +138,7 @@ def _write_history(path: Path, result: Any, *, spec_out: str, budget: str) -> in
     """
     payload = _history_payload(result, spec_out=spec_out, budget=budget)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return len(payload["points"])
 
 
@@ -210,7 +208,9 @@ def mine(
         f"多样性：最低 {result.min_diversity:.3f} / 初始 {result.initial_diversity:.3f} "
         f"= {result.diversity_ratio:.3f}"
     )
-    _echo(f"开发区 {result.dev_bars} / 全量 {result.n_bars} 根（hold-out 未触碰={result.holdout_untouched}）")
+    _echo(
+        f"开发区 {result.dev_bars} / 全量 {result.n_bars} 根（hold-out 未触碰={result.holdout_untouched}）"
+    )
     _echo("")
     for i, cand in enumerate(result.candidates):
         _echo(
@@ -223,9 +223,7 @@ def mine(
         _echo(f"逐代历史：{n_points} 代 → {history_path}")
     else:
         _echo("逐代历史：本次未产出（0 代）—— 训练曲线不显示")
-    payload_vocab = (
-        spec.payload.vocab_version if isinstance(spec.payload, FactorPayload) else "-"
-    )
+    payload_vocab = spec.payload.vocab_version if isinstance(spec.payload, FactorPayload) else "-"
     _echo(f"spec_id={spec.spec_id}  vocab={payload_vocab}  git={git_sha}")
 
 
@@ -385,13 +383,17 @@ def report(
     if isinstance(spec.payload, FactorPayload):
         _echo(f"tokens    ：{list(spec.payload.tokens)}")
         _echo(f"词表版本  ：{spec.payload.vocab_version}")
-    _echo(f"语义      ：{spec.semantics.position_fn} / 中性带 {spec.semantics.neutral_band} "
-          f"/ 多空 {spec.semantics.long_short} / 预热 {spec.semantics.warmup_bars}")
+    _echo(
+        f"语义      ：{spec.semantics.position_fn} / 中性带 {spec.semantics.neutral_band} "
+        f"/ 多空 {spec.semantics.long_short} / 预热 {spec.semantics.warmup_bars}"
+    )
     _echo("─" * 60)
     _echo(f"验证集得分：{evidence.val_score}（{evidence.wf_folds} 折 WF）")
     _echo(f"试验次数  ：{evidence.n_trials}")
     _echo(f"DSR       ：{evidence.deflated_sharpe}")
-    _echo(f"hold-out  ：{evidence.holdout_sharpe if evidence.holdout_sharpe is not None else '未消费'}")
+    _echo(
+        f"hold-out  ：{evidence.holdout_sharpe if evidence.holdout_sharpe is not None else '未消费'}"
+    )
     _echo(f"成本敏感度：{evidence.cost_sensitivity or 'n/a'}")
     _echo(f"门禁结论  ：{evidence.gate_verdict}（deployable={evidence.deployable}）")
     for reason in evidence.gate_reasons:
@@ -410,7 +412,9 @@ def backtest(
     spec_path: str = typer.Option(..., "--spec", help="StrategySpec JSON 路径"),
     data: str = typer.Option(..., "--data", help="行情数据文件（parquet / csv）"),
     market: str = typer.Option("", "--market", help="市场画像名（缺省按数据自带 profile）"),
-    rolling_window: int = typer.Option(0, "--rolling-window", help="滚动夏普窗口（0 = 按年化 bar 数的 1/12）"),
+    rolling_window: int = typer.Option(
+        0, "--rolling-window", help="滚动夏普窗口（0 = 按年化 bar 数的 1/12）"
+    ),
     out: str = typer.Option("", "--out", help="回测结果 JSON 输出路径（缺省不落盘）"),
 ) -> None:
     """全样本回测：tokens + 行情 + 画像 → 逐 bar 资金曲线 / 滚动夏普 / 交易统计。
@@ -468,7 +472,9 @@ def backtest(
     tr = result.trades
     _echo(f"策略      ：{spec.name}  spec_id={spec.spec_id}")
     _echo(f"数据      ：{data}  {result.symbol} {result.timeframe}  {result.n_bars} 根")
-    _echo(f"市场画像  ：{profile.name}  单边成本率={result.cost_rate:.6f}  年化 bar={result.periods_per_year}")
+    _echo(
+        f"市场画像  ：{profile.name}  单边成本率={result.cost_rate:.6f}  年化 bar={result.periods_per_year}"
+    )
     _echo("─" * 60)
     _echo(f"累计收益  ：{result.total_return:.6f}")
     _echo(f"年化收益  ：{m.annual_return:.6f}")
@@ -492,9 +498,15 @@ def backtest(
 def tune(
     spec: str = typer.Option(..., "--spec", help="策略 Spec JSON 路径"),
     data: str = typer.Option(..., "--data", help="行情数据文件（parquet / csv）"),
-    param_spaces: str = typer.Option("", "--param-spaces", help="参数空间 JSON 字符串（如 '[{\"name\":\"neutral_band\",\"default\":0.05,\"kind\":\"float\",\"low\":0.01,\"high\":0.2}]'）"),
+    param_spaces_json: str = typer.Option(
+        "",
+        "--param-spaces",
+        help='参数空间 JSON 字符串（如 \'[{"name":"neutral_band","default":0.05,"kind":"float","low":0.01,"high":0.2}]\'）',
+    ),
     n_trials: int = typer.Option(50, "--n-trials", help="最大试验次数"),
-    metric: str = typer.Option("sharpe", "--metric", help="优化目标指标（sharpe/sortino/calmar/composite）"),
+    metric: str = typer.Option(
+        "sharpe", "--metric", help="优化目标指标（sharpe/sortino/calmar/composite）"
+    ),
     seed: int = typer.Option(42, "--seed", help="随机种子"),
     out: str = typer.Option("", "--out", help="结果输出路径（缺省自动命名）"),
 ) -> None:
@@ -509,6 +521,7 @@ def tune(
 
     # 解析因子 token
     from .ir.schema import FactorPayload
+
     tokens: tuple[int, ...] = ()
     if isinstance(spec_obj.payload, FactorPayload):
         tokens = tuple(spec_obj.payload.tokens)
@@ -516,8 +529,9 @@ def tune(
         _die("spec 载荷不是因子体，无法寻优（需先挖掘产出 FactorPayload）")
 
     # 解析参数空间
-    raw_spaces = _json.loads(param_spaces) if param_spaces else []
+    raw_spaces = _json.loads(param_spaces_json) if param_spaces_json else []
     from .adapters.base import ParamSpace
+
     param_spaces = [ParamSpace.from_dict(s) for s in raw_spaces]
     if not param_spaces:
         # 尝试从 spec 自动提取
@@ -544,7 +558,7 @@ def tune(
 
     # 输出结果
     _echo("")
-    _echo(f"寻优完成：{result.n_trials} 次试验 · 耗时 {result.elapsed_sec:.1f}s")
+    _echo(f"寻优完成：{len(result.trials)} 次试验 · 耗时 {result.elapsed_sec:.1f}s")
     _echo(f"最优评分：{result.best.score:.4f}")
     _echo("最优参数：")
     for k, v in sorted(result.best.params.items()):

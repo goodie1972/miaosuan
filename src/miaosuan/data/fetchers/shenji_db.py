@@ -56,7 +56,8 @@ class ShenjiDBFetcher(BaseFetcher):
                 context={"db_path": self._db_path},
             )
         # 只读 URI 打开，防止任何写操作（架构 §3.2 硬约束）
-        uri = "file:" + self._db_path + "?mode=ro"
+        db_path = self._db_path or ""
+        uri = f"file:{db_path}?mode=ro"
         return sqlite3.connect(uri, uri=True)
 
     def _query(self, timeframe: str, since_ts: int | None) -> pd.DataFrame:
@@ -64,7 +65,7 @@ class ShenjiDBFetcher(BaseFetcher):
             "SELECT timestamp AS time, open, high, low, close, volume "
             "FROM ohlcv WHERE timeframe = ?"
         )
-        params: list = [timeframe]
+        params: list[str | int] = [timeframe]
         if since_ts is not None:
             query += " AND timestamp > ?"
             params.append(int(since_ts))
@@ -81,8 +82,6 @@ class ShenjiDBFetcher(BaseFetcher):
         _ = symbol
         return self._query(timeframe, None)
 
-    def fetch_incremental(
-        self, symbol: str, timeframe: str, since_ts: int
-    ) -> pd.DataFrame:
+    def fetch_incremental(self, symbol: str, timeframe: str, since_ts: int) -> pd.DataFrame:
         _ = symbol
         return self._query(timeframe, since_ts)

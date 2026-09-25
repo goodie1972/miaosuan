@@ -71,6 +71,7 @@ _EXCLUDED_JSON = {"magic_registry.json", "holdout_seals.json", "config_snapshot.
 
 # ── 工具 ─────────────────────────────────────────────────────────────────────
 
+
 def _safe_name(name: str, *, suffixes: set[str] | None = None) -> Path:
     """把用户传入的文件名约束为 artifacts 下的单个文件（拒绝路径穿越）。"""
     if not name or "/" in name or "\\" in name or ".." in name:
@@ -260,6 +261,7 @@ def _validate_market_choice(symbol: str, market: str) -> None:
 
 # ── 实时页：妙算 后端**只读**代理 ───────────────────────────────────────
 
+
 def _realtime_client() -> ShenjiReadOnlyClient:
     """构造只读客户端（地址/超时每次读环境变量，便于运维改配置）。
 
@@ -283,6 +285,7 @@ def _outcome_payload(outcome: RealtimeOutcome, base_url: str) -> dict[str, Any]:
 
 
 # ── 挖掘任务（单飞 + 增量日志）───────────────────────────────────────────────
+
 
 @dataclass
 class MineJob:
@@ -325,9 +328,18 @@ class _JobManager:
     def job(self) -> MineJob | None:
         return self._job
 
-    def start(self, *, data: str, budget: str, seed: int, symbol: str,
-              timeframe: str, top_k: int, n_folds: int,
-              market: str = "") -> MineJob:
+    def start(
+        self,
+        *,
+        data: str,
+        budget: str,
+        seed: int,
+        symbol: str,
+        timeframe: str,
+        top_k: int,
+        n_folds: int,
+        market: str = "",
+    ) -> MineJob:
         # 前置校验：把 pipeline 的 ConfigError 提前成 400，而不是让子进程甩堆栈。
         _validate_market_choice(symbol, market)
         if self._job is not None and self._job.running:
@@ -335,8 +347,19 @@ class _JobManager:
         _ARTIFACTS.mkdir(parents=True, exist_ok=True)
         stamp = time.strftime("%Y%m%d_%H%M%S")
         spec_out = _ARTIFACTS / f"spec_{stamp}.json"
-        args = ["mine", "--data", data, "--budget", budget,
-                "--out", str(spec_out), "--top-k", str(top_k), "--n-folds", str(n_folds)]
+        args = [
+            "mine",
+            "--data",
+            data,
+            "--budget",
+            budget,
+            "--out",
+            str(spec_out),
+            "--top-k",
+            str(top_k),
+            "--n-folds",
+            str(n_folds),
+        ]
         if seed:
             args += ["--seed", str(seed)]
         if symbol:
@@ -373,6 +396,7 @@ _jobs = _JobManager()
 
 # ── Pydantic 请求体 ──────────────────────────────────────────────────────────
 
+
 class MineRequest(BaseModel):
     data: str
     budget: str = "quick"
@@ -408,8 +432,8 @@ class FetchRequest(BaseModel):
     symbol: str
     timeframe: str = "H1"
     since: int = 0
-    source: str = ""          # 单选数据来源类名（空 = 按优先级自动）
-    note: str = ""            # 备注，追加至生成的缓存文件名
+    source: str = ""  # 单选数据来源类名（空 = 按优先级自动）
+    note: str = ""  # 备注，追加至生成的缓存文件名
     market_profile: str = ""  # 市场画像（前端联动；后端仅透传/校验）
 
 
@@ -425,6 +449,7 @@ class TuneRequest(BaseModel):
 
 
 # ── App ──────────────────────────────────────────────────────────────────────
+
 
 def create_app() -> FastAPI:
     """构造仪表盘 FastAPI 应用。"""
@@ -451,14 +476,16 @@ def create_app() -> FastAPI:
                 stat = path.stat()
                 # 起止时间：轻量只读 time 列（失败降级为 ""，绝不 500）
                 rng = _peek_time_range(path)
-                out.append({
-                    "path": str(path),
-                    "name": path.name,
-                    "size_mb": round(stat.st_size / 1e6, 2),
-                    "mtime": time.strftime("%Y-%m-%d %H:%M", time.localtime(stat.st_mtime)),
-                    "start": rng[0] if rng else "",
-                    "end": rng[1] if rng else "",
-                })
+                out.append(
+                    {
+                        "path": str(path),
+                        "name": path.name,
+                        "size_mb": round(stat.st_size / 1e6, 2),
+                        "mtime": time.strftime("%Y-%m-%d %H:%M", time.localtime(stat.st_mtime)),
+                        "start": rng[0] if rng else "",
+                        "end": rng[1] if rng else "",
+                    }
+                )
         return out
 
     @app.get("/api/meta")
@@ -507,10 +534,10 @@ def create_app() -> FastAPI:
             "years": round(span / (365.25 * 86400), 2),
             "fingerprint": panel.fingerprint,
             "market_profile": panel.market_profile_name,
-        # 复用 _fmt_utc：与 /api/data 的 start/end 保证同一 UTC 口径
-        # （两处若一个用 gmtime 一个用 localtime，同一文件会差一天）。
-        "start": _fmt_utc(int(stamps[0])) if len(stamps) else "",
-        "end": _fmt_utc(int(stamps[-1])) if len(stamps) else "",
+            # 复用 _fmt_utc：与 /api/data 的 start/end 保证同一 UTC 口径
+            # （两处若一个用 gmtime 一个用 localtime，同一文件会差一天）。
+            "start": _fmt_utc(int(stamps[0])) if len(stamps) else "",
+            "end": _fmt_utc(int(stamps[-1])) if len(stamps) else "",
         }
 
     @app.get("/api/specs")
@@ -519,15 +546,16 @@ def create_app() -> FastAPI:
         out: list[dict[str, Any]] = []
         if not _ARTIFACTS.is_dir():
             return out
-        for path in sorted(_ARTIFACTS.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        for path in sorted(
+            _ARTIFACTS.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True
+        ):
             if path.name in _EXCLUDED_JSON:
                 continue
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 continue
-            if not (isinstance(data, dict) and "payload" in data
-                    and "spec_version" in data):
+            if not (isinstance(data, dict) and "payload" in data and "spec_version" in data):
                 continue
             payload = data.get("payload") or {}
             tokens = payload.get("tokens") or []
@@ -535,23 +563,23 @@ def create_app() -> FastAPI:
             provenance = data.get("provenance") or {}
             semantics = data.get("semantics") or {}
             snapshot = provenance.get("config_snapshot") or {}
-            out.append({
-                "file": path.name,
-                "spec_id": _spec_id(path),
-                "name": data.get("name", ""),
-                "n_tokens": len(tokens),
-                "formula": readable_formula([int(t) for t in tokens][:12]) if tokens else "",
-                "val_score": evidence.get("val_score"),
-                "deflated_sharpe": evidence.get("deflated_sharpe"),
-                "gate_verdict": evidence.get("gate_verdict", ""),
-                "vocab_version": payload.get("vocab_version", ""),
-                "symbol": str(snapshot.get("symbol") or ""),
-                "timeframe": str(semantics.get("timeframe") or ""),
-                "created_at": str(provenance.get("created_at") or ""),
-                "mtime": time.strftime(
-                    "%Y-%m-%d %H:%M", time.localtime(path.stat().st_mtime)
-                ),
-            })
+            out.append(
+                {
+                    "file": path.name,
+                    "spec_id": _spec_id(path),
+                    "name": data.get("name", ""),
+                    "n_tokens": len(tokens),
+                    "formula": readable_formula([int(t) for t in tokens][:12]) if tokens else "",
+                    "val_score": evidence.get("val_score"),
+                    "deflated_sharpe": evidence.get("deflated_sharpe"),
+                    "gate_verdict": evidence.get("gate_verdict", ""),
+                    "vocab_version": payload.get("vocab_version", ""),
+                    "symbol": str(snapshot.get("symbol") or ""),
+                    "timeframe": str(semantics.get("timeframe") or ""),
+                    "created_at": str(provenance.get("created_at") or ""),
+                    "mtime": time.strftime("%Y-%m-%d %H:%M", time.localtime(path.stat().st_mtime)),
+                }
+            )
         return out
 
     @app.get("/api/strategies")
@@ -575,21 +603,25 @@ def create_app() -> FastAPI:
             if not magic:
                 continue
             issues = lint_source(source)
-            out.append({
-                "file": path.name,
-                "magic": magic,
-                "lint_errors": sum(1 for i in issues if i.severity.value == "ERROR"),
-                "lint_warnings": sum(1 for i in issues if i.severity.value == "WARNING"),
-                "size_kb": round(path.stat().st_size / 1024, 1),
-                "mtime": time.strftime("%m-%d %H:%M", time.localtime(path.stat().st_mtime)),
-            })
+            out.append(
+                {
+                    "file": path.name,
+                    "magic": magic,
+                    "lint_errors": sum(1 for i in issues if i.severity.value == "ERROR"),
+                    "lint_warnings": sum(1 for i in issues if i.severity.value == "WARNING"),
+                    "size_kb": round(path.stat().st_size / 1024, 1),
+                    "mtime": time.strftime("%m-%d %H:%M", time.localtime(path.stat().st_mtime)),
+                }
+            )
         return out
 
     @app.get("/api/spec/{name}")
     def get_spec(name: str) -> dict[str, Any]:
         path = _safe_name(name, suffixes={".json"})
         try:
-            data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))  # 显式标注，避免 Any 泄漏
+            data: dict[str, Any] = json.loads(
+                path.read_text(encoding="utf-8")
+            )  # 显式标注，避免 Any 泄漏
         except (OSError, json.JSONDecodeError) as exc:
             raise HTTPException(status_code=400, detail=f"spec 解析失败：{exc}") from exc
         payload = data.get("payload") or {}
@@ -612,9 +644,14 @@ def create_app() -> FastAPI:
     @app.post("/api/mine")
     def start_mine(req: MineRequest) -> dict[str, Any]:
         job = _jobs.start(
-            data=req.data, budget=req.budget, seed=req.seed,
-            symbol=req.symbol, timeframe=req.timeframe, market=req.market,
-            top_k=req.top_k, n_folds=req.n_folds,
+            data=req.data,
+            budget=req.budget,
+            seed=req.seed,
+            symbol=req.symbol,
+            timeframe=req.timeframe,
+            market=req.market,
+            top_k=req.top_k,
+            n_folds=req.n_folds,
         )
         return {"job_id": job.id, "spec_out": job.spec_out, "cmd": " ".join(job.args)}
 
@@ -665,8 +702,13 @@ def create_app() -> FastAPI:
     # ── 导出与校验（同步子进程，秒级返回）────────────────────────────────
     def _run_sync(args: list[str]) -> tuple[int, str]:
         proc = subprocess.run(  # noqa: S603 - 白名单拼接，见上
-            _cli_process(*args), capture_output=True, text=True,
-            encoding="utf-8", errors="replace", cwd=str(_REPO_ROOT), timeout=600,
+            _cli_process(*args),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            cwd=str(_REPO_ROOT),
+            timeout=600,
         )
         output = (proc.stdout or "") + (proc.stderr or "")
         return proc.returncode, output.strip()
@@ -806,6 +848,7 @@ def create_app() -> FastAPI:
         if profile:
             try:
                 from ..market.profiles import get_profile
+
                 allowed = list(get_profile(profile).data_sources)
             except Exception:
                 allowed = None
@@ -834,6 +877,7 @@ def create_app() -> FastAPI:
     def acquisition_fetch(req: FetchRequest) -> dict[str, Any]:
         """触发数据获取（指定单一来源，可选备注）。"""
         from ..data.acquisition import fetch as acquire
+
         try:
             path = acquire(
                 req.symbol,
@@ -875,13 +919,19 @@ def create_app() -> FastAPI:
         except HTTPException as exc:
             raise exc
 
-        def _run():
+        def _run() -> None:
             try:
                 from ..ir.codec import read_spec
                 from ..adapters.base import ParamSpace
+                from ..ir.schema import FactorPayload
                 from ..tune import TuneConfig, TuneEngine, load_param_space_from_spec
 
                 spec = read_spec(str(spec_path))
+                if not isinstance(spec.payload, FactorPayload):
+                    _tune_job["error"] = "spec 载荷不是因子体，无法寻优"
+                    _tune_job["running"] = False
+                    return
+                tokens = tuple(spec.payload.tokens)
                 param_spaces = [ParamSpace.from_dict(s) for s in req.param_spaces]
                 if not param_spaces:
                     # 前端未显式指定参数空间 → 自动从 spec 挖掘语义旋钮
@@ -897,7 +947,7 @@ def create_app() -> FastAPI:
                     seed=req.seed,
                 )
                 engine = TuneEngine(config)
-                result = engine.optimize(tuple(spec.payload.tokens), str(data_path), spec)
+                result = engine.optimize(tokens, str(data_path), spec)
                 _tune_job["result"] = result.to_dict()
                 _tune_job["running"] = False
             except Exception as exc:  # noqa: BLE001
@@ -919,7 +969,7 @@ def create_app() -> FastAPI:
     @app.get("/api/tune/result")
     def tune_result() -> dict[str, Any]:
         """获取寻优结果。"""
-        result = _tune_job.get("result")
+        result: dict[str, Any] | None = _tune_job.get("result")
         if result is None:
             raise HTTPException(status_code=404, detail="尚未完成寻优任务")
         return result
@@ -930,17 +980,21 @@ def create_app() -> FastAPI:
         out: list[dict[str, Any]] = []
         if not _ARTIFACTS.is_dir():
             return out
-        for path in sorted(_ARTIFACTS.glob("tune_*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        for path in sorted(
+            _ARTIFACTS.glob("tune_*.json"), key=lambda p: p.stat().st_mtime, reverse=True
+        ):
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
-                out.append({
-                    "file": path.name,
-                    "result_id": data.get("result_id", ""),
-                    "n_trials": data.get("n_trials", 0),
-                    "best_score": data.get("best", {}).get("score", 0.0),
-                    "elapsed_sec": data.get("elapsed_sec", 0),
-                    "mtime": time.strftime("%m-%d %H:%M", time.localtime(path.stat().st_mtime)),
-                })
+                out.append(
+                    {
+                        "file": path.name,
+                        "result_id": data.get("result_id", ""),
+                        "n_trials": data.get("n_trials", 0),
+                        "best_score": data.get("best", {}).get("score", 0.0),
+                        "elapsed_sec": data.get("elapsed_sec", 0),
+                        "mtime": time.strftime("%m-%d %H:%M", time.localtime(path.stat().st_mtime)),
+                    }
+                )
             except (OSError, json.JSONDecodeError):
                 continue
         return out

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import urllib.parse
+from typing import Any
 
 import pandas as pd
 
@@ -71,7 +72,7 @@ class OkxFetcher(BaseFetcher):
 
     # ── 内部 ─────────────────────────────────────────────────────────────
 
-    def _fetch_raw(self, symbol: str, timeframe: str) -> list[list]:
+    def _fetch_raw(self, symbol: str, timeframe: str) -> list[list[Any]]:
         """分页拉取原始蜡烛数组（每元素 ``[ts_ms, o, h, l, c, vol, ...]``）。
 
         Args:
@@ -81,7 +82,7 @@ class OkxFetcher(BaseFetcher):
         bar = _OKX_BAR.get(timeframe.upper())
         if bar is None:
             raise DataError(f"OKX 不支持周期: {timeframe}")
-        rows: list[list] = []
+        rows: list[list[Any]] = []
         seen: set[int] = set()
         before: int | None = None
         while len(rows) < self._max_bars:
@@ -98,9 +99,7 @@ class OkxFetcher(BaseFetcher):
             if not isinstance(body, dict):
                 raise DataError(f"OKX 返回非对象 JSON: {url}")
             if body.get("code") != "0":
-                raise DataError(
-                    f"OKX API 错误 {body.get('code')}: {body.get('msg')}"
-                )
+                raise DataError(f"OKX API 错误 {body.get('code')}: {body.get('msg')}")
             data = body.get("data") or []
             if not data:
                 break
