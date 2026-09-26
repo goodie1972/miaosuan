@@ -122,6 +122,26 @@ def test_infer_symbol_timeframe() -> None:
     assert infer_symbol_timeframe("weird.parquet") == ("weird", "")
 
 
+def test_infer_symbol_timeframe_with_note_suffix() -> None:
+    """带备注的三段式文件名（acquisition 自己的落盘格式）不能把备注当周期。
+
+    ``acquisition._cache_path`` 写出 ``{symbol}_{timeframe}_{note}``，note 可含
+    下划线（如 ``unit_test`` / ``mt4_live``）。旧实现只按最后一个下划线切，
+    会得出 ``timeframe=LIVE`` —— UI 周期栏与 spec 都跟着错。
+    """
+    assert infer_symbol_timeframe("XAUUSD_H1_mt4_live.parquet") == ("XAUUSD", "H1")
+    assert infer_symbol_timeframe("XAUUSD_H1_unit_test.parquet") == ("XAUUSD", "H1")
+    assert infer_symbol_timeframe("BTCUSDT_M15_downloaded_2026.csv") == ("BTCUSDT", "M15")
+    # 备注里含周期别名也不许截错：周期取**第一个**已知周期段（紧跟 symbol）
+    assert infer_symbol_timeframe("XAUUSD_H1_replay_to_M15.parquet") == ("XAUUSD", "H1")
+
+
+def test_infer_symbol_timeframe_unknown_period_keeps_old_semantics() -> None:
+    """没有已知周期段时保持旧语义（最后一段当周期、原样大写），不改变既有行为。"""
+    assert infer_symbol_timeframe("XAUUSD_ZZZ.parquet") == ("XAUUSD", "ZZZ")
+    assert infer_symbol_timeframe("BTC_USD_H1.parquet") == ("BTC_USD", "H1")
+
+
 def test_normalize_timeframe_alias() -> None:
     assert normalize_timeframe("1h") == "H1"
     assert normalize_timeframe("5min") == "M5"

@@ -54,6 +54,10 @@ _TIMEFRAME_ALIASES: dict[str, str] = {
     "mn1": "MN1", "1mo": "MN1", "monthly": "MN1",
 }
 
+#: 已知周期规范名——文件名解析靠它认出「哪一段是周期」。
+#: 由别名表反推，别名表加了新周期这里自动跟上（单一来源）。
+_KNOWN_TIMEFRAMES: frozenset[str] = frozenset(_TIMEFRAME_ALIASES.values())
+
 _TIME_UNITS = ("auto", "s", "ms")
 
 
@@ -67,15 +71,46 @@ def normalize_timeframe(token: str) -> str:
 
 
 def infer_symbol_timeframe(path: str | Path) -> tuple[str, str]:
-    """从 ``{symbol}_{timeframe}.parquet`` 推断 ``(symbol, timeframe)``。
+    """从文件名推断 ``(symbol, timeframe)``，兼容两种落盘形态。
+
+    两种形态（都是项目自己在写的，缺一不可）：
+
+    ==========  ==========================================
+    形态        例子
+    ==========  ==========================================
+    两段式      ``XAUUSD_H1.parquet`` → ``XAUUSD / H1``
+    带备注      ``XAUUSD_H1_mt4_live.parquet`` → ``XAUUSD / H1``
+    ==========  ==========================================
+
+    备注形态由 :meth:`miaosuan.data.acquisition.DataAcquisition._cache_path` 产出
+    （``{symbol}_{timeframe}_{note}``，note 可含下划线如 ``unit_test``）。
+    **旧实现只按最后一个下划线切**，会把备注当周期：上面第二个例子曾被解析成
+    ``XAUUSD_H1_mt4 / LIVE``，连带 ``/api/inspect`` 的周期栏显示 LIVE、spec 标错。
+
+    现策略：**从左往右找第一段能归一成已知周期的 token**，它之前的是 symbol、
+    之后的整段是备注（丢弃）。找不到已知周期则退回旧语义（最后一段当周期，原样
+    大写），保证 ``XAUUSD_ZZZ`` 这类未知周期的行为不变。
 
     无下划线时，``symbol`` = 文件名主体、``timeframe`` = 空串。
+
+    Args:
+        path: 文件路径（只用 ``stem``，扩展名无关）。
+
+    Returns:
+        ``(symbol, timeframe)``；周期已归一到 ``M1/H1/D1/...`` 规范名。
     """
     stem = Path(path).stem
-    if "_" in stem:
-        symbol, tf_raw = stem.rsplit("_", 1)
-        return symbol.strip() or stem, normalize_timeframe(tf_raw)
-    return stem, ""
+    if "_" not in stem:
+        return stem, ""
+    parts = stem.split("_")
+    # 第 0 段永远属于 symbol；从第 1 段起找已知周期 token。
+    for i in range(1, len(parts)):
+        if normalize_timeframe(parts[i]) in _KNOWN_TIMEFRAMES:
+            symbol = "_".join(parts[:i]).strip()
+            return symbol or stem, normalize_timeframe(parts[i])
+    # 无已知周期段：退回旧语义（最后一段当周期），未知周期原样大写。
+    symbol, tf_raw = stem.rsplit("_", 1)
+    return symbol.strip() or stem, normalize_timeframe(tf_raw)
 
 
 def _normalize_time(series: Any, time_unit: str) -> np.ndarray:

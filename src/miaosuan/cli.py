@@ -144,6 +144,101 @@ def _write_history(path: Path, result: Any, *, spec_out: str, budget: str) -> in
     return len(payload["points"])
 
 
+#: 候选落盘 sidecar 的版本号（结构变更时递增，便于下游识别）。
+_CANDIDATES_VERSION = 1
+
+
+def _candidate_entry(cand: Any, rank: int) -> dict[str, Any]:
+    """把单个 :class:`~miaosuan.search.mine.Candidate` 转成可 JSON 序列化的条目。
+
+    ``verdict_snapshot`` 是「JSON 字符串」，这里解析成**对象**再落盘——下游
+    （多因子组合）要读 hard/soft 失败原因，字符串还得再解一次，徒增出错面。
+    解析失败时保留原文字符串，绝不因为快照损坏而丢弃整条候选。
+
+    Args:
+        cand: 候选对象（结构对齐 ``Candidate`` dataclass；测试可传同形替身）。
+        rank: 名次（0 起，按适应度降序 = 传入顺序）。
+
+    Returns:
+        可直接 ``json.dumps`` 的字典。
+    """
+    snapshot = getattr(cand, "verdict_snapshot", "") or ""
+    try:
+        parsed: Any = json.loads(snapshot) if isinstance(snapshot, str) else snapshot
+        if not isinstance(parsed, (dict, list)):
+            parsed = snapshot
+    except (json.JSONDecodeError, TypeError):
+        parsed = snapshot
+    sharpes = getattr(cand, "sharpes", None) or {}
+    return {
+        "rank": int(rank),
+        "tokens": [int(t) for t in getattr(cand, "tokens", ())],
+        "decoded": str(getattr(cand, "decoded", "")),
+        "train_score": float(getattr(cand, "train_score", 0.0)),
+        "val_score": float(getattr(cand, "val_score", 0.0)),
+        "status": str(getattr(cand, "status", "")),
+        "cost_sensitivity": {f"{float(k):g}": float(v) for k, v in sharpes.items()},
+        "sharpe_2x": float(getattr(cand, "sharpe_2x", 0.0)),
+        "wf_win_rate": float(getattr(cand, "wf_win_rate", 0.0)),
+        "dsr": float(getattr(cand, "dsr", 0.0)),
+        "verdict": str(getattr(cand, "verdict", "")),
+        "verdict_snapshot": parsed,
+    }
+
+
+def _write_candidates(
+    path: Path,
+    result: Any,
+    *,
+    spec_out: str,
+    spec_id: str,
+    budget: str,
+    symbol: str,
+    timeframe: str,
+    market: str,
+    git_sha: str,
+) -> int:
+    """把 top-k 候选落盘为 JSON sidecar（供多因子组合读取），返回写入条数。
+
+    与逐代历史 sidecar 同思路：**不进 stdout**（stdout 已承载给人看的挖掘结论），
+    单独落文件、机器读。顶层带上本次运行的溯源字段（spec / 预算 / 品种 / 周期 /
+    画像 / git sha），避免下游把候选与运行上下文对不上。
+
+    Args:
+        path: 输出 JSON 路径（父目录自动创建）。
+        result: :class:`~miaosuan.search.mine.MineResult`（取 ``candidates``）。
+        spec_out: 本次 ``--out`` 的 spec 路径，便于回指。
+        spec_id: 该 spec 的 id（``StrategySpec.spec_id``）。
+        budget: 预算档位。
+        symbol: 生效标的。
+        timeframe: 生效周期。
+        market: 市场画像名。
+        git_sha: 代码 sha。
+
+    Returns:
+        写入的候选条数（0 = 本次无候选，仍写空壳文件以便下游判定「跑过但没产出」）。
+    """
+    candidates = [
+        _candidate_entry(cand, rank)
+        for rank, cand in enumerate(getattr(result, "candidates", None) or ())
+    ]
+    payload = {
+        "version": _CANDIDATES_VERSION,
+        "spec": str(spec_out),
+        "spec_id": str(spec_id),
+        "budget": str(budget),
+        "symbol": str(symbol),
+        "timeframe": str(timeframe),
+        "market": str(market),
+        "git_sha": str(git_sha),
+        "n_candidates": len(candidates),
+        "candidates": candidates,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return len(candidates)
+
+
 # ── mine ────────────────────────────────────────────────────────────────────
 def _resolve_search_space(
     config: AppConfig,
@@ -266,6 +361,11 @@ def mine(
     n_islands: int = typer.Option(
         0, "--n-islands", help="覆盖岛屿数（0 = 用预算档位值；1 = 关闭分岛）"
     ),
+    dump_candidates: str = typer.Option(
+        "",
+        "--dump-candidates",
+        help="top-k 候选落盘 JSON 路径（缺省不落盘；供多因子组合读取）",
+    ),
 ) -> None:
     """挖掘因子：数据 → 切分（封印 hold-out）→ 搜索 → 门禁 → Spec JSON。
 
@@ -302,8 +402,42 @@ def mine(
         panel = load(data)
     except (MiaoSuanError, FileNotFoundError, OSError, ValueError) as exc:
         _die(f"无法加载行情数据 {data!r}：{exc}")
+
+    # ── 标签派生（timeframe 标错修复）─────────────────────────────────────
+    # 优先级：**CLI 显式 > env 显式 > 数据文件名 > 配置默认**（显式意图压过自动推断，
+    # 与搜索空间覆盖同一条原则）。原先只看 `config`：`timeframe` 默认恒 H1、`symbol`
+    # 默认恒 XAUUSD，M15 数据会被标成 h1_xauusd，且 backtest/report 用的是
+    # `panel.timeframe`，spec 与回测互相矛盾。
+    #
+    # 「env 显式」的判定用**值不等于配置默认**（config 来自 from_env，CLI 覆盖在前
+    # 面已并入）：不读第二次 env，遵守「env 只在 config 边界读取」的铁律。
+    # 已知边界：env 恰好显式设成默认值时会被当未设置、落到数据文件名——此时以数据
+    # 为准反而更正确（spec 与 backtest 一致）。
+    _default_cfg = AppConfig()
+    if timeframe:  # CLI 已在上面并入 config，这里只判来源
+        tf_source = "CLI 显式"
+    elif config.timeframe != _default_cfg.timeframe:
+        tf_source = "env 显式"
+    elif panel.timeframe:
+        config = config.with_overrides(timeframe=panel.timeframe)
+        tf_source = "数据文件名"
+    else:
+        tf_source = "配置默认"
+
+    derived_symbol = str(panel.symbols[0]).strip() if panel.symbols else ""
+    if symbol:
+        sym_source = "CLI 显式"
+    elif config.symbol != _default_cfg.symbol:
+        sym_source = "env 显式"
+    elif derived_symbol and derived_symbol != "SINGLE":
+        config = config.with_overrides(symbol=derived_symbol)
+        sym_source = "数据文件名"
+    else:
+        sym_source = "配置默认"
+
     _echo(f"数据：{data}  N={panel.n_symbols} T={panel.n_bars} profile={panel.market_profile_name}")
     _echo(f"指纹：{panel.fingerprint}")
+    _echo(f"标签：{config.symbol} {config.timeframe}（来源 {sym_source}/{tf_source}）")
 
     git_sha = resolve_git_sha()
     try:
@@ -352,6 +486,20 @@ def mine(
         _echo(f"逐代历史：{n_points} 代 → {history_path}")
     else:
         _echo("逐代历史：本次未产出（0 代）—— 训练曲线不显示")
+    if dump_candidates:
+        # top-k 候选落盘（多因子组合的输入）：单独 sidecar，不混进 stdout。
+        n_cands = _write_candidates(
+            Path(dump_candidates),
+            result,
+            spec_out=out,
+            spec_id=spec.spec_id,
+            budget=budget,
+            symbol=config.symbol,
+            timeframe=config.timeframe,
+            market=outcome.profile.name,
+            git_sha=git_sha,
+        )
+        _echo(f"候选落盘：{n_cands} 条 → {dump_candidates}")
     payload_vocab = spec.payload.vocab_version if isinstance(spec.payload, FactorPayload) else "-"
     _echo(f"spec_id={spec.spec_id}  vocab={payload_vocab}  git={git_sha}")
 
