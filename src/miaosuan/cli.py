@@ -197,12 +197,21 @@ def _write_candidates(
     timeframe: str,
     market: str,
     git_sha: str,
+    vocab_version: str,
+    data_fingerprint: str,
+    semantics: dict[str, Any],
+    n_trials: int,
 ) -> int:
     """把 top-k 候选落盘为 JSON sidecar（供多因子组合读取），返回写入条数。
 
     与逐代历史 sidecar 同思路：**不进 stdout**（stdout 已承载给人看的挖掘结论），
     单独落文件、机器读。顶层带上本次运行的溯源字段（spec / 预算 / 品种 / 周期 /
-    画像 / git sha），避免下游把候选与运行上下文对不上。
+    画像 / git sha）与 combine 的**校验输入**（vocab_version / data_fingerprint /
+    semantics / n_trials），避免下游把候选与运行上下文对不上。
+
+    ``vocab_version`` / ``data_fingerprint`` / ``timeframe`` 是 ``combine`` 入口的
+    三道同源校验（§3 成员校验），``n_trials`` 则是 DSR 累加校正的来源（§1.3）——
+    缺任一项 combine 都只能拒绝输入，故必须与本次运行同值写在这里。
 
     Args:
         path: 输出 JSON 路径（父目录自动创建）。
@@ -214,6 +223,10 @@ def _write_candidates(
         timeframe: 生效周期。
         market: 市场画像名。
         git_sha: 代码 sha。
+        vocab_version: 词表版本指纹（与 spec.payload 同值）。
+        data_fingerprint: 数据指纹（``Panel.fingerprint``）。
+        semantics: 语义四元组 ``{timeframe, position_fn, neutral_band, long_short}``。
+        n_trials: 本次运行总评估数（``Evidence.n_trials`` 同源）。
 
     Returns:
         写入的候选条数（0 = 本次无候选，仍写空壳文件以便下游判定「跑过但没产出」）。
@@ -231,6 +244,11 @@ def _write_candidates(
         "timeframe": str(timeframe),
         "market": str(market),
         "git_sha": str(git_sha),
+        # ── combine 的输入契约（docs/combo-impl-spec.md §2）──────────────
+        "vocab_version": str(vocab_version),
+        "data_fingerprint": str(data_fingerprint),
+        "semantics": dict(semantics),
+        "n_trials": int(n_trials),
         "n_candidates": len(candidates),
         "candidates": candidates,
     }
@@ -486,8 +504,11 @@ def mine(
         _echo(f"逐代历史：{n_points} 代 → {history_path}")
     else:
         _echo("逐代历史：本次未产出（0 代）—— 训练曲线不显示")
+    payload_vocab = spec.payload.vocab_version if isinstance(spec.payload, FactorPayload) else "-"
     if dump_candidates:
         # top-k 候选落盘（多因子组合的输入）：单独 sidecar，不混进 stdout。
+        # vocab_version / data_fingerprint / semantics / n_trials 四字段是 combine
+        # 的校验与 DSR 累加输入，取值必须与本次 spec 同源（同一 config/panel/result）。
         n_cands = _write_candidates(
             Path(dump_candidates),
             result,
@@ -498,9 +519,17 @@ def mine(
             timeframe=config.timeframe,
             market=outcome.profile.name,
             git_sha=git_sha,
+            vocab_version=payload_vocab,
+            data_fingerprint=panel.fingerprint,
+            semantics={
+                "timeframe": spec.semantics.timeframe,
+                "position_fn": spec.semantics.position_fn,
+                "neutral_band": float(spec.semantics.neutral_band),
+                "long_short": bool(spec.semantics.long_short),
+            },
+            n_trials=int(result.n_evaluations),
         )
         _echo(f"候选落盘：{n_cands} 条 → {dump_candidates}")
-    payload_vocab = spec.payload.vocab_version if isinstance(spec.payload, FactorPayload) else "-"
     _echo(f"spec_id={spec.spec_id}  vocab={payload_vocab}  git={git_sha}")
 
 

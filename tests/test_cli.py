@@ -21,11 +21,13 @@ from miaosuan.cli import (
     _extract_tokens,
     _history_payload,
     _resolve_search_space,
+    _write_candidates,
     _write_history,
     app,
 )
 from miaosuan.config import AppConfig
 from miaosuan.core.vocab import VOCAB_VERSION
+from miaosuan.data.loader import load
 from miaosuan.ir.codec import write_spec
 from miaosuan.ir.schema import (
     Evidence,
@@ -732,11 +734,12 @@ def test_dump_candidates_writes_sidecar_json(
 ) -> None:
     """``--dump-candidates <path>`` 落盘 top-k：结构含溯源字段 + 逐条候选。"""
     _capture_full_run(monkeypatch)
+    data = _csv(tmp_path)
     out = tmp_path / "spec.json"
     cand_path = tmp_path / "nested" / "cands.json"  # 父目录须自动创建
     result = runner.invoke(
         app,
-        ["mine", "--data", str(_csv(tmp_path)), "--out", str(out),
+        ["mine", "--data", str(data), "--out", str(out),
          "--dump-candidates", str(cand_path)],
     )
     assert result.exit_code == 0, result.output
@@ -751,6 +754,19 @@ def test_dump_candidates_writes_sidecar_json(
     assert payload["market"] == "FOREX_XAUUSD"
     assert payload["spec"] == str(out)
     assert payload["n_candidates"] == 2
+    # combo 的输入契约四字段（docs/combo-impl-spec.md §2）
+    assert payload["vocab_version"] == VOCAB_VERSION
+    assert payload["vocab_version"] == json.loads(out.read_text(encoding="utf-8"))[
+        "payload"
+    ]["vocab_version"]
+    assert payload["data_fingerprint"] == load(str(data)).fingerprint
+    assert payload["n_trials"] == 30  # = result.n_evaluations（Evidence.n_trials 同源）
+    assert payload["semantics"] == {
+        "timeframe": "H1",
+        "position_fn": "tanh",
+        "neutral_band": 0.05,
+        "long_short": True,
+    }
 
     got = payload["candidates"]
     assert [c["rank"] for c in got] == [0, 1]
@@ -787,37 +803,47 @@ def test_dump_candidates_not_requested_by_default(
 
 def test_write_candidates_keeps_entry_on_broken_snapshot(tmp_path: Path) -> None:
     """非 JSON 快照 → 条目照写、原样保留字符串（失败可见且不丢数据）。"""
-    from miaosuan.cli import _write_candidates
-
     path = tmp_path / "c.json"
     n = _write_candidates(
         path, SimpleNamespace(candidates=_fake_candidates()),
         spec_out="s.json", spec_id="abc", budget="quick",
         symbol="XAUUSD", timeframe="H1", market="FOREX_XAUUSD", git_sha="deadbeef",
+        vocab_version=VOCAB_VERSION, data_fingerprint="f" * 64,
+        semantics={"timeframe": "H1", "position_fn": "tanh",
+                   "neutral_band": 0.05, "long_short": True},
+        n_trials=3280,
     )
     assert n == 2
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert payload["spec_id"] == "abc"
     assert payload["git_sha"] == "deadbeef"
     assert payload["candidates"][1]["verdict_snapshot"] == "not-a-json"
+    # §2 四字段在直接调用路径同样落盘（combine 的校验输入）
+    assert payload["vocab_version"] == VOCAB_VERSION
+    assert payload["data_fingerprint"] == "f" * 64
+    assert payload["n_trials"] == 3280
+    assert payload["semantics"]["neutral_band"] == 0.05
 
 
 def test_write_candidates_writes_empty_shell_when_no_candidates(
     tmp_path: Path,
 ) -> None:
     """0 候选也写空壳文件：下游据此区分「跑过但没产出」与「压根没跑」。"""
-    from miaosuan.cli import _write_candidates
-
     path = tmp_path / "c.json"
     n = _write_candidates(
         path, SimpleNamespace(candidates=[]),
         spec_out="s.json", spec_id="x", budget="quick",
         symbol="XAUUSD", timeframe="H1", market="FOREX_XAUUSD", git_sha="g",
+        vocab_version=VOCAB_VERSION, data_fingerprint="",
+        semantics={"timeframe": "H1", "position_fn": "tanh",
+                   "neutral_band": 0.05, "long_short": True},
+        n_trials=0,
     )
     assert n == 0
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert payload["n_candidates"] == 0
     assert payload["candidates"] == []
+    assert payload["n_trials"] == 0
 
 
 # ── mine 标签派生：timeframe / symbol 不许再标错 ──────────────────────────────
