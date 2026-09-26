@@ -39,9 +39,9 @@ from typing import Any
 import numpy as np
 import typer
 
+from .adapters.base import install_stub_modules, uninstall_stub_modules
 from .adapters.shenji import ShenjiPort
 from .adapters.shenji.lint import lint_source
-from .adapters.base import install_stub_modules, uninstall_stub_modules
 from .config import AppConfig
 from .core.features import compute_features
 from .core.signal import MIN_TRADE_EXPOSURE
@@ -52,12 +52,23 @@ from .ir.codec import read_spec, write_spec
 from .ir.provenance import resolve_git_sha
 from .ir.schema import FactorPayload, StrategySpec
 from .market.profiles import get_profile
-from .pipeline import run_mine
+from .pipeline import _gate_reasons, derive_labels, run_combine, run_mine
 from .report.equity import run_full_backtest
 from .search.budget import Budget
 from .tune import TuneConfig, TuneEngine, load_param_space_from_spec, save_tune_result
 
-__all__ = ["app", "backtest", "export", "import_spec", "mine", "report", "tune", "ui", "verify"]
+__all__ = [
+    "app",
+    "backtest",
+    "combine",
+    "export",
+    "import_spec",
+    "mine",
+    "report",
+    "tune",
+    "ui",
+    "verify",
+]
 
 app = typer.Typer(
     add_completion=False,
@@ -422,36 +433,11 @@ def mine(
         _die(f"无法加载行情数据 {data!r}：{exc}")
 
     # ── 标签派生（timeframe 标错修复）─────────────────────────────────────
-    # 优先级：**CLI 显式 > env 显式 > 数据文件名 > 配置默认**（显式意图压过自动推断，
-    # 与搜索空间覆盖同一条原则）。原先只看 `config`：`timeframe` 默认恒 H1、`symbol`
-    # 默认恒 XAUUSD，M15 数据会被标成 h1_xauusd，且 backtest/report 用的是
-    # `panel.timeframe`，spec 与回测互相矛盾。
-    #
-    # 「env 显式」的判定用**值不等于配置默认**（config 来自 from_env，CLI 覆盖在前
-    # 面已并入）：不读第二次 env，遵守「env 只在 config 边界读取」的铁律。
-    # 已知边界：env 恰好显式设成默认值时会被当未设置、落到数据文件名——此时以数据
-    # 为准反而更正确（spec 与 backtest 一致）。
-    _default_cfg = AppConfig()
-    if timeframe:  # CLI 已在上面并入 config，这里只判来源
-        tf_source = "CLI 显式"
-    elif config.timeframe != _default_cfg.timeframe:
-        tf_source = "env 显式"
-    elif panel.timeframe:
-        config = config.with_overrides(timeframe=panel.timeframe)
-        tf_source = "数据文件名"
-    else:
-        tf_source = "配置默认"
-
-    derived_symbol = str(panel.symbols[0]).strip() if panel.symbols else ""
-    if symbol:
-        sym_source = "CLI 显式"
-    elif config.symbol != _default_cfg.symbol:
-        sym_source = "env 显式"
-    elif derived_symbol and derived_symbol != "SINGLE":
-        config = config.with_overrides(symbol=derived_symbol)
-        sym_source = "数据文件名"
-    else:
-        sym_source = "配置默认"
+    # 优先级 CLI 显式 > env 显式 > 数据文件名 > 配置默认，实现收敛在
+    # `pipeline.derive_labels`（mine 与 combine 共用一套，避免两处漂移）。
+    config, sym_source, tf_source = derive_labels(
+        config, panel, explicit_timeframe=timeframe, explicit_symbol=symbol
+    )
 
     _echo(f"数据：{data}  N={panel.n_symbols} T={panel.n_bars} profile={panel.market_profile_name}")
     _echo(f"指纹：{panel.fingerprint}")
@@ -530,6 +516,92 @@ def mine(
             n_trials=int(result.n_evaluations),
         )
         _echo(f"候选落盘：{n_cands} 条 → {dump_candidates}")
+    _echo(f"spec_id={spec.spec_id}  vocab={payload_vocab}  git={git_sha}")
+
+
+# ── combine ────────────────────────────────────────────────────────────────
+@app.command()
+def combine(
+    candidates: str = typer.Option(
+        ..., "--candidates",
+        help="候选落盘 JSON 路径（mine --dump-candidates 的产物），逗号分隔",
+    ),
+    data: str = typer.Option(..., "--data", help="行情数据文件（须与候选同周期、同指纹）"),
+    method: str = typer.Option("equal", "--method", help="权重方法 equal/ic（确定性，禁 GA 搜权重）"),
+    seed: int = typer.Option(0, "--seed", help="随机种子（0 = 使用配置默认值）"),
+    out: str = typer.Option("artifacts/combo.json", "--out", help="ComboStrategySpec 输出路径"),
+    top_per_file: int = typer.Option(
+        3, "--top-per-file", help="每个候选文件取前几名（默认 rank0..2，跨文件去重相同 tokens）"
+    ),
+    market: str = typer.Option("", "--market", help="市场画像名（缺省按数据自带 profile）"),
+) -> None:
+    """多因子组合（docs/combo-impl-spec.md）：弱因子 → 同款 WF+DSR 门禁 → Combo spec。
+
+    输入是 **任务A 的候选落盘 JSON**（不是 spec 文件——里面有 n_trials/dsr/verdict），
+    产物是 kind=``combo`` 的 StrategySpec（members/weights/evidence.n_trials=Σ/verdict/provenance）。
+
+    示例::
+
+        miaosuan combine --candidates a.candidates.json,b.candidates.json \\
+            --data data/XAUUSD_H1.parquet --method equal --out artifacts/combo_h1.json
+    """
+    paths = [p.strip() for p in candidates.split(",") if p.strip()]
+    if not paths:
+        _die("--candidates 至少要给一个候选文件路径（逗号分隔）")
+    if method not in ("equal", "ic"):
+        _die(f"未知权重方法 {method!r}，可选 ['equal', 'ic']（禁止 GA 搜权重）")
+    if top_per_file < 1:
+        _die(f"--top-per-file 必须 >= 1，收到 {top_per_file}")
+
+    config = AppConfig.from_env()
+
+    try:
+        panel = load(data)
+    except (MiaoSuanError, FileNotFoundError, OSError, ValueError) as exc:
+        _die(f"无法加载行情数据 {data!r}：{exc}")
+
+    config, sym_source, tf_source = derive_labels(config, panel)
+    _echo(f"数据：{data}  N={panel.n_symbols} T={panel.n_bars} profile={panel.market_profile_name}")
+    _echo(f"指纹：{panel.fingerprint}")
+    _echo(f"标签：{config.symbol} {config.timeframe}（来源 {sym_source}/{tf_source}）")
+
+    git_sha = resolve_git_sha()
+    try:
+        outcome = run_combine(
+            paths,
+            panel=panel,
+            config=config,
+            method=method,
+            seed=int(seed),
+            git_sha=git_sha,
+            top_per_file=int(top_per_file),
+            market=market,
+        )
+    except (MiaoSuanError, ValueError) as exc:
+        _die(f"组合失败：{exc}")
+
+    candidate = outcome.candidate
+    spec = outcome.spec
+    write_spec(out, spec)
+
+    _echo(f"市场画像：{outcome.profile.name}  权重方法={method}")
+    _echo(
+        f"成员：{candidate.n_members} 个（top_per_file={top_per_file}，跨文件已去重）  "
+        f"权重={[round(float(w), 4) for w in candidate.weights]}"
+    )
+    _echo("")
+    # §5 要求的三值实测输出：verdict / DSR / n_trials（Σ 累加）。
+    _echo(f"verdict={candidate.verdict}  DSR={candidate.dsr:.4f}  n_trials={candidate.n_trials}")
+    _echo(
+        f"val={candidate.val_score:.4f}  train={candidate.train_score:.4f}  "
+        f"wf_win_rate={candidate.wf_win_rate:.3f}  sharpe_2x={candidate.sharpe_2x:.4f}"
+    )
+    for reason in _gate_reasons(candidate.verdict_snapshot):
+        _echo(f"  - {reason}")
+    _echo("")
+    _echo(f"combo spec 已写入：{out}")
+    # ComboPayload 自带 vocab_version（成员因子的词表），不能因非 FactorPayload 就打 "-"。
+    payload_vocab = getattr(spec.payload, "vocab_version", "") or "-"
     _echo(f"spec_id={spec.spec_id}  vocab={payload_vocab}  git={git_sha}")
 
 

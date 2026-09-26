@@ -255,11 +255,30 @@ class AMFitnessEvaluator:
         res = self.vm.execute([int(t) for t in tokens], self.features)
         if res is None:
             return [], []
+        return self.fold_scores_of(res)
+
+    def fold_scores_of(
+        self, factor: np.ndarray | None
+    ) -> tuple[list[float], list[float]]:
+        """对**已算好的因子**返回逐折 ``(train_scores, val_scores)``。
+
+        与 :meth:`fold_scores` 是**同一段折分打分实现**（后者先跑 VM 再转调本方法）。
+        抽出来是因为组合信号（``search/combo.py``）手上是现成的因子数组、没有 token
+        可喂 VM —— 另写一份折分逻辑必然与单因子口径漂移，故只留这一份。
+
+        Args:
+            factor: ``[N, T]`` 因子数组；``None`` 视为不可求值，返回两个空列表。
+
+        Returns:
+            逐折 ``(train_scores, val_scores)``，均已做 IC 门控、未减重复惩罚。
+        """
+        if factor is None:
+            return [], []
         train_scores: list[float] = []
         val_scores: list[float] = []
         for f in self.folds:
             tr_sc, vl_sc = self.bt.evaluate_fold(
-                res,
+                factor,
                 self.target_ret,
                 f["train_start"],
                 f["train_end"],
@@ -267,12 +286,12 @@ class AMFitnessEvaluator:
                 f["val_end"],
             )
             ic_m, _ = _compute_ic(
-                res[:, f["train_start"] : f["train_end"]],
+                factor[:, f["train_start"] : f["train_end"]],
                 self.target_ret[:, f["train_start"] : f["train_end"]],
             )
             train_scores.append(self.reward_alpha * _apply_ic_gate(float(tr_sc), ic_m))
             ic_v, _ = _compute_ic(
-                res[:, f["val_start"] : f["val_end"]],
+                factor[:, f["val_start"] : f["val_end"]],
                 self.target_ret[:, f["val_start"] : f["val_end"]],
             )
             val_scores.append(_apply_ic_gate(float(vl_sc), ic_v))
