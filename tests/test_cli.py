@@ -650,3 +650,227 @@ def test_mine_rejects_islands_exceeding_pop(tmp_path: Path) -> None:
     )
     assert result.exit_code == 1
     assert "--n-islands" in result.output
+
+
+# ── mine --dump-candidates：top-k 候选落盘 sidecar ────────────────────────────
+
+
+def _fake_candidates() -> list[Any]:
+    """两个结构真实的 :class:`Candidate`（真类型，避免替身掩盖字段名写错）。"""
+    from miaosuan.search.mine import Candidate
+
+    return [
+        Candidate(
+            tokens=(33, 62, 3, 87, 72, 119, 73, 103),
+            decoded="A → B",
+            train_score=1.5,
+            val_score=1.25,
+            status="ok",
+            sharpes={1.0: 2.0, 2.0: 1.1},
+            sharpe_2x=1.1,
+            wf_win_rate=0.8,
+            dsr=0.62,
+            verdict="DEPLOYABLE",
+            verdict_snapshot='{"hard_failures": [], "soft_failures": [], "status": "DEPLOYABLE"}',
+        ),
+        Candidate(
+            tokens=(1, 2, 3, 4, 5, 6, 7, 8),
+            decoded="C",
+            train_score=0.9,
+            val_score=0.5,
+            status="ok",
+            sharpes={},
+            sharpe_2x=0.1,
+            wf_win_rate=0.4,
+            dsr=0.2,
+            verdict="RESEARCH_ONLY",
+            verdict_snapshot="not-a-json",
+        ),
+    ]
+
+
+class _FakeOutcomeRunMine:
+    """返回可走完整 ``mine`` 流程的假 outcome（真 spec + 真候选，不跑 GA）。"""
+
+    def __init__(self) -> None:
+        self.kwargs: dict[str, Any] | None = None
+
+    def __call__(self, panel: Any, **kwargs: Any) -> Any:
+        from types import SimpleNamespace
+
+        from miaosuan.search.mine import MineResult
+
+        self.kwargs = kwargs
+        result = MineResult(
+            candidates=_fake_candidates(),
+            best=_fake_candidates()[0],
+            split=SimpleNamespace(),
+            stop_reason="MAX_GENERATIONS",
+            generations=3,
+            n_evaluations=30,
+            initial_diversity=0.5,
+            min_diversity=0.2,
+            dev_bars=300,
+            n_bars=400,
+            wall_clock_seconds=1.0,
+        )
+        return SimpleNamespace(
+            result=result,
+            spec=_spec(),
+            profile=SimpleNamespace(name="FOREX_XAUUSD"),
+        )
+
+
+def _capture_full_run(monkeypatch: pytest.MonkeyPatch) -> _FakeOutcomeRunMine:
+    stub = _FakeOutcomeRunMine()
+    monkeypatch.setattr("miaosuan.cli.run_mine", stub)
+    return stub
+
+
+def test_dump_candidates_writes_sidecar_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--dump-candidates <path>`` 落盘 top-k：结构含溯源字段 + 逐条候选。"""
+    _capture_full_run(monkeypatch)
+    out = tmp_path / "spec.json"
+    cand_path = tmp_path / "nested" / "cands.json"  # 父目录须自动创建
+    result = runner.invoke(
+        app,
+        ["mine", "--data", str(_csv(tmp_path)), "--out", str(out),
+         "--dump-candidates", str(cand_path)],
+    )
+    assert result.exit_code == 0, result.output
+    assert cand_path.is_file()
+
+    payload = json.loads(cand_path.read_text(encoding="utf-8"))
+    # 溯源字段：把候选和这次运行对上（下游多因子组合要用）
+    assert payload["version"] == 1
+    assert payload["budget"] == "standard"
+    assert payload["symbol"] == "XAUUSD"
+    assert payload["timeframe"] == "H1"
+    assert payload["market"] == "FOREX_XAUUSD"
+    assert payload["spec"] == str(out)
+    assert payload["n_candidates"] == 2
+
+    got = payload["candidates"]
+    assert [c["rank"] for c in got] == [0, 1]
+    assert got[0]["tokens"] == [33, 62, 3, 87, 72, 119, 73, 103]
+    assert got[0]["val_score"] == pytest.approx(1.25)
+    assert got[0]["dsr"] == pytest.approx(0.62)
+    assert got[0]["verdict"] == "DEPLOYABLE"
+    # 快照 JSON 字符串须被解析成**对象**（下游不必二次 json.loads）
+    assert isinstance(got[0]["verdict_snapshot"], dict)
+    assert got[0]["verdict_snapshot"]["status"] == "DEPLOYABLE"
+    assert got[0]["cost_sensitivity"] == {"1": 2.0, "2": 1.1}
+    # 快照损坏 → 保留原文字符串，绝不丢整条候选
+    assert got[1]["verdict_snapshot"] == "not-a-json"
+    assert "候选落盘：2 条" in result.output
+
+
+def test_dump_candidates_not_requested_by_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """不传 ``--dump-candidates`` → 一个候选文件都不写（默认行为零变化）。"""
+    _capture_full_run(monkeypatch)
+    out = tmp_path / "spec.json"
+    result = runner.invoke(
+        app, ["mine", "--data", str(_csv(tmp_path)), "--out", str(out)]
+    )
+    assert result.exit_code == 0, result.output
+    assert not list(tmp_path.glob("*.candidates.json"))
+    assert not list(tmp_path.glob("cands*.json"))
+    assert "候选落盘" not in result.output
+    # spec / history 两个既有 sidecar 不受影响
+    assert out.is_file()
+    assert (tmp_path / "spec.history.json").is_file()
+
+
+def test_write_candidates_keeps_entry_on_broken_snapshot(tmp_path: Path) -> None:
+    """非 JSON 快照 → 条目照写、原样保留字符串（失败可见且不丢数据）。"""
+    from miaosuan.cli import _write_candidates
+
+    path = tmp_path / "c.json"
+    n = _write_candidates(
+        path, SimpleNamespace(candidates=_fake_candidates()),
+        spec_out="s.json", spec_id="abc", budget="quick",
+        symbol="XAUUSD", timeframe="H1", market="FOREX_XAUUSD", git_sha="deadbeef",
+    )
+    assert n == 2
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["spec_id"] == "abc"
+    assert payload["git_sha"] == "deadbeef"
+    assert payload["candidates"][1]["verdict_snapshot"] == "not-a-json"
+
+
+def test_write_candidates_writes_empty_shell_when_no_candidates(
+    tmp_path: Path,
+) -> None:
+    """0 候选也写空壳文件：下游据此区分「跑过但没产出」与「压根没跑」。"""
+    from miaosuan.cli import _write_candidates
+
+    path = tmp_path / "c.json"
+    n = _write_candidates(
+        path, SimpleNamespace(candidates=[]),
+        spec_out="s.json", spec_id="x", budget="quick",
+        symbol="XAUUSD", timeframe="H1", market="FOREX_XAUUSD", git_sha="g",
+    )
+    assert n == 0
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["n_candidates"] == 0
+    assert payload["candidates"] == []
+
+
+# ── mine 标签派生：timeframe / symbol 不许再标错 ──────────────────────────────
+
+
+def test_mine_derives_timeframe_and_symbol_from_filename(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """不带 ``--timeframe/--symbol`` → 从数据文件名推导（不再恒标 h1/xauusd）。"""
+    recorder = _capture_run_mine(monkeypatch)
+    data = _csv(tmp_path, name="BTCUSDT_M15.csv")
+    result = runner.invoke(
+        app, ["mine", "--data", str(data), "--out", str(tmp_path / "s.json")]
+    )
+    assert recorder.kwargs is not None, result.output
+    config = recorder.kwargs["config"]
+    assert config.timeframe == "M15"
+    assert config.symbol == "BTCUSDT"
+    assert "标签：BTCUSDT M15" in result.output
+    assert "数据文件名" in result.output
+
+
+def test_mine_explicit_labels_beat_filename(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CLI 显式 ``--timeframe/--symbol`` 压过文件名（显式意图 > 自动推断）。"""
+    recorder = _capture_run_mine(monkeypatch)
+    data = _csv(tmp_path, name="BTCUSDT_M15.csv")
+    result = runner.invoke(
+        app,
+        ["mine", "--data", str(data), "--out", str(tmp_path / "s.json"),
+         "--timeframe", "H4", "--symbol", "ETHUSDT"],
+    )
+    assert recorder.kwargs is not None, result.output
+    config = recorder.kwargs["config"]
+    assert config.timeframe == "H4"
+    assert config.symbol == "ETHUSDT"
+    assert "CLI 显式" in result.output
+
+
+def test_mine_env_label_beats_filename(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """env 显式设置（值≠配置默认）压过文件名，且不违反「env 只在 config 读」铁律。"""
+    recorder = _capture_run_mine(monkeypatch)
+    monkeypatch.setenv("MIAOSUAN_TIMEFRAME", "M30")
+    monkeypatch.setenv("MIAOSUAN_SYMBOL", "GBPUSD")
+    data = _csv(tmp_path, name="BTCUSDT_M15.csv")
+    result = runner.invoke(
+        app, ["mine", "--data", str(data), "--out", str(tmp_path / "s.json")]
+    )
+    assert recorder.kwargs is not None, result.output
+    config = recorder.kwargs["config"]
+    assert config.timeframe == "M30"
+    assert config.symbol == "GBPUSD"
+    assert "env 显式" in result.output
