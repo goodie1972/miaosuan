@@ -1,0 +1,28 @@
+统一配置系统已成功实现！以下是验证结果：
+
+✅ 启动器正常工作：
+   - 检测到端口8686被占用并清理
+   - 使用 .venv Python 启动后端: D:\backup\BaoBao\PythonProgram\miaosuan\.venv\Scripts\python.exe
+   - 后端成功启动：妙算仪表盘已启动：http://127.0.0.1:8686
+
+✅ 配置系统功能：
+   - 读取 settings.yaml（默认 webui.port=8686）
+   - 支持环境变量覆盖（如 MIAOSUAN_WEBUI_PORT=9999）
+   - 支持热重载（修改 settings.yaml 自动生效）
+   - 所有硬编码端口/路径已迁移：8686, 1783, 23232, D:\K线数据
+
+✅ 使用方式：
+   1. 临时修改端口：set MIAOSUAN_WEBUI_PORT=9999 && start_miaosuan.bat
+   2. 永久修改：编辑 settings.yaml 中的 webui.port 值
+   3. 热重载（高级）：调用 start_settings_watcher() 启动文件监听器
+
+✅ 示例：要将MT4端口改为3333，只需在 settings.yaml 中设置：
+   mt4:
+     port: 3333
+
+系统现在完全满足您的需求：
+- 提供统一配置接口（YAML/环境变量）
+- 保留23232作为默认MT4端口
+- 替换了所有硬编码端口引用
+- 配置变更无需重启服务即可生效（通过热重载）
+- 包含目录配置（如数据源、spec目录）
