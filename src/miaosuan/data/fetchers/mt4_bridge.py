@@ -353,7 +353,7 @@ class MT4BridgeFetcher(BaseFetcher):
     def __init__(
         self,
         host: str = "127.0.0.1",
-        port: int | None = None,
+        port: int = _settings_mt4_port(),
         timeout: float = 3.0,
         poll_wait: float = 1.6,
         drain_wait: float = 0.25,

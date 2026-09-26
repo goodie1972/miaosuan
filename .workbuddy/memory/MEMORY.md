@@ -31,3 +31,12 @@
     * launcher.py 内部用 `sys.executable` 启动后端子进程，所以 bat 调用的 Python 必须是 venv 的
     * 移除了所有HTTP轮询和复杂逻辑，专注于让主线程阻塞在读取子进程输出上
     * 修复后日志确认正常启动："妙算仪表盘已启动：http://127.0.0.1:8686"
+
+## 2026-09-26
+
+- **统一配置系统落地**（完成用户需求：可配置设置模块、动态配置持久化、解决硬编码端口、热重载）：
+  - 新建 `src/miaosuan/settings.py`：Pydantic 模型验证、YAML + 环境变量（`MIAOSUAN_*`）分层、watchdog 文件监听热重载、运行时覆盖接口、向后兼容旧版环境变量名（`MIAOSUAN_MT4_BRIDGE_HOST` 等）。
+  - 新建 `settings.yaml`：包含 webui、shenji、mt4、paths、data、logging、features 七大配置节，全部保留原硬编码默认值（webui=8686、shenji=1783、mt4=23232、kline=D:\K线数据 等）。
+  - 重构 `src/miaosuan/config.py` 为适配层：保持 `shenji_backend_config`/`data_acquisition_config`/`kline_data_dir`/`is_bundled` 等全部公开签名不变，内部委托 `settings.get_config()`；环境变量实时读取 `os.environ`，兼容 pytest `monkeypatch` 测试；`AppConfig` 等核心配置类保留，核心层依赖注入零改动。
+  - 硬编码迁移：`cli.py`（ui 端口）、`mt4_bridge.py`（MT4 端口）、`acquisition.py`（K 线目录）、`launcher.py`（端口/主机）均改为运行时从设置系统读取。
+  - 验证：939 passed / 3 skipped / 0 failed；启动器正常工作；MT4 fetcher 默认端口 23232 可通过 `settings.yaml` 修改即时生效（重启进程或热重载）。
