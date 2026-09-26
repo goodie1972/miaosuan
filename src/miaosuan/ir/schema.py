@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
@@ -103,6 +104,69 @@ class ParamPayload:
         return cls(
             template_id=str(data["template_id"]),
             params={str(k): float(v) for k, v in (data.get("params") or {}).items()},
+        )
+
+
+@dataclass(frozen=True)
+class ComboPayload:
+    """组合体：多个成员因子（RPN token 序列）+ 各自权重（多因子组合，spec 1.x 内新增 kind）。
+
+    规格 ``docs/combo-impl-spec.md`` §3 T2 / §1.6：
+
+    * ``kind = "combo"`` —— 在 spec 1.x 内以**新 kind 兼容新增**，不 bump ``SPEC_VERSION`` 2.0；
+    * ``members`` 是各成员因子的 RPN token 序列（各自与同一 ``vocab_version`` 绑定）；
+    * ``weights`` 与 ``members`` 等长（等权时全为 ``1/M``，IC 加权时为确定性权重）；
+      **禁止 GA 搜权重**（§1.2），故权重是可复现的输入而非搜索结果；
+    * ``vocab_version`` 对**全体成员共用**——成员来自同一词表，跨词表组合无意义。
+
+    Attributes:
+        members: 成员因子的 RPN token 序列元组（至少 1 个成员）。
+        weights: 与 ``members`` 等长的浮点权重（非有限值或全零拒绝）。
+        vocab_version: 词表版本指纹（全体成员共用）。
+    """
+
+    kind: ClassVar[str] = "combo"
+    members: tuple[tuple[int, ...], ...]
+    weights: tuple[float, ...]
+    vocab_version: str
+
+    def __post_init__(self) -> None:
+        if not self.members:
+            raise ValueError("ComboPayload.members 不能为空（组合至少要有 1 个成员）")
+        if len(self.weights) != len(self.members):
+            raise ValueError(
+                f"weights 数量与 members 不一致：{len(self.weights)} vs {len(self.members)}"
+            )
+        if any(len(m) == 0 for m in self.members):
+            raise ValueError("ComboPayload.members 不得含空 token 序列")
+        if not all(math.isfinite(w) for w in self.weights):
+            raise ValueError("ComboPayload.weights 含非有限值（NaN/Inf）")
+        if float(sum(abs(w) for w in self.weights)) == 0.0:
+            raise ValueError("ComboPayload.weights 全为 0 —— 组合恒为常数")
+
+    @property
+    def n_members(self) -> int:
+        """成员因子个数。"""
+        return len(self.members)
+
+    def to_dict(self) -> dict[str, Any]:
+        """序列化为纯字典。"""
+        return {
+            "kind": self.kind,
+            "members": [list(m) for m in self.members],
+            "weights": [float(w) for w in self.weights],
+            "vocab_version": self.vocab_version,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> ComboPayload:
+        """从字典还原（:meth:`to_dict` 的逆操作）。"""
+        return cls(
+            members=tuple(
+                tuple(int(t) for t in m) for m in (data.get("members") or ())
+            ),
+            weights=tuple(float(w) for w in (data.get("weights") or ())),
+            vocab_version=str(data.get("vocab_version", "")),
         )
 
 
@@ -285,7 +349,7 @@ class StrategySpec:
 
     spec_version: str = SPEC_VERSION
     name: str = ""
-    payload: FactorPayload | ParamPayload = field(
+    payload: FactorPayload | ParamPayload | ComboPayload = field(
         default_factory=lambda: FactorPayload(tokens=(), vocab_version="")
     )
     semantics: Semantics = field(default_factory=Semantics)
@@ -311,11 +375,17 @@ class StrategySpec:
         raw_payload = data.get("payload") or {}
         kind = str(raw_payload.get("kind", "factor"))
         if kind == FactorPayload.kind:
-            payload: FactorPayload | ParamPayload = FactorPayload.from_dict(raw_payload)
+            payload: FactorPayload | ParamPayload | ComboPayload = FactorPayload.from_dict(
+                raw_payload
+            )
         elif kind == ParamPayload.kind:
             payload = ParamPayload.from_dict(raw_payload)
+        elif kind == ComboPayload.kind:
+            payload = ComboPayload.from_dict(raw_payload)
         else:
-            raise ValueError(f"未知 payload.kind: {kind!r}（期望 'factor' 或 'param'）")
+            raise ValueError(
+                f"未知 payload.kind: {kind!r}（期望 'factor' / 'param' / 'combo'）"
+            )
         return cls(
             spec_version=str(data.get("spec_version", SPEC_VERSION)),
             name=str(data.get("name", "")),
