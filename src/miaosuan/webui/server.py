@@ -980,7 +980,7 @@ def create_app() -> FastAPI:
                 _tune_job["error"] = f"{type(exc).__name__}: {exc}"
                 _tune_job["running"] = False
 
-        _tune_job = {"running": True, "result": None, "error": ""}
+        _tune_job: dict[str, Any] = {"running": True, "result": None, "error": ""}
         threading.Thread(target=_run, daemon=True).start()
         return {"ok": True, "message": "寻优任务已启动"}
 
@@ -1298,7 +1298,7 @@ def create_app() -> FastAPI:
 
         exports = [
             s for s in all_strategies
-            if s.get("spec_id")[:12] == spec_id[:12]
+            if (sid := s.get("spec_id")) is not None and isinstance(sid, str) and sid[:12] == spec_id[:12]
         ]
         backtests = [
             bt for bt in all_backtests

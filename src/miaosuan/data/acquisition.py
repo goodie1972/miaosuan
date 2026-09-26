@@ -50,8 +50,8 @@ __all__ = [
 ]
 
 #: 默认本地缓存目录列表（与 ``server.py`` 的 ``_DATA_DIRS`` 对齐）。
+#: 首项从统一设置系统获取（settings.yaml → paths.kline）。
 _DEFAULT_CACHE_DIRS: tuple[Path, ...] = (
-    Path(r"D:\K线数据"),
     Path(__file__).resolve().parents[2] / "data",
 )
 
@@ -652,7 +652,10 @@ def _cache_dirs_from_config() -> tuple[Path, ...]:
         p = Path(custom)
         p.mkdir(parents=True, exist_ok=True)
         return (p,)
-    return _DEFAULT_CACHE_DIRS
+    # 从统一设置系统获取 K 线数据目录（settings.yaml → paths.kline）
+    from ..config import kline_data_dir
+    dirs = [Path(kline_data_dir())] + list(_DEFAULT_CACHE_DIRS)
+    return tuple(dirs)
 
 
 def _scan_cache_dirs(cache_dirs: tuple[Path, ...]) -> list[dict[str, Any]]:

@@ -44,7 +44,22 @@ from .base import BaseFetcher
 
 __all__ = ["MT4BridgeClient", "MT4BridgeFetcher", "DEFAULT_MT4_PORT"]
 
+
+def _settings_mt4_port() -> int:
+    """从统一设置系统读取 MT4 Bridge 端口（settings.yaml 可改，支持热重载）。
+
+    延迟导入避免 import 期副作用；设置系统不可用时回落 23232。
+    """
+    try:
+        from ...settings import get_config
+        return get_config().mt4.port
+    except Exception:  # pragma: no cover - 防御性
+        return 23232
+
+
 #: FreeMT4Bridge V3 默认监听端口（EA 源码 `#property` 未固定，社区默认 23232）。
+#: 注意：这是**回退值**；实际运行时默认端口由统一设置系统决定
+#: （:func:`_settings_mt4_port`，对应 ``settings.yaml → mt4.port``）。
 DEFAULT_MT4_PORT: int = 23232
 
 #: 妙算周期标识 -> MQL4 ``PERIOD_*`` 常数（EA 按整数接收，见源码第 236 行）。
@@ -80,7 +95,7 @@ class MT4BridgeClient:
 
     Args:
         host: 监听地址，默认 ``127.0.0.1``。
-        port: 监听端口，默认 :data:`DEFAULT_MT4_PORT`。
+        port: 监听端口，默认从统一设置系统读取（settings.yaml → mt4.port）。
         timeout: 单次 socket 操作超时（秒）。
         poll_wait: 发出请求后等待 EA 轮询一拍的时间（秒）。EA 约 1s 一次，
             取值小于 1 会偶发空读；过大则白白变慢。
@@ -91,13 +106,13 @@ class MT4BridgeClient:
     def __init__(
         self,
         host: str = "127.0.0.1",
-        port: int = DEFAULT_MT4_PORT,
+        port: int | None = None,
         timeout: float = 3.0,
         poll_wait: float = 1.6,
         drain_wait: float = 0.25,
     ) -> None:
         self.host = host
-        self.port = port
+        self.port = port if port is not None else _settings_mt4_port()
         self.timeout = timeout
         self.poll_wait = poll_wait
         self.drain_wait = drain_wait
@@ -323,6 +338,7 @@ class MT4BridgeFetcher(BaseFetcher):
 
     Args:
         host / port / timeout / poll_wait / drain_wait: 传给 :class:`MT4BridgeClient`。
+            port 缺省从统一设置系统读取（settings.yaml → mt4.port）。
         page_bars: 每次 ``F042`` 请求的根数（1..5000）。
         max_bars: ``fetch_full`` 累计上限，防止无限翻页。
         time_base: 输出时间戳口径，``"utc"``（默认，符合 panel 契约）/
@@ -337,7 +353,7 @@ class MT4BridgeFetcher(BaseFetcher):
     def __init__(
         self,
         host: str = "127.0.0.1",
-        port: int = DEFAULT_MT4_PORT,
+        port: int | None = None,
         timeout: float = 3.0,
         poll_wait: float = 1.6,
         drain_wait: float = 0.25,

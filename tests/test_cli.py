@@ -295,6 +295,69 @@ def test_export_gate_deadband_switch(tmp_path: Path, spec_file: Path) -> None:
     assert "_GATE_DEADBAND = 0.05" in written
 
 
+def test_import_command(tmp_path: Path, spec_file: Path) -> None:
+    """Test the new import command that extracts StrategySpec from exported .py file."""
+    # First export a spec to a .py file
+    out_dir = tmp_path / "strategies"
+    result = runner.invoke(
+        app,
+        [
+            "export",
+            "--spec",
+            str(spec_file),
+            "--out-dir",
+            str(out_dir),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    
+    # Get the generated .py file
+    strategy_file = next(out_dir.glob("*.py"))
+    
+    # Now test importing it back
+    result = runner.invoke(
+        app,
+        [
+            "import",
+            "--file",
+            str(strategy_file),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    
+    # The output should be valid JSON matching the original spec
+    import json
+    imported_spec = json.loads(result.output.strip())
+    original_spec = json.loads(spec_file.read_text(encoding="utf-8"))
+    
+    # Compare key fields (excluding generated_at which will differ)
+    assert imported_spec["spec_version"] == original_spec["spec_version"]
+    assert imported_spec["name"] == original_spec["name"]
+    assert imported_spec["payload"]["kind"] == original_spec["payload"]["kind"]
+    assert imported_spec["payload"]["tokens"] == original_spec["payload"]["tokens"]
+    assert imported_spec["payload"]["vocab_version"] == original_spec["payload"]["vocab_version"]
+    
+    # Test with --out option
+    out_spec_file = tmp_path / "imported_spec.json"
+    result = runner.invoke(
+        app,
+        [
+            "import",
+            "--file",
+            str(strategy_file),
+            "--out",
+            str(out_spec_file),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert out_spec_file.exists()
+    
+    # Verify the written file matches
+    written_spec = json.loads(out_spec_file.read_text(encoding="utf-8"))
+    assert written_spec["spec_version"] == original_spec["spec_version"]
+    assert written_spec["name"] == original_spec["name"]
+
+
 def test_verify_command_on_exported_file(tmp_path: Path, spec_file: Path) -> None:
     export = runner.invoke(
         app,

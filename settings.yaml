@@ -1,0 +1,55 @@
+# 妙算 (MiaoSuan) 统一配置文件
+# 所有可配置项均可在此文件中设置
+# 环境变量 MIAOSUAN_* 具有最高优先级，会覆盖此文件中的设置
+# 修改此文件后，若启用了文件监听器，配置会热重载生效
+
+# 服务器端口配置
+webui:
+  port: 8686          # WebUI 后端端口
+  host: "127.0.0.1"   # 绑定地址
+  reload: false       # 开发时热重载 (仅在直接运行时有效)
+
+shenji:
+  port: 1783          # 神机仪表盘端口 (供 WebUI 只读访问)
+  host: "127.0.0.1"
+  timeout: 3.0        # 请求超时（秒）
+
+# MT4 Bridge 配置 (FreeMT4Bridge EA)
+mt4:
+  host: "127.0.0.1"          # MT4 终端地址
+  port: 23232                # FreeMT4Bridge EA 端口 (需与 EA 中的一致)
+  time_base: "utc"           # 时间戳口径: utc / broker / shanghai
+  timeout: 5.0               # 连接超时（秒）
+  poll_wait: 1000            # EA 响应轮询间隔（毫秒）
+  drain_wait: 100            # 数据排空等待（毫秒）
+
+# 数据目录配置
+paths:
+  data_cache: "data/cache"    # OHLCV 数据缓存目录 (Parquet 文件)
+  artifacts: "artifacts"      # Spec/策略/回测/调优产物目录
+  tmp: "tmp"                  # 临时文件目录
+  kline: "D:\\K线数据"         # 本地 K 线数据根目录 (TradingView 导出)
+  shenji_db: ""               # 妙算本地库路径 (留空则自动探测默认路径)
+
+# 数据源配置
+data:
+  timeout: 30                 # 网络请求超时（秒）
+  source: ""                  # 默认数据源 ("shenji", "tradingview" 等，空=自动选择)
+  api_url: ""                 # 通用 HTTP 数据源地址 (留空则不启用)
+  cache_dir: ""               # 数据缓存目录 (留空则使用 paths.data_cache)
+  dukascopy_user: ""          # Dukascopy 实盘用户名 (可选)
+  dukascopy_password: ""      # Dukascopy 实盘密码 (可选)
+
+# 日志配置
+logging:
+  level: "INFO"               # 日志级别: DEBUG/INFO/WARNING/ERROR/CRITICAL
+  json_lines: true            # 生产环境使用 JSON 行格式
+
+# 功能开关
+features:
+  enable_webui: true          # 启用 Web 界面
+  enable_mt4: true            # 启用 MT4 Bridge 数据源
+  enable_shenji: true         # 启用神机仪表盘只读访问
+  enable_spec_management: true # 启用 Spec 管理页面
+  enable_backtest: true       # 启用回测功能
+  enable_tune: true           # 启用参数调优功能
