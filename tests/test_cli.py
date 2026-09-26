@@ -10,12 +10,21 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
 import pytest
+import typer
 from typer.testing import CliRunner
 
-from miaosuan.cli import _extract_tokens, _history_payload, _write_history, app
+from miaosuan.cli import (
+    _extract_tokens,
+    _history_payload,
+    _resolve_search_space,
+    _write_history,
+    app,
+)
+from miaosuan.config import AppConfig
 from miaosuan.core.vocab import VOCAB_VERSION
 from miaosuan.ir.codec import write_spec
 from miaosuan.ir.schema import (
@@ -425,3 +434,219 @@ def test_extract_tokens_helper() -> None:
     assert _extract_tokens("_TOKENS = (33, 62, 3)\n") == (33, 62, 3)
     assert _extract_tokens("_TOKENS = ()\n") == ()
     assert _extract_tokens("nothing here\n") == ()
+
+
+# ── mine 搜索空间覆盖：--pop-size / --elite-size / --formula-len / --n-islands ──
+
+
+class _StopMine(Exception):
+    """run_mine 桩的提前终止信号（不跑真 GA，也不需要真 spec 产物）。"""
+
+
+class _RecordingRunMine:
+    """记录 ``run_mine`` 收到的 ``config`` / ``budget`` 后立刻终止。
+
+    覆盖是否**真的生效**只能在这一层验：``run_mine`` 收到的 ``budget`` 就是
+    ``search.mine`` 里 ``RpnGA.run`` 读的那份（``config.search.pop_size`` 运行时
+    不被读取）。跑完整 GA 太慢，故在此截断。
+    """
+
+    def __init__(self) -> None:
+        self.kwargs: dict[str, Any] | None = None
+
+    def __call__(self, panel: Any, **kwargs: Any) -> Any:
+        self.kwargs = kwargs
+        raise _StopMine
+
+
+def _capture_run_mine(monkeypatch: pytest.MonkeyPatch) -> _RecordingRunMine:
+    recorder = _RecordingRunMine()
+    monkeypatch.setattr("miaosuan.cli.run_mine", recorder)
+    return recorder
+
+
+def test_search_space_defaults_are_not_overridden() -> None:
+    """不传任何覆盖参数 → config 与预算档位表都保持默认（0 = 不覆盖）。"""
+    config, budget = _resolve_search_space(
+        AppConfig(),
+        budget_profile="standard",
+        pop_size=0,
+        elite_size=0,
+        formula_len=0,
+        n_islands=0,
+    )
+    # config 线：GASearchConfig 默认
+    assert config.search.pop_size == 256
+    assert config.search.elite_size == 32
+    assert config.search.formula_len == 8
+    assert config.search.n_islands == 4
+    # 运行线：standard 档位表
+    assert (budget.pop_size, budget.elite_size, budget.island_count) == (256, 32, 4)
+    assert budget.profile == "standard"
+
+
+def test_search_space_overrides_apply_to_both_lines() -> None:
+    """覆盖值必须同时落到 config.search（进 snapshot）与 Budget（真跑的那份）。"""
+    config, budget = _resolve_search_space(
+        AppConfig(),
+        budget_profile="deep",
+        pop_size=512,
+        elite_size=64,
+        formula_len=12,
+        n_islands=2,
+    )
+    assert (config.search.pop_size, config.search.elite_size) == (512, 64)
+    assert config.search.formula_len == 12
+    assert config.search.n_islands == 2
+    # 运行时这份必须被改写（否则只写进产物、实际仍是 deep 档 384）
+    assert (budget.pop_size, budget.elite_size, budget.island_count) == (512, 64, 2)
+    assert budget.profile == "deep"
+    # 产物 config_snapshot 必须如实反映覆盖后的值
+    snapshot = config.to_snapshot()
+    assert snapshot["search"]["pop_size"] == 512
+    assert snapshot["search"]["elite_size"] == 64
+    assert snapshot["search"]["formula_len"] == 12
+    assert snapshot["search"]["n_islands"] == 2
+
+
+def test_search_space_partial_override_keeps_profile_values() -> None:
+    """只覆盖 pop 时：elite/islands 仍用档位表；config 未被指定的字段不动。"""
+    config, budget = _resolve_search_space(
+        AppConfig(),
+        budget_profile="quick",
+        pop_size=200,
+        elite_size=0,
+        formula_len=0,
+        n_islands=0,
+    )
+    assert budget.pop_size == 200
+    assert budget.elite_size == 12  # quick 档位表
+    assert budget.island_count == 1  # quick 档位表（1 = 关闭分岛）
+    assert config.search.pop_size == 200
+    assert config.search.formula_len == 8  # 未指定 → 不覆盖
+
+
+def test_search_space_rejects_elite_greater_than_pop() -> None:
+    with pytest.raises(typer.Exit):
+        _resolve_search_space(
+            AppConfig(),
+            budget_profile="standard",
+            pop_size=16,
+            elite_size=32,
+            formula_len=0,
+            n_islands=0,
+        )
+
+
+def test_search_space_rejects_islands_greater_than_pop() -> None:
+    with pytest.raises(typer.Exit):
+        _resolve_search_space(
+            AppConfig(),
+            budget_profile="standard",
+            pop_size=4,
+            elite_size=2,
+            formula_len=0,
+            n_islands=8,
+        )
+
+
+def test_search_space_rejects_negative_values() -> None:
+    defaults: dict[str, int] = {
+        "pop_size": 0,
+        "elite_size": 0,
+        "formula_len": 0,
+        "n_islands": 0,
+    }
+    for flag in defaults:
+        with pytest.raises(typer.Exit):
+            _resolve_search_space(
+                AppConfig(),
+                budget_profile="standard",
+                **{**defaults, flag: -1},
+            )
+
+
+def test_mine_cli_overrides_reach_run_mine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CLI 覆盖参数要原样传到 ``run_mine(config=..., budget=...)``。"""
+    recorder = _capture_run_mine(monkeypatch)
+    data = _csv(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "mine",
+            "--data",
+            str(data),
+            "--budget",
+            "deep",
+            "--pop-size",
+            "512",
+            "--elite-size",
+            "64",
+            "--formula-len",
+            "12",
+            "--n-islands",
+            "2",
+            "--out",
+            str(tmp_path / "spec.json"),
+        ],
+    )
+    # 桩 raise _StopMine → CliRunner 捕获为非 0 退出码；关键是 kwargs 已记录。
+    assert recorder.kwargs is not None, result.output
+    config = recorder.kwargs["config"]
+    budget = recorder.kwargs["budget"]
+    assert (budget.pop_size, budget.elite_size, budget.island_count) == (512, 64, 2)
+    assert (config.search.pop_size, config.search.elite_size) == (512, 64)
+    assert config.search.formula_len == 12
+    assert config.search.n_islands == 2
+    assert recorder.kwargs["budget_profile"] == "deep"
+
+
+def test_mine_cli_without_overrides_passes_profile_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """不传覆盖参数 → 传下去的是档位表预算，config 保持 GASearchConfig 默认。"""
+    recorder = _capture_run_mine(monkeypatch)
+    result = runner.invoke(
+        app,
+        ["mine", "--data", str(_csv(tmp_path)), "--budget", "deep",
+         "--out", str(tmp_path / "spec.json")],
+    )
+    assert recorder.kwargs is not None, result.output
+    config = recorder.kwargs["config"]
+    budget = recorder.kwargs["budget"]
+    assert (budget.pop_size, budget.elite_size, budget.island_count) == (384, 48, 4)
+    # config 线不受档位影响：pop 仍是 GASearchConfig 默认（两条线互不覆盖的证据）
+    assert (config.search.pop_size, config.search.formula_len) == (256, 8)
+
+
+def test_mine_rejects_elite_gt_pop_before_loading_data(tmp_path: Path) -> None:
+    """非法组合必须在**读数据之前**报错（文件不存在也能先给出参数错误）。"""
+    result = runner.invoke(
+        app,
+        ["mine", "--data", str(tmp_path / "nope.csv"), "--pop-size", "16",
+         "--elite-size", "32"],
+    )
+    assert result.exit_code == 1
+    assert "不得大于" in result.output
+    assert "无法加载" not in result.output
+
+
+def test_mine_rejects_negative_override_flag(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app, ["mine", "--data", str(tmp_path / "nope.csv"), "--pop-size=-1"]
+    )
+    assert result.exit_code == 1
+    assert "--pop-size" in result.output
+    assert "不覆盖" in result.output
+
+
+def test_mine_rejects_islands_exceeding_pop(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["mine", "--data", str(tmp_path / "nope.csv"), "--pop-size", "4",
+         "--elite-size", "2", "--n-islands", "8"],
+    )
+    assert result.exit_code == 1
+    assert "--n-islands" in result.output

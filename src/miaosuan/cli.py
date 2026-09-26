@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -46,13 +47,14 @@ from .core.features import compute_features
 from .core.signal import MIN_TRADE_EXPOSURE
 from .core.vm import StackVM
 from .data.loader import load
-from .errors import MiaoSuanError
+from .errors import ConfigError, MiaoSuanError
 from .ir.codec import read_spec, write_spec
 from .ir.provenance import resolve_git_sha
 from .ir.schema import FactorPayload, StrategySpec
 from .market.profiles import get_profile
 from .pipeline import run_mine
 from .report.equity import run_full_backtest
+from .search.budget import Budget
 from .tune import TuneConfig, TuneEngine, load_param_space_from_spec, save_tune_result
 
 __all__ = ["app", "backtest", "export", "import_spec", "mine", "report", "tune", "ui", "verify"]
@@ -143,6 +145,99 @@ def _write_history(path: Path, result: Any, *, spec_out: str, budget: str) -> in
 
 
 # ── mine ────────────────────────────────────────────────────────────────────
+def _resolve_search_space(
+    config: AppConfig,
+    *,
+    budget_profile: str,
+    pop_size: int,
+    elite_size: int,
+    formula_len: int,
+    n_islands: int,
+) -> tuple[AppConfig, Budget]:
+    """校验 CLI 的搜索空间覆盖值，返回 ``(config, 运行时 Budget)``。
+
+    **0 = 不覆盖**（沿用预算档位 / ``GASearchConfig`` 默认）；负值一律报错。
+
+    为什么必须同时改两条配置线（读 ``run_mine`` → ``search.mine`` → ``RpnGA.run``
+    得出的结论，不是猜的）：
+
+    * 运行时种群/精英/岛屿数 **只由 ``search.budget.Budget`` 决定**
+      （``RpnGA.run(budget)`` 里 ``budget.pop_size`` / ``budget.elite_size`` /
+      ``budget.island_count``），而这个 Budget 由 ``Budget.from_profile(budget)``
+      按档位表构造 —— **deep 档 pop=384 就在这里，与 ``config.search`` 无关**；
+    * ``config.search``（``GASearchConfig``）只真正生效于 ``formula_len``
+      （``RpnGA(length=...)``）与交叉/变异概率，其 ``pop_size`` / ``elite_size`` /
+      ``n_islands`` 运行时**不被读取**，只进 ``provenance.config_snapshot``。
+
+    因此仅 ``replace(config.search, ...)`` 会让覆盖「写进产物但没跑」；仅改 Budget
+    则 snapshot 与实跑不一致。两条线一起改，才能满足「CLI 显式值 > 一切默认值」
+    且产物如实反映实跑值。注意 ``config.budget``（``BudgetConfig``）字段只有墙钟/
+    代数/早停，**没有** pop/elite/islands，且挖掘路径不读它，故无需同步。
+
+    Args:
+        config: 当前生效配置（env + CLI 覆盖之后）。
+        budget_profile: 预算档位名（已由调用方校验合法）。
+        pop_size / elite_size / formula_len / n_islands: CLI 传入的覆盖值。
+
+    Returns:
+        ``(覆盖后的 config, 实际运行的 Budget)``。
+
+    Raises:
+        typer.Exit: 覆盖值为负，或组合非法（elite > pop、岛屿数 > pop）时。
+    """
+    for flag, value in (
+        ("--pop-size", pop_size),
+        ("--elite-size", elite_size),
+        ("--formula-len", formula_len),
+        ("--n-islands", n_islands),
+    ):
+        if value < 0:
+            _die(f"{flag} 必须为非负整数（0 = 不覆盖），收到 {value}")
+
+    # 生效值 = 覆盖值，否则取预算档位表里的值（= 运行时真正用的值）。
+    base_budget = Budget.from_profile(budget_profile)
+    eff_pop = pop_size or base_budget.pop_size
+    eff_elite = elite_size or base_budget.elite_size
+    eff_islands = n_islands or base_budget.island_count
+
+    if eff_elite > eff_pop:
+        _die(
+            f"elite_size({eff_elite}) 不得大于 pop_size({eff_pop})——"
+            "请调大 --pop-size 或调小 --elite-size"
+        )
+    if eff_islands > eff_pop:
+        _die(
+            f"--n-islands({eff_islands}) 不得超过 pop_size({eff_pop})"
+            "（每个岛至少要分到 1 个个体）"
+        )
+
+    search_over: dict[str, Any] = {}
+    budget_over: dict[str, Any] = {}
+    if pop_size:
+        search_over["pop_size"] = pop_size
+        budget_over["pop_size"] = pop_size
+    if elite_size:
+        search_over["elite_size"] = elite_size
+        budget_over["elite_size"] = elite_size
+    if formula_len:
+        search_over["formula_len"] = formula_len
+    if n_islands:
+        search_over["n_islands"] = n_islands
+        budget_over["island_count"] = n_islands
+
+    if search_over:
+        try:
+            config = config.with_overrides(search=replace(config.search, **search_over))
+        except ConfigError as exc:  # 数据类 __post_init__ 的二次防线
+            _die(f"搜索空间参数非法：{exc}")
+    if budget_over:
+        try:
+            base_budget = replace(base_budget, **budget_over)
+        except ConfigError as exc:  # 同上（elite > pop 已在上面用更友好的文案拦过）
+            _die(f"搜索空间参数非法：{exc}")
+    return config, base_budget
+
+
 @app.command()
 def mine(
     data: str = typer.Option(..., "--data", help="行情数据文件（parquet / csv）"),
@@ -159,8 +254,26 @@ def mine(
         "--history-out",
         help="逐代历史 sidecar 路径（缺省由 --out 派生：<stem>.history.json）",
     ),
+    pop_size: int = typer.Option(
+        0, "--pop-size", help="覆盖种群规模 P（0 = 用预算档位值）"
+    ),
+    elite_size: int = typer.Option(
+        0, "--elite-size", help="覆盖精英数（0 = 用预算档位值；须 ≤ pop_size）"
+    ),
+    formula_len: int = typer.Option(
+        0, "--formula-len", help="覆盖公式 token 数（0 = 用默认 8；须 ≥ 1）"
+    ),
+    n_islands: int = typer.Option(
+        0, "--n-islands", help="覆盖岛屿数（0 = 用预算档位值；1 = 关闭分岛）"
+    ),
 ) -> None:
-    """挖掘因子：数据 → 切分（封印 hold-out）→ 搜索 → 门禁 → Spec JSON。"""
+    """挖掘因子：数据 → 切分（封印 hold-out）→ 搜索 → 门禁 → Spec JSON。
+
+    搜索空间可显式覆盖（0 = 不覆盖）::
+
+        miaosuan mine --data data/XAUUSD_H1.parquet --budget deep \\
+            --pop-size 512 --elite-size 64 --formula-len 12 --n-islands 4
+    """
     if budget not in _BUDGETS:
         _die(f"未知预算档位 {budget!r}，可选 {list(_BUDGETS)}")
 
@@ -174,6 +287,16 @@ def mine(
         overrides["seed"] = int(seed)
     if overrides:
         config = config.with_overrides(**overrides)
+
+    # 搜索空间覆盖：先于数据加载校验（非法参数要秒回，不要等 IO）。
+    config, runtime_budget = _resolve_search_space(
+        config,
+        budget_profile=budget,
+        pop_size=pop_size,
+        elite_size=elite_size,
+        formula_len=formula_len,
+        n_islands=n_islands,
+    )
 
     try:
         panel = load(data)
@@ -192,6 +315,7 @@ def mine(
             n_folds=n_folds,
             market=market,
             git_sha=git_sha,
+            budget=runtime_budget,
         )
     except MiaoSuanError as exc:
         _die(f"挖掘失败：{exc}")
@@ -202,6 +326,11 @@ def mine(
     history_path = Path(history_out) if history_out else Path(out).with_suffix(".history.json")
     n_points = _write_history(history_path, result, spec_out=out, budget=budget)
     _echo(f"市场画像：{outcome.profile.name}  预算档位={budget}")
+    if pop_size or elite_size or formula_len or n_islands:
+        _echo(
+            f"搜索覆盖：pop={runtime_budget.pop_size}  elite={runtime_budget.elite_size}  "
+            f"islands={runtime_budget.island_count}  formula_len={config.search.formula_len}"
+        )
     _echo("")
     _echo(f"停止原因：{result.stop_reason}  代数={result.generations}  评估={result.n_evaluations}")
     _echo(

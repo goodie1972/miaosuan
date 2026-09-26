@@ -32,7 +32,7 @@ from .data.split import HoldoutSealRegistry
 from .ir.provenance import build_provenance
 from .ir.schema import Evidence, FactorPayload, Semantics, StrategySpec
 from .market.profiles import FrozenMarketProfile, get_profile
-from .search.budget import DEFAULT_PROFILE
+from .search.budget import DEFAULT_PROFILE, Budget
 from .search.mine import Candidate, MineResult, mine
 
 __all__ = ["MineOutcome", "build_spec", "resolve_market", "run_mine"]
@@ -204,6 +204,7 @@ def run_mine(
     git_sha: str = "unknown",
     created_at: str = "",
     name: str = "",
+    budget: Budget | None = None,
 ) -> MineOutcome:
     """模式 A 的唯一编排入口：搜索 → 门禁 → IR。
 
@@ -219,6 +220,12 @@ def run_mine(
         git_sha: 代码 sha。
         created_at: 生成时刻。
         name: 策略名。
+        budget: 显式预算对象（``None`` = 按 ``budget_profile`` 用
+            :meth:`~miaosuan.search.budget.Budget.from_profile` 构造）。
+            运行时的 ``pop_size`` / ``elite_size`` / ``island_count`` **只读这一份**
+            （见 ``search.mine.mine()`` → ``RpnGA.run(budget)``），``config.search``
+            里的同名字段不参与运行——CLI 的 ``--pop-size`` 等覆盖必须经此透传，
+            否则只写进 config_snapshot、实际种群仍是档位表里的值。
 
     Returns:
         :class:`MineOutcome`（搜索结果 + IR 规格 + 市场画像）。
@@ -236,6 +243,7 @@ def run_mine(
         config=config,
         registry=registry,
         profile=profile,
+        budget=budget,
         budget_profile=budget_profile,
         top_k=int(top_k),
         n_folds=int(n_folds),
