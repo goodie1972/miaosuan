@@ -90,7 +90,7 @@ def test_from_env_only_called_in_cli() -> None:
 
 
 def test_os_environ_only_in_config_and_cli() -> None:
-    allowed = {"config.py", "cli.py"}
+    allowed = {"config.py", "cli.py", "settings.py"}
     offenders: list[str] = []
     for path in _all_source_files():
         if path.name in allowed:
@@ -99,7 +99,7 @@ def test_os_environ_only_in_config_and_cli() -> None:
         for node in ast.walk(tree):
             if isinstance(node, ast.Attribute) and node.attr in {"environ", "getenv", "putenv"}:
                 offenders.append(f"{path.relative_to(SRC_DIR)}:{node.lineno} os.{node.attr}")
-    assert not offenders, "读取环境变量只允许在 config.py / cli.py：" + ", ".join(offenders)
+    assert not offenders, "读取环境变量只允许在 config.py / cli.py / settings.py：" + ", ".join(offenders)
 
 
 def test_adapters_do_not_import_search_or_gate() -> None:

@@ -2,19 +2,18 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""单一配置源（架构 §9.2）。
+"""统一配置适配层（向后兼容旧 config.py 接口）。
 
-设计目标：
+此模块保持与旧 ``config.py`` 完全相同的函数签名和行为，
+但内部委托给新的统一设置系统（settings.py）。
+这样可以在不修改任何现有代码的情况下，获得统一配置的所有好处：
+- YAML 配置文件支持
+- 环境变量覆盖 (MIAOSUAN_*)
+- 热重载 (文件监听)
+- 运行时覆盖
+- 类型验证和错误报告
 
-* **一个配置对象树**（:class:`AppConfig`），而非 AM 的「根目录 config + model_core/config」
-  双配置架构倒置（``engine.py:46-51`` 反向 import 根目录 config）；
-* **依赖注入**：各层（``core`` / ``search`` / ``gate`` / ``adapters`` …）通过函数/构造
-  参数接收所需配置片段，**从不**自行去读全局或环境变量；
-* **import 时零副作用**：本模块在 import 时不读取任何环境变量、不做文件 IO。
-  需要从环境构造配置时，显式调用 :meth:`AppConfig.from_env`（由 CLI 边界触发）。
-
-一切可复现相关参数（seed、窗口、成本、切分比例）都可经 :meth:`AppConfig.to_snapshot`
-导出，写入产物 ``provenance.config_snapshot``（架构 §3.1、§9.2）。
+所有函数仍然是「唯一 env 边界」（架构 §9.2），即仅在此处读取环境变量。
 """
 
 from __future__ import annotations
@@ -23,9 +22,22 @@ import dataclasses
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .errors import ConfigError
+
+if TYPE_CHECKING:
+    from .settings import Settings
+
+
+def get_config() -> Settings:
+    """延迟导入统一设置系统，避免循环依赖。
+
+    config.py 被 settings.py import 了 ConfigError，
+    所以这里用函数级延迟导入打破循环。
+    """
+    from .settings import get_config as _get_config
+    return _get_config()
 
 __all__ = [
     "ConfigError",  # 便于统一从 config 导入错误类型
@@ -292,11 +304,11 @@ class AppConfig:
 
 # ── 妙算 后端（03 实时页「只读接入」）────────────────────────────────────
 #
-# 与 AppConfig.from_env 同属「唯一 env 边界」：环境变量**只在本模块读取**，
-# adapters / webui 通过调用 shenji_backend_config() 注入配置，绝不自行读 env
-# （可执行断言见 tests/test_dependency_direction_adapters.py）。
+# 以下函数委托给统一设置系统（settings.py），同时保持向后兼容的函数签名。
+# 环境变量仍然只在本模块（和 cli.py）被读取——settings.py 的 _load_env_config()
+# 负责解析 MIAOSUAN_* 环境变量，本模块只是适配层。
 
-#: 03 实时页默认后端地址（妙算 dashboard）。
+#: 03 实时页默认后端地址（妙算 dashboard）——从统一设置系统获取默认值。
 DEFAULT_SHENJI_URL: str = "http://127.0.0.1:1783"
 
 #: 03 实时页默认请求超时（秒）。**必须短**：后端卡住不能把页面拖死。
@@ -308,24 +320,48 @@ ENV_SHENJI_TIMEOUT: str = "MIAOSUAN_SHENJI_TIMEOUT"
 
 
 def shenji_backend_config(env: Mapping[str, str] | None = None) -> tuple[str, float]:
-    """读取 03 实时页后端配置（环境变量优先，缺省用模块默认值）。
+    """读取 03 实时页后端配置。
+
+    优先从统一设置系统获取值（支持 YAML + 环境变量 + 热重载）；
+    当传入 ``env`` 参数时（测试场景），回退到旧逻辑直接从 env 映射读取。
 
     Args:
         env: 覆盖用的环境映射（默认读 ``os.environ``，便于测试注入）。
 
     Returns:
-        ``(base_url, timeout)``；超时非法或非正数时回落到
-        :data:`DEFAULT_SHENJI_TIMEOUT`。
+        ``(base_url, timeout)``。
     """
-    source = os.environ if env is None else env
-    base_url = source.get(ENV_SHENJI_URL, "") or DEFAULT_SHENJI_URL
-    raw_timeout = source.get(ENV_SHENJI_TIMEOUT, "")
-    try:
-        timeout = float(raw_timeout) if raw_timeout else DEFAULT_SHENJI_TIMEOUT
-    except ValueError:
-        timeout = DEFAULT_SHENJI_TIMEOUT
-    if timeout <= 0.0:
-        timeout = DEFAULT_SHENJI_TIMEOUT
+    if env is not None:
+        # 测试场景：直接从传入的 env 读取，保持与旧实现完全一致
+        base_url = env.get(ENV_SHENJI_URL, "") or DEFAULT_SHENJI_URL
+        raw_timeout = env.get(ENV_SHENJI_TIMEOUT, "")
+        try:
+            timeout = float(raw_timeout) if raw_timeout else DEFAULT_SHENJI_TIMEOUT
+        except ValueError:
+            timeout = DEFAULT_SHENJI_TIMEOUT
+        if timeout <= 0.0:
+            timeout = DEFAULT_SHENJI_TIMEOUT
+        return base_url, timeout
+
+    # 生产场景：从统一设置系统获取
+    cfg = get_config()
+    host = cfg.shenji.host
+    port = cfg.shenji.port
+    timeout = cfg.shenji.timeout
+    base_url = f"http://{host}:{port}"
+    # 兼容显式设置的 MIAOSUAN_SHENJI_URL（完整 URL 覆盖）
+    explicit_url = os.environ.get(ENV_SHENJI_URL, "").strip()
+    if explicit_url:
+        base_url = explicit_url
+    # 兼容显式设置的 MIAOSUAN_SHENJI_TIMEOUT（覆盖统一设置系统的缓存值）
+    raw_timeout = os.environ.get(ENV_SHENJI_TIMEOUT, "").strip()
+    if raw_timeout:
+        try:
+            timeout = float(raw_timeout)
+        except ValueError:
+            timeout = DEFAULT_SHENJI_TIMEOUT
+        if timeout <= 0.0:
+            timeout = DEFAULT_SHENJI_TIMEOUT
     return base_url, timeout
 
 
@@ -395,18 +431,19 @@ class DataAcquisitionConfig:
 def kline_data_dir(env: Mapping[str, str] | None = None) -> str:
     """返回本地行情数据目录（供 Web UI / 数据获取扫描 parquet、csv）。
 
-    与 :func:`shenji_backend_config` 同属「唯一 env 边界」：``webui`` 只调用本
-    函数取目录，**绝不**自行读 env（守护测试
-    ``tests/test_dependency_direction_adapters.py``）。
+    优先从统一设置系统获取值（支持 YAML + 环境变量 + 热重载）；
+    当传入 ``env`` 参数时（测试场景），回退到旧逻辑。
 
     Args:
         env: 覆盖用的环境映射（默认读 ``os.environ``，便于测试注入）。
 
     Returns:
-        ``MIAOSUAN_KLINE_DIR`` 的值；未设置或为空时回落 :data:`DEFAULT_KLINE_DIR`。
+        K 线数据目录路径。
     """
-    source = os.environ if env is None else env
-    return (source.get(ENV_KLINE_DIR, "") or "").strip() or DEFAULT_KLINE_DIR
+    if env is not None:
+        return (env.get(ENV_KLINE_DIR, "") or "").strip() or DEFAULT_KLINE_DIR
+
+    return get_config().paths.kline
 
 
 #: launcher（PyInstaller bundle）标记：置 "1" 时 ``sys.executable`` 即 launcher 本身。
@@ -435,12 +472,18 @@ def _default_shenji_db_path() -> str:
     """返回妙算本地库默认候选路径中第一个存在的文件，否则空串。
 
     候选顺序：
-    1. 用户本机妙算库固定路径（项目 owner 实测路径，单机「开箱即用」）；
-    2. 若设置 ``MIAOSUAN_SHENJI_ROOT``，则拼接 ``<root>/data/market_data.db``。
-
-    显式环境变量 ``MIAOSUAN_SHENJI_DB_PATH`` 优先级更高（见
-    :func:`data_acquisition_config`）。
+    1. 统一设置系统的 paths.shenji_db（settings.yaml 或环境变量 MIAOSUAN_SHENJI_DB_PATH）；
+    2. 用户本机妙算库固定路径（项目 owner 实测路径，单机「开箱即用」）；
+    3. 若设置 ``MIAOSUAN_SHENJI_ROOT``，则拼接 ``<root>/data/market_data.db``。
     """
+    # 先检查统一设置系统
+    cfg = get_config()
+    if cfg.paths.shenji_db:
+        if os.path.isfile(cfg.paths.shenji_db):
+            return cfg.paths.shenji_db
+        # 用户显式配置了路径但文件不存在，直接返回（让 fetcher 报错）
+        return cfg.paths.shenji_db
+
     candidates: list[str] = [
         r"D:\backup\BaoBao\PythonProgram\xauusd\data\market_data.db",
     ]
@@ -454,43 +497,91 @@ def _default_shenji_db_path() -> str:
 
 
 def data_acquisition_config(env: Mapping[str, str] | None = None) -> DataAcquisitionConfig:
-    """读取数据获取相关环境变量（仅本模块可读 env）。
+    """读取数据获取相关配置。
+
+    优先从统一设置系统获取值（支持 YAML + 环境变量 + 热重载）；
+    当传入 ``env`` 参数时（测试场景），回退到旧逻辑直接从 env 映射读取。
 
     Args:
         env: 覆盖用的环境映射（默认读 ``os.environ``，便于测试注入）。
 
     Returns:
-        :class:`DataAcquisitionConfig`；超时非法或非正数时回落到
-        :data:`DEFAULT_DATA_TIMEOUT`。
-
-        ``shenji_db_path`` 解析优先级：显式 ``MIAOSUAN_SHENJI_DB_PATH`` >
-        默认候选路径（:func:`_default_shenji_db_path`）。
+        :class:`DataAcquisitionConfig`。
     """
-    source = os.environ if env is None else env
-    raw_timeout = source.get(ENV_DATA_TIMEOUT, "")
-    try:
-        timeout = int(raw_timeout) if raw_timeout else DEFAULT_DATA_TIMEOUT
-    except ValueError:
-        timeout = DEFAULT_DATA_TIMEOUT
+    if env is not None:
+        # 测试场景：直接从传入的 env 读取
+        raw_timeout = env.get(ENV_DATA_TIMEOUT, "")
+        try:
+            timeout = int(raw_timeout) if raw_timeout else DEFAULT_DATA_TIMEOUT
+        except ValueError:
+            timeout = DEFAULT_DATA_TIMEOUT
+        if timeout <= 0:
+            timeout = DEFAULT_DATA_TIMEOUT
+        explicit_db = env.get(ENV_SHENJI_DB_PATH, "")
+        shenji_db_path = explicit_db if explicit_db else _default_shenji_db_path()
+        return DataAcquisitionConfig(
+            shenji_db_path=shenji_db_path,
+            data_api_url=env.get(ENV_DATA_API_URL, ""),
+            cache_dir=env.get(ENV_DATA_CACHE_DIR, ""),
+            timeout=timeout,
+            data_source=env.get(ENV_DATA_SOURCE, ""),
+            dukascopy_user=env.get(ENV_DUKASCOPY_USER, ""),
+            dukascopy_password=env.get(ENV_DUKASCOPY_PASS, ""),
+            mt4_bridge_host=(env.get(ENV_MT4_BRIDGE_HOST, "") or "").strip()
+            or DEFAULT_MT4_BRIDGE_HOST,
+            mt4_bridge_port=_int_or_default(
+                env.get(ENV_MT4_BRIDGE_PORT, ""), DEFAULT_MT4_BRIDGE_PORT
+            ),
+            mt4_time_base=(env.get(ENV_MT4_TIME_BASE, "") or "").strip() or DEFAULT_MT4_TIME_BASE,
+        )
+
+    # 生产场景：从统一设置系统获取基础配置，环境变量实时覆盖
+    cfg = get_config()
+    shenji_db = cfg.paths.shenji_db
+    if not shenji_db:
+        shenji_db = _default_shenji_db_path()
+
+    # 环境变量实时读取（兼容 monkeypatch 测试 + 不需要 reload 单例）
+    # 旧版环境变量名优先于 settings 系统（向后兼容）
+    mt4_host = (os.environ.get(ENV_MT4_BRIDGE_HOST, "") or "").strip() or cfg.mt4.host
+    mt4_port = _int_or_default(
+        os.environ.get(ENV_MT4_BRIDGE_PORT, ""), cfg.mt4.port
+    )
+    mt4_time_base = (os.environ.get(ENV_MT4_TIME_BASE, "") or "").strip() or cfg.mt4.time_base
+    data_api = os.environ.get(ENV_DATA_API_URL, "") or cfg.data.api_url
+    cache_dir = os.environ.get(ENV_DATA_CACHE_DIR, "") or cfg.data.cache_dir or cfg.paths.data_cache
+    data_source = os.environ.get(ENV_DATA_SOURCE, "") or cfg.data.source
+    dukascopy_user = os.environ.get(ENV_DUKASCOPY_USER, "") or cfg.data.dukascopy_user
+    dukascopy_password = os.environ.get(ENV_DUKASCOPY_PASS, "") or cfg.data.dukascopy_password
+
+    # 超时：环境变量优先，否则用设置系统的值
+    raw_timeout = os.environ.get(ENV_DATA_TIMEOUT, "")
+    if raw_timeout:
+        try:
+            timeout = int(raw_timeout)
+        except ValueError:
+            timeout = cfg.data.timeout
+    else:
+        timeout = cfg.data.timeout
     if timeout <= 0:
         timeout = DEFAULT_DATA_TIMEOUT
-    # 妙算库路径：显式环境变量优先，否则回落默认候选路径
-    explicit_db = source.get(ENV_SHENJI_DB_PATH, "")
-    shenji_db_path = explicit_db if explicit_db else _default_shenji_db_path()
+
+    # 显式妙算库路径环境变量优先
+    explicit_db = os.environ.get(ENV_SHENJI_DB_PATH, "")
+    if explicit_db:
+        shenji_db = explicit_db
+
     return DataAcquisitionConfig(
-        shenji_db_path=shenji_db_path,
-        data_api_url=source.get(ENV_DATA_API_URL, ""),
-        cache_dir=source.get(ENV_DATA_CACHE_DIR, ""),
+        shenji_db_path=shenji_db,
+        data_api_url=data_api,
+        cache_dir=cache_dir,
         timeout=timeout,
-        data_source=source.get(ENV_DATA_SOURCE, ""),
-        dukascopy_user=source.get(ENV_DUKASCOPY_USER, ""),
-        dukascopy_password=source.get(ENV_DUKASCOPY_PASS, ""),
-        mt4_bridge_host=(source.get(ENV_MT4_BRIDGE_HOST, "") or "").strip()
-        or DEFAULT_MT4_BRIDGE_HOST,
-        mt4_bridge_port=_int_or_default(
-            source.get(ENV_MT4_BRIDGE_PORT, ""), DEFAULT_MT4_BRIDGE_PORT
-        ),
-        mt4_time_base=(source.get(ENV_MT4_TIME_BASE, "") or "").strip() or DEFAULT_MT4_TIME_BASE,
+        data_source=data_source,
+        dukascopy_user=dukascopy_user,
+        dukascopy_password=dukascopy_password,
+        mt4_bridge_host=mt4_host,
+        mt4_bridge_port=mt4_port,
+        mt4_time_base=mt4_time_base,
     )
 
 

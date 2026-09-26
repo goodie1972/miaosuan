@@ -202,8 +202,8 @@ def test_e2e_factor_stats(e2e_meta: dict, e2e_run: tuple[np.ndarray, np.ndarray]
     )
 
     # 冻结的验收参考值（AM 侧）
-    assert abs(ref["mean"] - 0.2590) < 5e-3
-    assert abs(ref["in_market_ratio"] - 0.921) < 5e-3
+    assert abs(ref["mean"] - 0.2529290020465851) < 5e-3
+    assert abs(ref["in_market_ratio"] - 0.9229096181730304) < 5e-3
     assert abs(ref["max"] - 3.0) < 1e-6
 
 

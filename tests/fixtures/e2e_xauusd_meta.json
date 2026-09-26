@@ -1,8 +1,8 @@
 {
   "_comment": "由 scripts/gen_e2e_xauusd_baseline.py 用冻结 AM 原生管线生成，请勿手工编辑。",
   "source": "ParquetDataManager → MT5FeatureEngineer.compute_features → StackVM.execute",
-  "torch_version": "2.14.0+cpu",
-  "numpy_version": "2.5.3",
+  "torch_version": "2.11.0+cpu",
+  "numpy_version": "2.5.2",
   "parquet": "D:\\K线数据\\XAUUSD_H1.parquet",
   "symbol": "XAUUSD",
   "timeframe": "H1",
@@ -18,26 +18,26 @@
     103
   ],
   "formula_decoded": "TRIX_15 → RET_ENTROPY_20 → MA_DIFF → MOMENTUM_5 → GATE → SQRT → JUMP → SCALE",
-  "bars": 8203,
+  "bars": 8276,
   "feature_shape": [
     1,
     65,
-    8203
+    8276
   ],
   "factor_shape": [
     1,
-    8203
+    8276
   ],
   "am_stats": {
-    "mean": 0.255410373210907,
-    "std": 0.8071770071983337,
+    "mean": 0.2529290020465851,
+    "std": 0.8067680597305298,
     "min": -1.4055795669555664,
     "max": 3.0,
-    "in_market_ratio": 0.922223576740217
+    "in_market_ratio": 0.9229096181730304
   },
   "data_facts": {
-    "rows_raw": 8203,
-    "rows_used": 8203,
+    "rows_raw": 8276,
+    "rows_used": 8276,
     "columns": [
       "time",
       "open",
@@ -48,7 +48,7 @@
       "tick_volume"
     ],
     "time_min": 1746442800,
-    "time_max": 1790071200,
+    "time_max": 1790344800,
     "has_tick_volume": true
   }
 }

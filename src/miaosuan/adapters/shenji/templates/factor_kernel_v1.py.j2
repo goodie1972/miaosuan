@@ -64,6 +64,9 @@ from typing import Any
 # ── 词表版本（硬约束 H-1 冻结锁；lint AF007 会校验与内核派生版本一致）────────
 VOCAB_VERSION = "{{ vocab_version }}"
 
+# ── 妙算 Spec 快照（机器可读，供反向提取使用；请勿手工编辑）────
+_MIAOSUAN_SPEC_JSON = r"""{{ spec_json }}"""
+
 # ── 策略身份（妙算 契约：四项必须齐全）────────────────────────────────
 # magic 必须是**裸 int**：平台侧是 magic: int（core/bridge.py:40），
 # 写成字符串会导致 p.magic == magic 永不相等 → 接管不到旧仓、产生孤儿单。

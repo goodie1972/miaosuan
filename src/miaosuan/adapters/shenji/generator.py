@@ -262,6 +262,8 @@ class ShenjiPort(TargetPort):
             seen_ops.add(tid)
             op_entries.append((tid, oname, arity, fname))
 
+        import json
+        spec_json = json.dumps(spec.to_dict(), ensure_ascii=False, indent=2)
         return {
             "filename": default_filename(spec.name or "unnamed", version, date=self.date),
             "magic": magic,
@@ -278,6 +280,7 @@ class ShenjiPort(TargetPort):
             "gate_func_name": gate_func_name,
             "param_space": param_space,
             "class_name": _class_name(spec.name),
+            "spec_json": spec_json,
         }
 
     def render(self, spec: StrategySpec, ctx: Mapping[str, Any]) -> str:
@@ -347,6 +350,7 @@ class ShenjiPort(TargetPort):
             },
             spec_id=spec.spec_id,
             generated_at=spec.provenance.created_at or "",
+            spec_json=ctx["spec_json"],
         )
 
     def lint(self, source: str, spec: StrategySpec | None = None) -> list[LintIssue]:

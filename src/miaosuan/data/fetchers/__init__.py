@@ -62,7 +62,7 @@ def all_network_sources(
         dukascopy_password: Dukascopy 实盘密码（可选；默认 ``None``）。
         mt4_bridge_host: MT4 Bridge 监听地址（如 ``127.0.0.1``）；
             ``None`` 或空串 = 不启用 MT4 来源。
-        mt4_bridge_port: MT4 Bridge 监听端口；默认 :data:`DEFAULT_MT4_PORT`。
+        mt4_bridge_port: MT4 Bridge 监听端口；默认 ``None`` 时从统一设置系统读取。
         mt4_time_base: MT4 输出时间戳口径（``utc`` / ``broker`` / ``shanghai``）。
 
     Returns:
@@ -81,7 +81,7 @@ def all_network_sources(
         sources.append(
             MT4BridgeFetcher(
                 host=mt4_host,
-                port=mt4_bridge_port or DEFAULT_MT4_PORT,
+                port=mt4_bridge_port,  # None → MT4BridgeFetcher 内部从设置系统读取
                 time_base=mt4_time_base or "utc",
             )
         )

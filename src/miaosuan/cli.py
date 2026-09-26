@@ -55,7 +55,7 @@ from .pipeline import run_mine
 from .report.equity import run_full_backtest
 from .tune import TuneConfig, TuneEngine, load_param_space_from_spec, save_tune_result
 
-__all__ = ["app", "backtest", "export", "mine", "report", "tune", "ui", "verify"]
+__all__ = ["app", "backtest", "export", "import_spec", "mine", "report", "tune", "ui", "verify"]
 
 app = typer.Typer(
     add_completion=False,
@@ -406,6 +406,23 @@ def report(
     _echo(f"生成时刻  ：{provenance.created_at}")
 
 
+# ── import ───────────────────────────────────────────────────────────────────
+@app.command(name="import")
+def import_spec(
+    file: str = typer.Option(..., "--file", help="导出的 .py 策略文件"),
+    out: str = typer.Option("", "--out", help="输出 Spec JSON 路径（缺省打印到 stdout）"),
+) -> None:
+    """从妙算导出的 .py 文件反向提取 StrategySpec（需包含 _MIAOSUAN_SPEC_JSON）。"""
+    from .adapters.shenji.reverse_extractor import extract_spec_from_py
+
+    spec = extract_spec_from_py(file)
+    if out:
+        Path(out).write_text(json.dumps(spec.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        _echo(f"已写入：{out}")
+    else:
+        _echo(json.dumps(spec.to_dict(), ensure_ascii=False, indent=2))
+
+
 # ── backtest ────────────────────────────────────────────────────────────────
 @app.command()
 def backtest(
@@ -574,9 +591,14 @@ def tune(
 @app.command()
 def ui(
     host: str = typer.Option("127.0.0.1", "--host", help="监听地址（仅本机）"),
-    port: int = typer.Option(8686, "--port", help="监听端口"),
+    port: int = typer.Option(None, "--port", help="监听端口（缺省读取统一设置）"),
 ) -> None:
     """启动本地 Web 仪表盘（模式 A 可视化：挖掘 → 导出 → 校验）。"""
+    # 端口缺省从统一设置系统读取（支持 settings.yaml / 环境变量 / 热重载）
+    if port is None:
+        from .settings import get_config
+        port = get_config().webui.port
+
     try:
         import uvicorn
     except ImportError as exc:  # pragma: no cover - 依赖缺失
