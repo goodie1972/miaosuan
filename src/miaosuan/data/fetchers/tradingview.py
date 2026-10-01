@@ -88,6 +88,10 @@ class TradingViewFetcher(BaseFetcher):
         # 否则该源在 UI 里凭空消失，用户无从判断是没装包还是网络不通。
         return "TradingView: 未安装 tvdatafeed（pip install tvdatafeed）"
 
+    def supported_timeframes(self) -> list[str]:
+        """返回支持的周期列表（与 _TV_INTERVAL 键一致）。"""
+        return list(_TV_INTERVAL.keys())
+
     # ── 代理探测（不读 env）──────────────────────────────────────────────
 
     @staticmethod

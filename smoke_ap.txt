@@ -1,0 +1,3 @@
+[1] missing target -> 400 {"detail":"追加目标不存在：D:\\K线数据\\XAUUSD_D1_notthere.parquet"}
+[2] traversal -> 400 {"detail":"行情文件不在允许的数据目录内：'C:\\\\Windows\\\\System32\\\\foo.parquet'（允许 D:\\K线数据 / D:\\backup\\BaoBao\\PythonProgram\\miaosuan\\data）"}
+[3] symbol mismatch -> 400 {"detail":"数据获取失败：[E-DATA] 拒绝追加：文件名与请求不匹配（XAUUSD_D1.parquet）: 文件名品种 XAUUSD ≠ 请求品种 BTCUSDT | {'failures': ['文件名品种 XAUUSD ≠ 请求品种 BTCUSDT'], 'target': 'D

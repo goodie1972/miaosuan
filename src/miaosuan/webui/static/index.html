@@ -184,6 +184,11 @@ table { width: 100%; border-collapse: collapse; font-size: var(--fs-small); }
 th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line-subtle); }
 th { color: var(--ink-2); font-weight: 600; font-size: var(--fs-tiny); background: var(--surface); }
 tr:hover td { background: var(--surface); }
+/* 追加目标选中行：整行暖色高亮 + 操作按钮变「已选中」 */
+tr.append-active td { background: rgba(240, 160, 32, .12); }
+tr.append-active:hover td { background: rgba(240, 160, 32, .18); }
+.del-btn { color: #c0392b; }
+.del-btn:hover { background: rgba(192, 57, 43, .12); }
 .tbl-wrap { border: 1px solid var(--line); border-radius: var(--r-table); overflow: hidden; }
 
 .kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
@@ -260,6 +265,7 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
   .modal-title { font-weight:700; font-size:16px; margin-bottom:10px; }
   .modal-title.ok { color:var(--up); }
   .modal-title.err { color:var(--down); }
+  .modal-title.warn { color:var(--warn); }
   .modal-body { font-size:13px; line-height:1.7; word-break:break-all; }
   .modal-foot { margin-top:16px; text-align:right; }
   /* ── Spec 管理：谱系树 ── */
@@ -317,6 +323,7 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
   <button data-view="live"><span class="step-no">03</span>实时</button>
   <button data-view="tune"><span class="step-no">04</span>调优</button>
   <button data-view="specs"><span class="step-no">05</span>Spec 管理</button>
+  <button data-view="config"><span class="step-no">06</span>设置</button>
 </nav>
 
 <main>
@@ -356,6 +363,7 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
         </div>
         <div class="tiny muted" style="margin:12px 0 4px">本地缓存</div>
         <div id="acqCached" class="empty">加载中…</div>
+        <div id="acqAppendBar" class="tiny" style="display:none;margin-top:8px;padding:6px 10px;border:1px solid var(--warn);border-radius:6px;background:rgba(240,160,32,.10);color:var(--warn)"></div>
         <div id="acqStatus" class="tiny muted" style="margin-top:8px"></div>
       </div>
     </section>
@@ -507,6 +515,8 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
         <div style="flex:1"><label>市场画像（可空）</label><select id="btMarket"></select></div>
         <div style="flex:1"><label>滚动窗口（0=自动）</label>
           <input id="btWindow" class="mono" value="0"></div>
+        <div style="flex:1"><label>周期（自动识别）</label>
+          <input id="btTimeframe" class="mono" placeholder="自动" readonly></div>
         <div style="flex:0"><button id="btnBacktest" class="primary">运行回测</button></div>
       </div>
       <div class="tiny muted" style="margin-top:8px" id="btNote"></div>
@@ -611,6 +621,8 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
             <option value="composite">综合评分</option>
           </select></div>
         <div style="flex:1"><label>随机种子</label><input id="tuneSeed" class="mono" value="42"></div>
+        <div style="flex:1"><label>周期（自动识别）</label>
+          <input id="tuneTimeframe" class="mono" placeholder="自动" readonly></div>
         <div style="flex:0"><button id="btnStartTune" class="primary">开始调优</button></div>
       </div>
       <div class="tiny muted" style="margin-top:8px">
@@ -755,6 +767,114 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
       </section>
 
     </div>
+  </div>
+
+  <!-- ══ 06 设置 ═══════════════════════════════════════════════════════ -->
+  <div class="view" id="view-config">
+    <section class="card">
+      <h2 id="cfgTitle">① 系统配置 <span class="hint">— 修改后写入 settings.yaml 并即时热重载，无需重启</span></h2>
+      <div class="tiny muted" style="margin-bottom:8px" id="cfgCurrentFile">当前配置文件：</div>
+      <div class="tiny muted" style="margin-bottom:16px" id="cfgEnvNote">注：环境变量 MIAOSUAN_* 优先级高于此文件，修改环境变量后需重启进程生效。</div>
+
+      <!-- WebUI -->
+      <section class="card">
+        <h2 id="cfgSectionWebUI">WebUI 服务</h2>
+        <div class="row">
+          <div style="flex:1"><label id="cfgLabelHost">主机</label><input id="cfgWebUIHost" type="text" placeholder="127.0.0.1"></div>
+          <div style="flex:1"><label id="cfgLabelPort">端口</label><input id="cfgWebUIPort" type="number" min="1" max="65535" placeholder="8686"></div>
+          <div style="flex:1"><label id="cfgLabelReload">热重载(开发)</label><select id="cfgWebUIReload"><option value="false">关闭</option><option value="true">开启</option></select></div>
+        </div>
+        <div class="tiny muted" id="cfgWebUIRestartHint">⚠ 修改端口/主机需重启进程生效</div>
+      </section>
+
+      <!-- 神机仪表盘 -->
+      <section class="card">
+        <h2 id="cfgSectionShenji">神机仪表盘</h2>
+        <div class="row">
+          <div style="flex:1"><label id="cfgLabelShenjiHost">主机</label><input id="cfgShenjiHost" type="text" placeholder="127.0.0.1"></div>
+          <div style="flex:1"><label id="cfgLabelShenjiPort">端口</label><input id="cfgShenjiPort" type="number" min="1" max="65535" placeholder="1783"></div>
+          <div style="flex:1"><label id="cfgLabelTimeout">超时(秒)</label><input id="cfgShenjiTimeout" type="number" step="0.1" min="0.1" max="60" placeholder="3.0"></div>
+        </div>
+      </section>
+
+      <!-- MT4 Bridge -->
+      <section class="card">
+        <h2 id="cfgSectionMT4">MT4 Bridge</h2>
+        <div class="row">
+          <div style="flex:1"><label id="cfgLabelMT4Host">主机</label><input id="cfgMT4Host" type="text" placeholder="127.0.0.1"></div>
+          <div style="flex:1"><label id="cfgLabelMT4Port">端口</label><input id="cfgMT4Port" type="number" min="1" max="65535" placeholder="23232"></div>
+          <div style="flex:1"><label id="cfgLabelTimeBase">时间基准</label><select id="cfgMT4TimeBase"><option value="utc">UTC</option><option value="broker">Broker</option><option value="shanghai">Shanghai</option></select></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <div style="flex:1"><label id="cfgLabelMT4Timeout">连接超时(秒)</label><input id="cfgMT4Timeout" type="number" step="0.1" min="0.1" max="60" placeholder="5.0"></div>
+          <div style="flex:1"><label id="cfgLabelPollWait">轮询间隔(ms)</label><input id="cfgMT4PollWait" type="number" min="0" max="10000" placeholder="1000"></div>
+          <div style="flex:1"><label id="cfgLabelDrainWait">排空等待(ms)</label><input id="cfgMT4DrainWait" type="number" min="0" max="10000" placeholder="100"></div>
+        </div>
+      </section>
+
+      <!-- 路径设置 -->
+      <section class="card">
+        <h2 id="cfgSectionPaths">路径设置</h2>
+        <div class="row">
+          <div style="flex:2"><label id="cfgLabelDataCache">数据缓存目录</label><div style="display:flex;gap:6px"><input id="cfgPathsDataCache" type="text" placeholder="data/cache" style="flex:1"><button class="btn ghost" type="button" onclick="pickDir('cfgPathsDataCache')" style="flex:0;min-width:72px">浏览</button></div></div>
+          <div style="flex:2"><label id="cfgLabelArtifacts">产物目录</label><div style="display:flex;gap:6px"><input id="cfgPathsArtifacts" type="text" placeholder="artifacts" style="flex:1"><button class="btn ghost" type="button" onclick="pickDir('cfgPathsArtifacts')" style="flex:0;min-width:72px">浏览</button></div></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <div style="flex:2"><label id="cfgLabelTmp">临时目录</label><div style="display:flex;gap:6px"><input id="cfgPathsTmp" type="text" placeholder="tmp" style="flex:1"><button class="btn ghost" type="button" onclick="pickDir('cfgPathsTmp')" style="flex:0;min-width:72px">浏览</button></div></div>
+          <div style="flex:2"><label id="cfgLabelKline">K线数据根目录</label><div style="display:flex;gap:6px"><input id="cfgPathsKline" type="text" placeholder="D:\K线数据" style="flex:1"><button class="btn ghost" type="button" onclick="pickDir('cfgPathsKline')" style="flex:0;min-width:72px">浏览</button></div></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <div style="flex:2"><label id="cfgLabelShenjiDB">神机数据库路径</label><div style="display:flex;gap:6px"><input id="cfgPathsShenjiDB" type="text" placeholder="(留空自动探测)" style="flex:1"><button class="btn ghost" type="button" onclick="pickDir('cfgPathsShenjiDB')" style="flex:0;min-width:72px">浏览</button></div></div>
+        </div>
+      </section>
+
+      <!-- 数据源 -->
+      <section class="card">
+        <h2 id="cfgSectionData">数据源</h2>
+        <div class="row">
+          <div style="flex:1"><label id="cfgLabelDataTimeout">网络超时(秒)</label><input id="cfgDataTimeout" type="number" min="1" max="300" placeholder="30"></div>
+          <div style="flex:2"><label id="cfgLabelDataSource">默认数据源</label><input id="cfgDataSource" type="text" placeholder="(空=自动)"></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <div style="flex:2"><label id="cfgLabelDataAPIUrl">HTTP数据源地址</label><input id="cfgDataAPIUrl" type="text" placeholder=""></div>
+          <div style="flex:2"><label id="cfgLabelDataCacheDir">数据缓存目录(留空用paths)</label><div style="display:flex;gap:6px"><input id="cfgDataCacheDir" type="text" placeholder="" style="flex:1"><button class="btn ghost" type="button" onclick="pickDir('cfgDataCacheDir')" style="flex:0;min-width:72px">浏览</button></div></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <div style="flex:2"><label id="cfgLabelDukascopyUser">Dukascopy用户名</label><input id="cfgDataDukascopyUser" type="text" placeholder=""></div>
+          <div style="flex:2"><label id="cfgLabelDukascopyPass">Dukascopy密码</label><input id="cfgDataDukascopyPass" type="password" placeholder=""></div>
+        </div>
+      </section>
+
+      <!-- 日志 -->
+      <section class="card">
+        <h2 id="cfgSectionLogging">日志</h2>
+        <div class="row">
+          <div style="flex:1"><label id="cfgLabelLogLevel">日志级别</label><select id="cfgLoggingLevel"><option value="DEBUG">DEBUG</option><option value="INFO" selected>INFO</option><option value="WARNING">WARNING</option><option value="ERROR">ERROR</option><option value="CRITICAL">CRITICAL</option></select></div>
+          <div style="flex:1"><label id="cfgLabelLogJSON">JSON格式</label><select id="cfgLoggingJSON"><option value="true">开启</option><option value="false">关闭</option></select></div>
+        </div>
+      </section>
+
+      <!-- 功能开关 -->
+      <section class="card">
+        <h2 id="cfgSectionFeatures">功能开关</h2>
+        <div class="row">
+          <div style="flex:1"><label id="cfgLabelEnableWebUI">启用 WebUI</label><select id="cfgFeatureWebUI"><option value="true">开启</option><option value="false">关闭</option></select></div>
+          <div style="flex:1"><label id="cfgLabelEnableMT4">启用 MT4</label><select id="cfgFeatureMT4"><option value="true">开启</option><option value="false">关闭</option></select></div>
+          <div style="flex:1"><label id="cfgLabelEnableShenji">启用神机</label><select id="cfgFeatureShenji"><option value="true">开启</option><option value="false">关闭</option></select></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <div style="flex:1"><label id="cfgLabelEnableSpec">启用 Spec 管理</label><select id="cfgFeatureSpec"><option value="true">开启</option><option value="false">关闭</option></select></div>
+          <div style="flex:1"><label id="cfgLabelEnableBacktest">启用回测</label><select id="cfgFeatureBacktest"><option value="true">开启</option><option value="false">关闭</option></select></div>
+          <div style="flex:1"><label id="cfgLabelEnableTune">启用调优</label><select id="cfgFeatureTune"><option value="true">开启</option><option value="false">关闭</option></select></div>
+        </div>
+      </section>
+
+      <div class="row" style="margin-top:16px; justify-content:flex-end">
+        <div style="flex:0"><button id="btnReloadConfig" class="ghost" onclick="loadConfig()">重新加载</button></div>
+        <div style="flex:0"><button id="btnSaveConfig" class="primary" onclick="saveConfig()">保存配置</button></div>
+      </div>
+      <div class="tiny muted" id="cfgStatus" style="margin-top:8px"></div>
+    </section>
   </div>
 </main>
 
@@ -955,6 +1075,51 @@ var TRANSLATIONS = {
     spmSemantics: "Semantics（语义）",
     spmEvidence: "Evidence（证据）",
     spmProvenance: "Provenance（溯源）",
+    // 设置页
+    navConfig: "设置",
+    cfgTitle: "① 系统配置",
+    cfgHint: "— 修改后写入 settings.yaml 并即时热重载，无需重启",
+    cfgSectionWebUI: "WebUI 服务",
+    cfgSectionShenji: "神机仪表盘",
+    cfgSectionMT4: "MT4 Bridge",
+    cfgSectionPaths: "路径设置",
+    cfgSectionData: "数据源",
+    cfgSectionLogging: "日志",
+    cfgSectionFeatures: "功能开关",
+    cfgPort: "端口",
+    cfgHost: "主机",
+    cfgReload: "热重载(开发)",
+    cfgTimeout: "超时(秒)",
+    cfgTimeBase: "时间基准",
+    cfgPollWait: "轮询间隔(ms)",
+    cfgDrainWait: "排空等待(ms)",
+    cfgDataCache: "数据缓存目录",
+    cfgArtifacts: "产物目录",
+    cfgTmp: "临时目录",
+    cfgKline: "K线数据根目录",
+    cfgShenjiDB: "神机数据库路径",
+    cfgDataTimeout: "网络超时(秒)",
+    cfgDataSource: "默认数据源",
+    cfgDataAPIUrl: "HTTP数据源地址",
+    cfgDataCacheDir: "数据缓存目录(留空用paths)",
+    cfgDukascopyUser: "Dukascopy用户名",
+    cfgDukascopyPass: "Dukascopy密码",
+    cfgLogLevel: "日志级别",
+    cfgLogJSON: "JSON格式",
+    cfgEnableWebUI: "启用 WebUI",
+    cfgEnableMT4: "启用 MT4",
+    cfgEnableShenji: "启用神机",
+    cfgEnableSpec: "启用 Spec 管理",
+    cfgEnableBacktest: "启用回测",
+    cfgEnableTune: "启用调优",
+    btnSaveConfig: "保存配置",
+    btnReloadConfig: "重新加载",
+    cfgSaving: "保存中…",
+    cfgSaved: "已保存并热重载",
+    cfgError: "保存失败：",
+    cfgCurrentFile: "当前配置文件：",
+    cfgEnvNote: "注：环境变量 MIAOSUAN_* 优先级高于此文件，修改环境变量后需重启进程生效。",
+    cfgRequiresRestart: "⚠ 修改此项需重启进程生效",
   },
   en: {
     title: "MiaoSuan · Factor Mining Center",
@@ -1131,6 +1296,51 @@ var TRANSLATIONS = {
     spmSemantics: "Semantics",
     spmEvidence: "Evidence",
     spmProvenance: "Provenance",
+    // Config page
+    navConfig: "Config",
+    cfgTitle: "① System Config",
+    cfgHint: "— Changes written to settings.yaml and hot-reloaded instantly, no restart needed",
+    cfgSectionWebUI: "WebUI Service",
+    cfgSectionShenji: "Shenji Dashboard",
+    cfgSectionMT4: "MT4 Bridge",
+    cfgSectionPaths: "Paths",
+    cfgSectionData: "Data Sources",
+    cfgSectionLogging: "Logging",
+    cfgSectionFeatures: "Feature Flags",
+    cfgPort: "Port",
+    cfgHost: "Host",
+    cfgReload: "Hot Reload (dev)",
+    cfgTimeout: "Timeout (s)",
+    cfgTimeBase: "Time Base",
+    cfgPollWait: "Poll Wait (ms)",
+    cfgDrainWait: "Drain Wait (ms)",
+    cfgDataCache: "Data Cache Dir",
+    cfgArtifacts: "Artifacts Dir",
+    cfgTmp: "Temp Dir",
+    cfgKline: "K-line Root Dir",
+    cfgShenjiDB: "Shenji DB Path",
+    cfgDataTimeout: "Network Timeout (s)",
+    cfgDataSource: "Default Source",
+    cfgDataAPIUrl: "HTTP Source URL",
+    cfgDataCacheDir: "Data Cache Dir (empty=paths)",
+    cfgDukascopyUser: "Dukascopy User",
+    cfgDukascopyPass: "Dukascopy Pass",
+    cfgLogLevel: "Log Level",
+    cfgLogJSON: "JSON Format",
+    cfgEnableWebUI: "Enable WebUI",
+    cfgEnableMT4: "Enable MT4",
+    cfgEnableShenji: "Enable Shenji",
+    cfgEnableSpec: "Enable Spec Mgmt",
+    cfgEnableBacktest: "Enable Backtest",
+    cfgEnableTune: "Enable Tune",
+    btnSaveConfig: "Save Config",
+    btnReloadConfig: "Reload",
+    cfgSaving: "Saving…",
+    cfgSaved: "Saved & hot-reloaded",
+    cfgError: "Save failed: ",
+    cfgCurrentFile: "Config file: ",
+    cfgEnvNote: "Note: Env vars MIAOSUAN_* override this file; change env vars and restart process to take effect.",
+    cfgRequiresRestart: "⚠ Requires process restart",
   }
 };
 
@@ -1180,6 +1390,7 @@ function applyLanguage() {
     if (view === "live") btn.innerHTML = '<span class="step-no">03</span>' + t("navLive");
     if (view === "tune") btn.innerHTML = '<span class="step-no">04</span>' + t("navTune");
     if (view === "specs") btn.innerHTML = '<span class="step-no">05</span>' + t("navSpecs");
+    if (view === "config") btn.innerHTML = '<span class="step-no">06</span>' + t("navConfig");
   });
   // KV labels
   var kvPairs = document.querySelectorAll(".kv .k");
@@ -1246,7 +1457,7 @@ function initTheme() {
 /* ── 视图切换 ─────────────────────────────────────────────────────── */
 function setView(v) {
   state.view = v;
-  ["mine", "backtest", "live", "tune", "specs"].forEach(function (name) {
+  ["mine", "backtest", "live", "tune", "specs", "config"].forEach(function (name) {
     var el = $("view-" + name);
     if (el) { el.className = "view" + (name === v ? " active" : ""); }
   });
@@ -1259,6 +1470,8 @@ function setView(v) {
   if (v === "live") { rtSetPolling($("rtPoll").checked); } else { rtSetPolling(false); }
   // 05 Spec 管理：进入时刷新数据
   if (v === "specs") { loadSpecMgmt(); }
+  // 06 设置：进入时加载配置
+  if (v === "config") { loadConfig(); }
 }
 
 /* ── 请求封装 ─────────────────────────────────────────────────────── */
@@ -1389,6 +1602,40 @@ function inspect() {
     $("dataMeta").className = "empty";
     $("dataMeta").textContent = "读取失败：" + e.message;
   });
+}
+
+/* 自动回填周期/品种：选中数据文件后自动调用 /api/inspect，把 timeframe/symbol 写入输入框 */
+function autoFillTimeframe() {
+  var p = $("data").value;
+  if (!p) return;
+  jfetch("/api/inspect?path=" + encodeURIComponent(p)).then(function (m) {
+    var tf = m.timeframe;
+    var sym = m.symbol;
+    if (tf && !$("timeframe").value) { $("timeframe").value = tf; }
+    if (sym && !$("symbol").value) { $("symbol").value = sym.split(",")[0].trim(); }
+  }).catch(function () { /* 静默失败，不影响主流程 */ });
+}
+
+/* 回测页：数据切换时自动回填周期到 btTimeframe（若存在） */
+function autoFillTimeframeForBt() {
+  var p = $("btData").value;
+  if (!p) return;
+  jfetch("/api/inspect?path=" + encodeURIComponent(p)).then(function (m) {
+    var tf = m.timeframe;
+    var el = $("btTimeframe");
+    if (tf && el && !el.value) { el.value = tf; }
+  }).catch(function () { /* 静默失败 */ });
+}
+
+/* 调优页：数据切换时自动回填周期到 tuneTimeframe（若存在） */
+function autoFillTimeframeForTune() {
+  var p = $("tuneData").value;
+  if (!p) return;
+  jfetch("/api/inspect?path=" + encodeURIComponent(p)).then(function (m) {
+    var tf = m.timeframe;
+    var el = $("tuneTimeframe");
+    if (tf && el && !el.value) { el.value = tf; }
+  }).catch(function () { /* 静默失败 */ });
 }
 
 /* ── 日志解析（全部来自 CLI 真实输出，不做任何模拟）────────────────── */
@@ -2288,6 +2535,25 @@ function loadAcqSources(profile, isRetry) {
   });
 }
 
+/* 追加目标：非空 = 下次「获取数据」把增量接到该文件后面（写入前后端做连续性校验） */
+var acqAppendTarget = "";
+
+function setAppendTarget(path, name) {
+  acqAppendTarget = path || "";
+  var box = $("acqAppendBar");
+  if (!box) return;
+  if (!acqAppendTarget) {
+    box.style.display = "none";
+    box.textContent = "";
+    return;
+  }
+  box.style.display = "";
+  box.innerHTML = "追加目标：<b class=\"mono\">" + esc(name || String(acqAppendTarget).split(/[\\/]/).pop())
+    + "</b> — 新增量将接在该文件末尾（写入前自动校验品种/周期/时间连续性）"
+    + ' <button class="ghost" id="btnClearAppend">取消追加</button>';
+  $("btnClearAppend").onclick = function () { setAppendTarget("", ""); };
+}
+
 function loadAcqCached() {
   jfetch("/api/acquisition/cached").then(function (rows) {
     var box = $("acqCached");
@@ -2298,19 +2564,62 @@ function loadAcqCached() {
     }
     box.className = "";
     // 「时间」改名为「更新时间」：它渲染的是文件 mtime，与数据起止范围同名会误读。
+    // 「操作」列：追加按钮把该文件设为增量追加目标（选中行高亮）；删除按钮移入回收站。
     box.innerHTML = '<div class="tbl-wrap"><table><tr><th>文件</th><th>大小</th>'
-      + "<th>数据范围</th><th>更新时间</th></tr>"
+      + "<th>数据范围</th><th>更新时间</th><th>操作</th></tr>"
       + rows.map(function (r) {
-        return '<tr><td class="mono tiny">' + esc(r.name) + "</td>"
+        var active = acqAppendTarget && acqAppendTarget === r.path;
+        return '<tr' + (active ? ' class="append-active"' : "") + '><td class="mono tiny">' + esc(r.name) + "</td>"
           + "<td>" + (r.size_mb != null ? r.size_mb + "MB" : "—") + "</td>"
           + '<td class="tiny">' + esc(dataRangeText(r)) + "</td>"
-          + '<td class="tiny muted">' + esc(r.mtime || r.updated_at || "") + "</td></tr>";
+          + '<td class="tiny muted">' + esc(r.mtime || r.updated_at || "") + "</td>"
+          + '<td>'
+          + '<button class="ghost tiny append-btn" data-path="' + esc(r.path)
+          + '" data-name="' + esc(r.name) + '">' + (active ? "已选中" : "追加") + "</button>"
+          + ' <button class="ghost tiny del-btn" data-path="' + esc(r.path)
+          + '" data-name="' + esc(r.name) + '">删除</button>'
+          + "</td></tr>";
       }).join("") + "</table></div>";
+    // 事件委托：表格 innerHTML 每次刷新都会重写，监听器挂容器上（同 specList）。
+    box.onclick = function (ev) {
+      var target = ev.target && ev.target.closest ? ev.target.closest("button") : null;
+      if (!target) return;
+      // 删除按钮
+      if (target.classList.contains("del-btn")) {
+        var dp = target.getAttribute("data-path");
+        var dn = target.getAttribute("data-name");
+        if (!confirm("确认删除缓存文件？\n\n" + dn + "\n\n文件将移入回收站（可恢复）。")) return;
+        delCacheFile(dp);
+        return;
+      }
+      // 追加按钮
+      if (target.classList.contains("append-btn")) {
+        var p = target.getAttribute("data-path");
+        if (acqAppendTarget === p) { setAppendTarget("", ""); } else { setAppendTarget(p, target.getAttribute("data-name")); }
+        loadAcqCached();
+      }
+    };
   }).catch(function (e) {
+    // 空值守卫：元素不存在时错误处理器自己会抛 TypeError，把真实错误盖掉。
     var box = $("acqCached");
+    if (!box) return;
     box.className = "empty";
     box.textContent = "加载缓存失败：" + e.message;
   });
+}
+
+function delCacheFile(path) {
+  // DELETE /api/acquisition/cached?path=xxx — 回收站式删除
+  jfetch("/api/acquisition/cached?path=" + encodeURIComponent(path), { method: "DELETE" })
+    .then(function (res) {
+      // 删除成功后刷新列表 + 如果删除的是追加目标，清空选中
+      if (acqAppendTarget === path) { setAppendTarget("", ""); }
+      loadAcqCached();
+      showModal("已删除", "文件已移入回收站" + (res.trashed ? "" : "（硬删）") + "。", "ok");
+    })
+    .catch(function (e) {
+      showModal("删除失败", e.message, "err");
+    });
 }
 
 function startAcqFetch() {
@@ -2326,22 +2635,66 @@ function startAcqFetch() {
   if (!timeframe) { showModal("无法获取", "请选择「周期」（选项来自市场画像）。", "err"); return; }
   if (!source) { showModal("无法获取", "请选择「数据来源」（选定市场画像后，仅能选一个）。", "err"); return; }
 
+  // 追加模式：弹确认，讲清楚「接到哪个文件、校验什么」
+  if (acqAppendTarget) {
+    var tgtName = String(acqAppendTarget).split(/[\\/]/).pop();
+    var okAppend = confirm(
+      "将把 " + symbol + " " + timeframe + " 的增量追加到：\n\n"
+      + tgtName + "\n\n"
+      + "写入前会自动校验：\n"
+      + "· 文件名品种/周期与请求一致\n"
+      + "· 数据实际周期与请求周期相符\n"
+      + "· 时间戳单位一致、新数据延伸旧时间轴\n"
+      + "· 新旧缺口不超过 30 天（超 7 天给出警告）\n\n"
+      + "任何一项不通过都不会写入。继续？"
+    );
+    if (!okAppend) return;
+  }
+
   var btn = $("btnAcqFetch");
   btn.disabled = true;
-  $("acqStatus").textContent = "获取中…（增量优先：本地无则全量，有则增量）";
+  $("acqStatus").textContent = acqAppendTarget
+    ? "追加中…（增量接至目标文件末尾，写入前校验连续性）"
+    : "获取中…（增量优先：本地无则全量，有则增量）";
   post("/api/acquisition/fetch", {
     symbol: symbol,
     timeframe: timeframe,
     since: since,
     source: source,
     note: note,
-    market_profile: profile
+    market_profile: profile,
+    append_to: acqAppendTarget
   }).then(function (r) {
-    var msg = "已落盘：" + esc(r.path || r.message || "（未知路径）");
-    if (r.note) msg += "<br>备注：" + esc(r.note);
-    if (r.source) msg += "<br>来源：" + esc(r.source);
-    showModal("数据获取成功", msg, "ok");
-    $("acqStatus").textContent = "完成：" + (r.path || "");
+    // 三色语义：updated/up_to_date=绿、stale_fallback=黄（附各源失败原因）
+    var st = r.status || "updated";
+    var lines = [];
+    if (st === "stale_fallback") {
+      lines.push("<b style=\"color:var(--warn)\">⚠ 所有数据源均失败，已回退本地旧缓存（数据可能过期）</b>");
+      lines.push("旧文件：" + esc(r.path || "—"));
+      if (r.errors && r.errors.length) {
+        lines.push("失败原因：<br>· " + r.errors.map(esc).join("<br>· "));
+      }
+      showModal("获取失败 · 使用旧缓存", lines.join("<br>"), "warn");
+      $("acqStatus").textContent = "⚠ 回退旧缓存：" + (r.path || "");
+    } else if (st === "up_to_date") {
+      lines.push("源已正常响应，本地缓存已是最新（无新 bar）。");
+      lines.push("文件：" + esc(r.path || "—"));
+      if (r.source_used) lines.push("来源：" + esc(r.source_used));
+      if (r.warnings && r.warnings.length) {
+        lines.push("部分源异常（不影响结果）：<br>· " + r.warnings.map(esc).join("<br>· "));
+      }
+      showModal("数据已是最新", lines.join("<br>"), "ok");
+      $("acqStatus").textContent = "已最新：" + (r.path || "");
+    } else {
+      lines.push("已落盘：" + esc(r.path || "（未知路径）"));
+      if (r.source_used) lines.push("来源：" + esc(r.source_used));
+      if (r.note) lines.push("备注：" + esc(r.note));
+      if (r.warnings && r.warnings.length) {
+        lines.push("部分源异常（不影响结果）：<br>· " + r.warnings.map(esc).join("<br>· "));
+      }
+      showModal("数据获取成功", lines.join("<br>"), "ok");
+      $("acqStatus").textContent = "完成：" + (r.path || "");
+    }
     loadAcqCached();
     loadData(r.path || ""); // 刷新 01 的行情下拉，并优先选中刚落盘的文件
   }).catch(function (e) {
@@ -2737,7 +3090,7 @@ function bind() {
     })(btns[i]);
   }
   $("btnInspect").onclick = inspect;
-  $("data").onchange = function () { inspect(); updateMineDataHint(); };
+  $("data").onchange = function () { inspect(); updateMineDataHint(); autoFillTimeframe(); };
   $("btnMine").onclick = startMine;
   $("btnCopy").onclick = copyFormula;
   $("btnVerify").onclick = runVerify;
@@ -2746,6 +3099,9 @@ function bind() {
   $("btnAcqFetch").onclick = startAcqFetch;
   $("acqProfile").onchange = onAcqProfileChange;
   $("btnRefreshCache").onclick = loadAcqCached;
+  // 回测/调优页：数据文件切换时自动回填周期
+  $("btData").onchange = function () { autoFillTimeframeForBt(); };
+  $("tuneData").onchange = function () { autoFillTimeframeForTune(); };
   // 事件委托：specList 每次刷新都会重写 innerHTML，故监听器挂在容器上。
   // 用 data-file + getAttribute 取值（不再把文件名拼进 onclick 的 JS 字符串上下文，
   // 否则文件名里的引号能逃出 HTML 转义 → 注入）。
@@ -2785,6 +3141,183 @@ function bind() {
     state.errors.push("JS: " + msg + " @" + src + ":" + ln);
     dbg("JS ERROR " + msg + " @" + src + ":" + ln);
   };
+}
+
+/* ── 06 设置页：加载/保存配置 ───────────────────────────────────────── */
+function loadConfig() {
+  var statusEl = $("cfgStatus");
+  if (statusEl) { statusEl.textContent = "加载中…"; statusEl.className = "tiny muted"; }
+  jfetch("/api/config").then(function (cfg) {
+    // WebUI
+    setVal("cfgWebUIHost", cfg.webui?.host || "127.0.0.1");
+    setVal("cfgWebUIPort", cfg.webui?.port || 8686);
+    setVal("cfgWebUIReload", String(cfg.webui?.reload || false));
+    // Shenji
+    setVal("cfgShenjiHost", cfg.shenji?.host || "127.0.0.1");
+    setVal("cfgShenjiPort", cfg.shenji?.port || 1783);
+    setVal("cfgShenjiTimeout", cfg.shenji?.timeout || 3.0);
+    // MT4
+    setVal("cfgMT4Host", cfg.mt4?.host || "127.0.0.1");
+    setVal("cfgMT4Port", cfg.mt4?.port || 23232);
+    setVal("cfgMT4TimeBase", cfg.mt4?.time_base || "utc");
+    setVal("cfgMT4Timeout", cfg.mt4?.timeout || 5.0);
+    setVal("cfgMT4PollWait", cfg.mt4?.poll_wait || 1000);
+    setVal("cfgMT4DrainWait", cfg.mt4?.drain_wait || 100);
+    // Paths
+    setVal("cfgPathsDataCache", cfg.paths?.data_cache || "data/cache");
+    setVal("cfgPathsArtifacts", cfg.paths?.artifacts || "artifacts");
+    setVal("cfgPathsTmp", cfg.paths?.tmp || "tmp");
+    setVal("cfgPathsKline", cfg.paths?.kline || "");
+    setVal("cfgPathsShenjiDB", cfg.paths?.shenji_db || "");
+    // Data
+    setVal("cfgDataTimeout", cfg.data?.timeout || 30);
+    setVal("cfgDataSource", cfg.data?.source || "");
+    setVal("cfgDataAPIUrl", cfg.data?.api_url || "");
+    setVal("cfgDataCacheDir", cfg.data?.cache_dir || "");
+    setVal("cfgDataDukascopyUser", cfg.data?.dukascopy_user || "");
+    setVal("cfgDataDukascopyPass", cfg.data?.dukascopy_password || "");
+    // Logging
+    setVal("cfgLoggingLevel", cfg.logging?.level || "INFO");
+    setVal("cfgLoggingJSON", String(cfg.logging?.json_lines || true));
+    // Features
+    setVal("cfgFeatureWebUI", String(cfg.features?.enable_webui || true));
+    setVal("cfgFeatureMT4", String(cfg.features?.enable_mt4 || true));
+    setVal("cfgFeatureShenji", String(cfg.features?.enable_shenji || true));
+    setVal("cfgFeatureSpec", String(cfg.features?.enable_spec_management || true));
+    setVal("cfgFeatureBacktest", String(cfg.features?.enable_backtest || true));
+    setVal("cfgFeatureTune", String(cfg.features?.enable_tune || true));
+    // Config file path
+    var manager = cfg._manager || {};
+    if (statusEl) {
+      statusEl.textContent = "已加载（来自 settings.yaml + 环境变量）";
+      statusEl.className = "tiny muted";
+    }
+    // 显示配置文件路径
+    var cfgFileEl = $("cfgCurrentFile");
+    if (cfgFileEl) { cfgFileEl.textContent = t("cfgCurrentFile") + (manager.config_path || "settings.yaml"); }
+  }).catch(function (e) {
+    if (statusEl) { statusEl.textContent = "加载失败：" + e.message; statusEl.className = "tiny down"; }
+  });
+}
+
+function setVal(id, val) {
+  var el = $(id);
+  if (el) { el.value = val; }
+}
+
+/* 数值读取：NaN → undefined。JSON.stringify 会省略 undefined 的键，
+   后端 deep_update 因此不覆盖 yaml 原值——空输入框（loadConfig 未完成 /
+   加载失败）绝不发送 null。曾因 parseInt("")=NaN → JSON 序列化成 null →
+   dict 内部的 None 绕过 exclude_none → 8 个字段 pydantic 校验全挂。 */
+function getNum(id) {
+  var v = parseFloat(getVal(id));
+  return isNaN(v) ? undefined : v;
+}
+
+function saveConfig() {
+  var statusEl = $("cfgStatus");
+  var btn = $("btnSaveConfig");
+  if (btn) { btn.disabled = true; btn.textContent = t("cfgSaving"); }
+  if (statusEl) { statusEl.textContent = "保存中…"; statusEl.className = "tiny muted"; }
+
+  // 收集表单数据（数值走 getNum：空/非法输入 → undefined → JSON 省略该键）
+  var payload = {
+    webui: {
+      host: getVal("cfgWebUIHost"),
+      port: getNum("cfgWebUIPort"),
+      reload: getVal("cfgWebUIReload") === "true"
+    },
+    shenji: {
+      host: getVal("cfgShenjiHost"),
+      port: getNum("cfgShenjiPort"),
+      timeout: getNum("cfgShenjiTimeout")
+    },
+    mt4: {
+      host: getVal("cfgMT4Host"),
+      port: getNum("cfgMT4Port"),
+      time_base: getVal("cfgMT4TimeBase"),
+      timeout: getNum("cfgMT4Timeout"),
+      poll_wait: getNum("cfgMT4PollWait"),
+      drain_wait: getNum("cfgMT4DrainWait")
+    },
+    paths: {
+      data_cache: getVal("cfgPathsDataCache"),
+      artifacts: getVal("cfgPathsArtifacts"),
+      tmp: getVal("cfgPathsTmp"),
+      kline: getVal("cfgPathsKline"),
+      shenji_db: getVal("cfgPathsShenjiDB")
+    },
+    data: {
+      timeout: getNum("cfgDataTimeout"),
+      source: getVal("cfgDataSource"),
+      api_url: getVal("cfgDataAPIUrl"),
+      cache_dir: getVal("cfgDataCacheDir"),
+      dukascopy_user: getVal("cfgDataDukascopyUser"),
+      dukascopy_password: getVal("cfgDataDukascopyPass")
+    },
+    logging: {
+      level: getVal("cfgLoggingLevel"),
+      json_lines: getVal("cfgLoggingJSON") === "true"
+    },
+    features: {
+      enable_webui: getVal("cfgFeatureWebUI") === "true",
+      enable_mt4: getVal("cfgFeatureMT4") === "true",
+      enable_shenji: getVal("cfgFeatureShenji") === "true",
+      enable_spec_management: getVal("cfgFeatureSpec") === "true",
+      enable_backtest: getVal("cfgFeatureBacktest") === "true",
+      enable_tune: getVal("cfgFeatureTune") === "true"
+    }
+  };
+
+  post("/api/config", payload).then(function (res) {
+    if (btn) { btn.disabled = false; btn.textContent = t("btnSaveConfig"); }
+    if (statusEl) { statusEl.textContent = t("cfgSaved"); statusEl.className = "tiny ok"; }
+    // 重新加载显示最新值（含环境变量覆盖后的实际生效值）
+    loadConfig();
+  }).catch(function (e) {
+    if (btn) { btn.disabled = false; btn.textContent = t("btnSaveConfig"); }
+    if (statusEl) { statusEl.textContent = t("cfgError") + e.message; statusEl.className = "tiny down"; }
+  });
+}
+
+function getVal(id) {
+  var el = $(id);
+  return el ? el.value : "";
+}
+
+/* ── 目录选择器（File System Access API）─────────────────────────────── */
+/* 仅在 localhost (secure context) 下可用；不支持时降级提示手动输入。     */
+/* 注意：浏览器安全策略禁止 JS 直接读取本地绝对路径。
+   选中后只能显示文件夹名称，请手动修正为完整绝对路径（如 D:\K线数据）。 */
+async function pickDir(inputId) {
+  var el = $(inputId);
+  if (!el) return;
+  if (!window.showDirectoryPicker) {
+    alert("当前浏览器不支持文件夹选择器（需 Chrome 86+ / Edge 86+ 且运行在 localhost/HTTPS 环境）。\n请手动输入完整绝对路径，如 D:\\K线数据");
+    return;
+  }
+  try {
+    var dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+    // 只能获取文件夹名，无法获取绝对路径（浏览器安全限制）
+    // 显示文件夹名作为提示，用户需手动改为完整路径
+    var current = el.value.trim();
+    var hint = dirHandle.name;
+    if (current && !current.includes(hint)) {
+      // 已有不同路径，提示用户
+      if (confirm("已选文件夹：" + hint + "\n当前输入：" + current + "\n\n是否替换为选中的文件夹名？\n（注意：仍需手动修正为完整绝对路径）")) {
+        el.value = hint;
+      }
+    } else {
+      el.value = hint;
+    }
+    // 存储 handle 供后续可能的文件操作（可选）
+    el._dirHandle = dirHandle;
+  } catch (e) {
+    if (e.name !== "AbortError") { // 用户取消不报错
+      console.error("目录选择失败:", e);
+      alert("选择失败：" + e.message);
+    }
+  }
 }
 
 /* ── 启动 ─────────────────────────────────────────────────────────── */

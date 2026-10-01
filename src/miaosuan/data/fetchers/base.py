@@ -57,6 +57,10 @@ class BaseFetcher:
         """人类可读的来源描述。"""
         return f"{self.source_name}: (unavailable)"
 
+    def supported_timeframes(self) -> list[str]:
+        """返回支持的周期列表。子类应覆盖此方法。"""
+        return []
+
     def fetch_full(self, symbol: str, timeframe: str) -> pd.DataFrame:
         """全量获取 ``symbol`` + ``timeframe`` 的历史数据。"""
         raise NotImplementedError(f"{type(self).__name__} 未实现 fetch_full")

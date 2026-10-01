@@ -1,0 +1,217 @@
+﻿UP009 [*] UTF-8 encoding declaration is unnecessary
+ --> src\miaosuan\data\acquisition.py:1:1
+  |
+1 | # -*- coding: utf-8 -*-
+  | ^^^^^^^^^^^^^^^^^^^^^^^
+2 | # Copyright (c) 2026 MiaoSuan Team
+3 | # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+  |
+help: Remove unnecessary coding comment
+  |
+  - # -*- coding: utf-8 -*-
+1 | # Copyright (c) 2026 MiaoSuan Team
+  |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> src\miaosuan\data\acquisition.py:24:1
+   |
+22 |   """
+23 |
+24 | / from __future__ import annotations
+25 | |
+26 | | import json
+27 | | import os
+28 | | import re
+29 | | import threading
+30 | | import time
+31 | | from abc import ABC, abstractmethod
+32 | | from dataclasses import dataclass, field
+33 | | from enum import Enum
+34 | | from pathlib import Path
+35 | | from typing import Any
+36 | |
+37 | | import numpy as np
+38 | | import pandas as pd
+39 | |
+40 | | from ..config import data_acquisition_config
+41 | | from .fetchers import BaseFetcher, ShenjiDBFetcher, all_network_sources, list_network_sources
+42 | | from ..errors import DataError
+   | |______________________________^
+43 |
+44 |   __all__ = [
+   |
+help: Organize imports
+   |
+40 | from ..config import data_acquisition_config
+41 + from ..errors import DataError
+42 | from .fetchers import BaseFetcher, ShenjiDBFetcher, all_network_sources, list_network_sources
+   - from ..errors import DataError
+43 |
+   |
+
+UP042 Class FetchStatus inherits from both `str` and `enum.Enum`
+  --> src\miaosuan\data\acquisition.py:95:7
+   |
+95 | class FetchStatus(str, Enum):
+   |       ^^^^^^^^^^^
+96 |     """``fetch()`` 缁撴灉鐘舵€侊細**鎴愬姛 鈮?鎷夊埌鏂版暟鎹?*锛屽繀椤诲尯鍒嗚涔夈€?   |
+help: Inherit from `enum.StrEnum`
+
+UP009 [*] UTF-8 encoding declaration is unnecessary
+ --> src\miaosuan\webui\server.py:1:1
+  |
+1 | # -*- coding: utf-8 -*-
+  | ^^^^^^^^^^^^^^^^^^^^^^^
+2 | # Copyright (c) 2026 MiaoSuan Team
+3 | # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+  |
+help: Remove unnecessary coding comment
+  |
+  - # -*- coding: utf-8 -*-
+1 | # Copyright (c) 2026 MiaoSuan Team
+  |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> src\miaosuan\webui\server.py:20:1
+   |
+18 |   """
+19 |
+20 | / from __future__ import annotations
+21 | |
+22 | | import json
+23 | | import subprocess
+24 | | import sys
+25 | | import threading
+26 | | import time
+27 | | import uuid
+28 | | from dataclasses import dataclass, field
+29 | | from pathlib import Path
+30 | | from typing import Any
+31 | |
+32 | | from fastapi import FastAPI, HTTPException
+33 | | from fastapi.responses import FileResponse, HTMLResponse
+34 | | from fastapi.staticfiles import StaticFiles
+35 | | from pydantic import BaseModel
+36 | |
+37 | | from ..adapters.shenji.generator import readable_formula
+38 | | from ..adapters.shenji.lint import lint_source
+39 | | from ..adapters.shenji.realtime import (
+40 | |     ShenjiReadOnlyClient,
+41 | |     RealtimeOutcome,
+42 | |     env_config,
+43 | |     safe_call,
+44 | | )
+45 | | from ..config import is_bundled, kline_data_dir
+46 | | from ..core.vocab import FORMULA_VOCAB, VOCAB_VERSION
+47 | | from ..data.loader import load
+48 | | from ..ir.provenance import MIAOSUAN_VERSION
+49 | | from ..market.profiles import EXPECTED_PROFILE_NAMES, all_profiles
+50 | | from ..pipeline import _SYMBOL_PROFILE_FALLBACK
+51 | | from ..settings import get_config, get_settings_manager, ConfigError, Settings, _deep_update
+   | |____________________________________________________________________________________________^
+52 |
+53 |   __all__ = ["create_app"]
+   |
+help: Organize imports
+   |
+39 | from ..adapters.shenji.realtime import (
+40 +     RealtimeOutcome,
+41 |     ShenjiReadOnlyClient,
+   -     RealtimeOutcome,
+42 |     env_config,
+--------------------------------------------------------------------------------
+50 | from ..pipeline import _SYMBOL_PROFILE_FALLBACK
+   - from ..settings import get_config, get_settings_manager, ConfigError, Settings, _deep_update
+51 + from ..settings import ConfigError, Settings, _deep_update, get_config, get_settings_manager
+52 |
+   |
+
+F401 [*] `..settings.ConfigError` imported but unused
+  --> src\miaosuan\webui\server.py:51:58
+   |
+49 | from ..market.profiles import EXPECTED_PROFILE_NAMES, all_profiles
+50 | from ..pipeline import _SYMBOL_PROFILE_FALLBACK
+51 | from ..settings import get_config, get_settings_manager, ConfigError, Settings, _deep_update
+   |                                                          ^^^^^^^^^^^
+52 |
+53 | __all__ = ["create_app"]
+   |
+help: Remove unused import: `..settings.ConfigError`
+   |
+50 | from ..pipeline import _SYMBOL_PROFILE_FALLBACK
+   - from ..settings import get_config, get_settings_manager, ConfigError, Settings, _deep_update
+51 + from ..settings import get_config, get_settings_manager, Settings, _deep_update
+52 |
+   |
+
+F841 Local variable `fmt` is assigned to but never used
+   --> src\miaosuan\webui\server.py:560:9
+    |
+558 |         stamps = panel.time
+559 |         span = int(stamps[-1]) - int(stamps[0]) if len(stamps) > 1 else 0
+560 |         fmt = "%Y-%m-%d"
+    |         ^^^
+561 |         return {
+562 |             "path": str(file_path),
+    |
+help: Remove assignment to unused variable `fmt`
+
+I001 [*] Import block is un-sorted or un-formatted
+   --> src\miaosuan\webui\server.py:968:17
+    |
+966 |           def _run() -> None:
+967 |               try:
+968 | /                 from ..ir.codec import read_spec
+969 | |                 from ..adapters.base import ParamSpace
+970 | |                 from ..ir.schema import FactorPayload
+971 | |                 from ..tune import TuneConfig, TuneEngine, load_param_space_from_spec
+    | |_____________________________________________________________________________________^
+972 |
+973 |                   spec = read_spec(str(spec_path))
+    |
+help: Organize imports
+    |
+967 |             try:
+968 +                 from ..adapters.base import ParamSpace
+969 |                 from ..ir.codec import read_spec
+    -                 from ..adapters.base import ParamSpace
+970 |                 from ..ir.schema import FactorPayload
+    |
+
+F841 Local variable `validated` is assigned to but never used
+    --> src\miaosuan\webui\server.py:1385:13
+     |
+1383 |         # 3. 楠岃瘉鍚堝苟鍚庣殑閰嶇疆锛堜細鎶涘嚭 ConfigError 濡傛灉鏃犳晥锛?1384 |         try:
+1385 |             validated = Settings.model_validate(merged)
+     |             ^^^^^^^^^
+1386 |         except ValidationError as exc:
+1387 |             raise HTTPException(status_code=400, detail=f"閰嶇疆楠岃瘉澶辫触: {exc}") from exc
+     |
+help: Remove assignment to unused variable `validated`
+
+F821 Undefined name `ValidationError`
+    --> src\miaosuan\webui\server.py:1386:16
+     |
+1384 |         try:
+1385 |             validated = Settings.model_validate(merged)
+1386 |         except ValidationError as exc:
+     |                ^^^^^^^^^^^^^^^
+1387 |             raise HTTPException(status_code=400, detail=f"閰嶇疆楠岃瘉澶辫触: {exc}") from exc
+     |
+
+UP009 [*] UTF-8 encoding declaration is unnecessary
+ --> tests\test_fetch_result.py:1:1
+  |
+1 | # -*- coding: utf-8 -*-
+  | ^^^^^^^^^^^^^^^^^^^^^^^
+2 | # Copyright (c) 2026 MiaoSuan Team
+3 | # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+  |
+help: Remove unnecessary coding comment
+  |
+  - # -*- coding: utf-8 -*-
+1 | # Copyright (c) 2026 MiaoSuan Team
+  |
+
+Found 11 errors.
+[*] 7 fixable with the `--fix` option (3 hidden fixes can be enabled with the `--unsafe-fixes` option).

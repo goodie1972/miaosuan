@@ -1,0 +1,17 @@
+﻿node : D:\backup\BaoBao\PythonProgram\miaosuan\tmp_js_1.js:27
+所在位置 行:445 字符: 288
++ ... oups[1].Value -Encoding UTF8 }; node --check tmp_js_1.js 2>&1 | Out-F ...
++                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (D:\backup\BaoBa...\tmp_js_1.js:27 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    statusMining: "閹告牗甯㈡稉?,
+                  ^^^^^^^
+
+SyntaxError: Invalid or unexpected token
+    at wrapSafe (node:internal/modules/cjs/loader:1637:18)
+    at checkSyntax (node:internal/main/check_syntax:78:3)
+
+Node.js v22.22.2
+scripts=1, exit=1

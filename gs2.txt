@@ -1,0 +1,102 @@
+﻿ M .workbuddy/memory/2026-09-26.md
+ M .workbuddy/memory/MEMORY.md
+ M settings.yaml
+ M src/miaosuan/config.py
+ M src/miaosuan/core/ops.py
+ M src/miaosuan/data/acquisition.py
+ M src/miaosuan/data/fetchers/__init__.py
+ M src/miaosuan/data/fetchers/akshare_src.py
+ M src/miaosuan/data/fetchers/base.py
+ M src/miaosuan/data/fetchers/binance.py
+ M src/miaosuan/data/fetchers/dukascopy.py
+ M src/miaosuan/data/fetchers/mt4_bridge.py
+ M src/miaosuan/data/fetchers/okx.py
+ M src/miaosuan/data/fetchers/shenji_db.py
+ M src/miaosuan/data/fetchers/tqsdk_src.py
+ M src/miaosuan/data/fetchers/tradingview.py
+ M src/miaosuan/settings.py
+ M src/miaosuan/webui/server.py
+ M src/miaosuan/webui/static/index.html
+ M tests/test_mt4_bridge.py
+?? .pytest_out.txt
+?? .test_import.py
+?? .workbuddy/memory/2026-09-29.md
+?? .workbuddy/memory/2026-09-30.md
+?? ap_test.txt
+?? ap_test2.txt
+?? build_all.py
+?? build_all_timeframes.py
+?? build_check.txt
+?? build_full_dataset.py
+?? build_full_dataset2.py
+?? build_h4.py
+?? build_h4_out.txt
+?? build_log.txt
+?? build_out.txt
+?? check_cache.py
+?? check_cache2.py
+?? check_cache_out.txt
+?? check_h1_avail2.py
+?? check_h1_availability.py
+?? check_out.txt
+?? col3.txt
+?? compare_d1.py
+?? compare_d1_out.py
+?? compare_h1.py
+?? d1_compare.txt
+?? d1_compare_out.txt
+?? duk_fetch_all.py
+?? duk_fetch_all_v2.py
+?? duk_fetch_all_v3.py
+?? duk_fetch_log.txt
+?? duk_m5_fetch.py
+?? duk_m5_log.txt
+?? envchk.txt
+?? error.txt
+?? fr_test_out.txt
+?? fr_test_out2.txt
+?? full_ap.txt
+?? full_test_out.txt
+?? gs.txt
+?? gs2.txt
+?? h1_check.txt
+?? h1_check_out.txt
+?? h1_compare_out.txt
+?? h1_merge_out.txt
+?? h1_merge_result.txt
+?? h1_merge_results.txt
+?? merge_h1_ultimate.py
+?? merge_h1_ultimate2.py
+?? merge_h1_ultimate3.py
+?? merge_out.txt
+?? merge_ultimate.py
+?? merge_ultimate2.py
+?? merge_ultimate_out.txt
+?? pytest_out.txt
+?? pytest_result.txt
+?? read_pytest.py
+?? ruff_ap.txt
+?? ruff_base.txt
+?? ruff_out.txt
+?? run_pytest.py
+?? scripts/compare_tv_duk.py
+?? smoke1.txt
+?? smoke2.txt
+?? smoke3.txt
+?? smoke4.txt
+?? st.txt
+?? test_duk.py
+?? test_duk2.py
+?? test_duk3.py
+?? test_duk4.py
+?? test_duk5.py
+?? test_duk6.py
+?? test_duk7.py
+?? test_duk8.py
+?? test_duk9.py
+?? test_dukascopy.py
+?? test_final.py
+?? tests/test_append_continuity.py
+?? tests/test_fetch_result.py
+?? ultimate_check.txt
+?? w1.txt

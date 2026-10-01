@@ -1,0 +1,3 @@
+DIR exists: True
+     1047 cand_seed1.log
+     1048 cand_seed2.log

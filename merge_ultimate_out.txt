@@ -1,0 +1,12 @@
+基础最新时间: 2026-08-31
+补丁行数: 22
+补丁范围: 2026-09-01 → 2026-09-30
+
+=== 合并完成 ===
+输出文件: D:\backup\BaoBao\PythonProgram\miaosuan\data\cache\XAUUSD_D1_ultimate.parquet
+总行数: 7253
+时间范围: 2006-10-05 → 2026-09-30
+异常间隙: 0 个
+
+与 XAUUSD_D1.parquet 差异: 39 行
+与 XAUUSD_D1_Dukascopy_full.parquet 差异: 22 行

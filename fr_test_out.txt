@@ -1,0 +1,1159 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.13.14, pytest-9.1.1, pluggy-1.6.0
+rootdir: D:\backup\BaoBao\PythonProgram\miaosuan
+configfile: pyproject.toml
+plugins: anyio-4.15.1, hypothesis-6.168.0, cov-7.1.0
+collected 10 items
+
+tests\test_fetch_result.py EFFFF.FFFF                                    [100%]
+
+=================================== ERRORS ====================================
+____________ ERROR at setup of test_full_fetch_success_is_updated _____________
+
+path = '\\\\?\\D:\\backup\\BaoBao\\PythonProgram\\miaosuan\\.pytest_fr1'
+ignore_errors = False, onerror = None
+kwargs = {'onexc': functools.partial(<function on_rm_rf_error at 0x000002C2C755F2E0>, start_path=WindowsPath('//?/D:/backup/BaoBao/PythonProgram/miaosuan/.pytest_fr1'))}
+
+    def _safe_shutil_rmtree(path, ignore_errors=False, onerror=None, **kwargs):
+        # Python 3.12+ 寮曞叆 onexc锛?.14+ 杩樻湁 dir_fd鈥斺€斾竴骞?forward 缁欏師鐢?
+        try:
+            abs_path = os.path.abspath(os.fspath(path))
+        except TypeError:
+            return _orig_shutil_rmtree(
+                path, ignore_errors=ignore_errors, onerror=onerror, **kwargs
+            )
+    
+        if _should_bypass_safe_delete(abs_path):
+            return _orig_shutil_rmtree(
+                path, ignore_errors=ignore_errors, onerror=onerror, **kwargs
+            )
+    
+        st = _safe_lstat(abs_path)
+        if not st:
+            return _orig_shutil_rmtree(
+                path, ignore_errors=ignore_errors, onerror=onerror, **kwargs
+            )
+        if not stat.S_ISDIR(st.st_mode):
+            # 涓嶆槸鐩綍 鈫?璁╁師鐢熷鐞嗭紙rmtree 浼氭姏 NotADirectoryError锛?
+            return _orig_shutil_rmtree(
+                path, ignore_errors=ignore_errors, onerror=onerror, **kwargs
+            )
+    
+        try:
+>           _try_trash(abs_path, recursive=True)
+
+C:\Program Files\wb\WorkBuddy\resources\app.asar.unpacked\cli\vendor\shim\sitecustomize.py:1144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Program Files\wb\WorkBuddy\resources\app.asar.unpacked\cli\vendor\shim\sitecustomize.py:981: in _try_trash
+    _platform_trash(abs_path)
+C:\Program Files\wb\WorkBuddy\resources\app.asar.unpacked\cli\vendor\shim\sitecustomize.py:137: in _platform_trash
+    path = _get_short_path(os.path.abspath(abs_path))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+path = '\\\\?\\D:\\backup\\BaoBao\\PythonProgram\\miaosuan\\.pytest_fr1'
+
+    def _get_short_path(path):
+        """璋冪敤 GetShortPathNameW 澶勭悊瓒呴暱璺緞鍜岀壒娈婂瓧绗︺€?""
+        prefix = "\\\\?\\"
+        long_path = (prefix + "UNC" + path[1:]) if path.startswith("\\\\") else (prefix + path)
+        n = _kernel32.GetShortPathNameW(long_path, None, 0)
+        if not n:
+            err = GetLastError()
+>           raise OSError(err, FormatError(err), path)
+E           OSError: [Errno 53] 鎵句笉鍒扮綉缁滆矾寰勩€? '\\\\?\\D:\\backup\\BaoBao\\PythonProgram\\miaosuan\\.pytest_fr1'
+
+C:\Program Files\wb\WorkBuddy\resources\app.asar.unpacked\cli\vendor\shim\sitecustomize.py:126: OSError
+---------------------------- Captured stderr setup ----------------------------
+[safe-delete][SAFE_DELETE_FAIL_CLOSED] {"target": "\\\\?\\D:\\backup\\BaoBao\\PythonProgram\\miaosuan\\.pytest_fr1", "reason": "trash-failed", "detail": "[Errno 53] 鎵句笉鍒扮綉缁滆矾寰勩€? '\\\\\\\\?\\\\D:\\\\backup\\\\BaoBao\\\\PythonProgram\\\\miaosuan\\\\.pytest_fr1'"}
+================================== FAILURES ===================================
+______________________ test_incremental_merge_is_updated ______________________
+
+cache_dir = WindowsPath('D:/backup/BaoBao/PythonProgram/miaosuan/.pytest_fr1/test_incremental_merge_is_upda0')
+
+    def test_incremental_merge_is_updated(cache_dir: Path) -> None:
+        """宸叉湁缂撳瓨 + 澧為噺杩斿洖鏂?bar 鈫?UPDATED锛堝悎骞跺幓閲嶅悗鍐欏洖锛夈€?""
+        src = ScriptedSource(stype="Dukascopy", full=_df(n=5), incremental=_df(n=5, start=1_700_000_000 + 5 * 3600))
+        acq = _acq(src)
+>       first = acq.fetch("XAUUSD", "H1")          # 棣栬窇钀?5 鏍?
+                ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_fetch_result.py:137: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <miaosuan.data.acquisition.DataAcquisition object at 0x000002C2D93D4980>
+symbol = 'XAUUSD', timeframe = 'H1', since = None, source = None, note = None
+allowed_types = None
+
+    def fetch(
+        self,
+        symbol: str,
+        timeframe: str,
+        since: int | None = None,
+        source: str | None = None,
+        note: str | None = None,
+        allowed_types: list[str] | None = None,
+    ) -> Path:
+        """鑾峰彇琛屾儏鏁版嵁骞剁紦瀛樹负鏈湴 parquet銆?
+    
+        Args:
+            symbol: 鍝佺鏍囪瘑锛堝 ``"XAUUSD"``锛夈€?
+            timeframe: 鍛ㄦ湡鏍囪瘑锛堝 ``"H1"``锛夈€?
+            since: 鍙€夌殑澧為噺璧峰 Unix 绉掞紙涓€鑸笉闇€瑕佷紶锛屾ā鍧楄嚜鍔ㄥ垽瀹氾級銆?
+            source: 鎸囧畾鍗曚竴鏁版嵁鏉ユ簮**绫诲瀷**锛堝 ``"Shenji"`` / ``"TradingView"`` / ``"OKX"``
+                / ``"Dukascopy"`` / ``"鍏朵粬"``锛夛紱绌?= 鎸変紭鍏堢骇鑷姩銆?
+            note: 澶囨敞锛岄潪绌烘椂杩藉姞鍒扮紦瀛樻枃浠跺悕锛坄`{symbol}_{timeframe}_{note}.parquet``锛夈€?
+            allowed_types: 浠呭厑璁哥殑鏉ユ簮绫诲瀷鍒楄〃锛堟寜甯傚満鐢诲儚绾︽潫锛夛紱绌?= 涓嶉檺鍒躲€?
+    
+        Returns:
+            :class:`FetchResult`鈥斺€旇矾寰?+ 鐘舵€?+ 鍚勬簮璇︽儏銆俙`status`` 鍖哄垎锛?
+            ``UPDATED``锛堟媺鍒版柊鏁版嵁锛夈€乣`UP_TO_DATE``锛堟簮纭鏃犳柊 bar锛夈€?
+            ``STALE_FALLBACK``锛堟墍鏈夋簮澶辫触銆佽繑鍥炴棫缂撳瓨锛夈€俙`path`` 瀹炵幇
+            ``__fspath__``锛屽彲鐩存帴浼犵粰 ``loader.load()`` / ``pd.read_parquet()``銆?
+    
+        Raises:
+            DataError: 鎵€鏈夋潵婧愬け璐?*涓旀棤浠讳綍鏈湴缂撳瓨**鍙敤鏃讹紙``context`` 鍚?
+                ``failures``鈥斺€旀瘡涓簮鐨勫け璐ュ師鍥狅紝涓?``NetworkSource`` 鍚屽彛寰勶級銆?
+        """
+        cache_path = self._cache_path(
+            symbol,
+            timeframe,
+            note=note,
+            # 鏄惧紡鎸囧畾 source 鏃舵妸 source_type 鍐欏叆鏂囦欢鍚嶏紙濡?XAUUSD_D1_Dukascopy.parquet锛夛紝
+            # 浣夸笉鍚屾潵婧愮殑缂撳瓨鍒嗙锛岄伩鍏嶇敤 Dukascopy 鎷夋暟鎹椂璇绘棫缂撳瓨鐨勬渶澶ф椂闂村仛"澧為噺"
+            # 璧扮┖銆佽杩斿洖鏃ф枃浠讹紱鍙湁鑷姩妯″紡锛坰ource=None锛変笉鍔犲墠缂€锛屼繚鎸佸巻鍙插吋瀹广€?
+            source_type=(source if source else None),
+        )
+        max_time = self._read_cache_max_time(cache_path)
+        sources = self._select_sources(source, allowed_types=allowed_types)
+    
+        # 纭畾澧為噺璧风偣锛氭樉寮?since > 缂撳瓨 max_time > None锛堝叏閲忥級
+        incremental_since = since
+        if incremental_since is None and max_time is not None:
+            incremental_since = max_time
+    
+        # 澧為噺灏濊瘯銆俢arry = 澧為噺闃舵鐨勫け璐ュ師鍥狅細鑻ラ殢鍚庡叏閲忔垚鍔熷垯闄嶇骇涓?
+        # warnings锛堟暟鎹槸鏂扮殑锛屼絾鏈夋簮涓嶅仴搴凤級锛岃嫢鍏ㄩ噺涔熷け璐ュ垯骞跺叆 errors銆?
+        carry: list[str] = []
+        if incremental_since is not None:
+            att = self._try_fetch_incremental(sources, symbol, timeframe, incremental_since)
+            if att.df is not None and len(att.df) > 0:
+                old_df = pd.DataFrame()
+                if cache_path.is_file():
+                    try:
+                        old_df = pd.read_parquet(cache_path)
+                    except Exception:  # noqa: BLE001 - 鏃х紦瀛樻崯鍧忓垯鎸夐璺戦噸鍐?
+                        old_df = pd.DataFrame()
+                merged = self._merge_and_dedup(old_df, att.df) if len(old_df) > 0 else att.df
+                self._write_parquet_atomic(merged, cache_path)
+                return FetchResult(
+                    path=cache_path,
+                    status=FetchStatus.UPDATED,
+                    source_used=att.source,
+                    warnings=_dedup(att.failures),
+                )
+            if att.ok and cache_path.is_file():
+                # 婧愭甯稿搷搴斾絾鏃犳柊 bar = 鏁版嵁宸叉槸鏈€鏂帮紙涓嶆槸澶辫触锛侊級銆?
+                # 鍏朵粬婧愮殑澶辫触鍙綔 warnings鈥斺€旀湁涓€涓簮纭杩囧氨澶熶簡銆?
+                return FetchResult(
+                    path=cache_path,
+                    status=FetchStatus.UP_TO_DATE,
+                    source_used=att.source,
+                    warnings=_dedup(att.failures),
+                )
+            # 澧為噺鍏ㄩ儴澶辫触锛堟垨鎴愬姛浣嗘湰鍦版棤缂撳瓨鍙垽瀹氾級鈫?璇曞叏閲?
+            carry = att.failures
+    
+        # 棣栬窇鎴栧閲忓け璐?鈫?鍏ㄩ噺鑾峰彇
+        att = self._try_fetch_full(sources, symbol, timeframe)
+        if att.df is not None and len(att.df) > 0:
+            self._write_parquet_atomic(att.df, cache_path)
+            return FetchResult(
+                path=cache_path,
+                status=FetchStatus.UPDATED,
+                source_used=att.source,
+                warnings=_dedup(carry + att.failures),
+            )
+    
+        # 鍏ㄩ噺涔熷け璐?鈫?鏃х紦瀛樺厹搴曪紝浣?*濡傚疄鏍囨敞 STALE_FALLBACK 骞跺甫涓婂け璐ュ師鍥?*
+        errors = _dedup(carry + att.failures)
+        if cache_path.is_file():
+            return FetchResult(
+                path=cache_path,
+                status=FetchStatus.STALE_FALLBACK,
+                source_used="",
+                errors=errors,
+            )
+    
+        available = " / ".join(s.describe() for s in sources)
+        detail = "锛?.join(errors) if errors else "鏃犲彲鐢ㄦ潵婧?
+>       raise DataError(
+            f"鏃犳硶鑾峰彇 {symbol} {timeframe} 鐨勮鎯呮暟鎹? {detail}",
+            context={
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "source": source,
+                "sources": available,
+                "failures": errors,
+            },
+        )
+E       miaosuan.errors.DataError: [E-DATA] 鏃犳硶鑾峰彇 XAUUSD H1 鐨勮鎯呮暟鎹? Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all(). | {'symbol': 'XAUUSD', 'timeframe': 'H1', 'source': None, 'sources': 'Dukascopy', 'failures': ['Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().']}
+
+src\miaosuan\data\acquisition.py:975: DataError
+------------------------------ Captured log call ------------------------------
+WARNING  miaosuan.data.acquisition:acquisition.py:1051 _try_fetch_full 鍏ㄩ儴鏉ユ簮澶辫触: XAUUSD H1 | Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().
+__________________ test_incremental_no_new_bar_is_up_to_date __________________
+
+cache_dir = WindowsPath('D:/backup/BaoBao/PythonProgram/miaosuan/.pytest_fr1/test_incremental_no_new_bar_is0')
+
+    def test_incremental_no_new_bar_is_up_to_date(cache_dir: Path) -> None:
+        """缂撳瓨宸叉槸鏈€鏂帮紙澧為噺婧愭甯稿搷搴斾絾涓虹┖锛夆啋 UP_TO_DATE + warnings=[]銆?""
+        src = ScriptedSource(stype="Dukascopy", full=_df(), incremental="empty")
+        acq = _acq(src)
+>       acq.fetch("XAUUSD", "H1")                   # 寤虹紦瀛?
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_fetch_result.py:152: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <miaosuan.data.acquisition.DataAcquisition object at 0x000002C2D930A710>
+symbol = 'XAUUSD', timeframe = 'H1', since = None, source = None, note = None
+allowed_types = None
+
+    def fetch(
+        self,
+        symbol: str,
+        timeframe: str,
+        since: int | None = None,
+        source: str | None = None,
+        note: str | None = None,
+        allowed_types: list[str] | None = None,
+    ) -> Path:
+        """鑾峰彇琛屾儏鏁版嵁骞剁紦瀛樹负鏈湴 parquet銆?
+    
+        Args:
+            symbol: 鍝佺鏍囪瘑锛堝 ``"XAUUSD"``锛夈€?
+            timeframe: 鍛ㄦ湡鏍囪瘑锛堝 ``"H1"``锛夈€?
+            since: 鍙€夌殑澧為噺璧峰 Unix 绉掞紙涓€鑸笉闇€瑕佷紶锛屾ā鍧楄嚜鍔ㄥ垽瀹氾級銆?
+            source: 鎸囧畾鍗曚竴鏁版嵁鏉ユ簮**绫诲瀷**锛堝 ``"Shenji"`` / ``"TradingView"`` / ``"OKX"``
+                / ``"Dukascopy"`` / ``"鍏朵粬"``锛夛紱绌?= 鎸変紭鍏堢骇鑷姩銆?
+            note: 澶囨敞锛岄潪绌烘椂杩藉姞鍒扮紦瀛樻枃浠跺悕锛坄`{symbol}_{timeframe}_{note}.parquet``锛夈€?
+            allowed_types: 浠呭厑璁哥殑鏉ユ簮绫诲瀷鍒楄〃锛堟寜甯傚満鐢诲儚绾︽潫锛夛紱绌?= 涓嶉檺鍒躲€?
+    
+        Returns:
+            :class:`FetchResult`鈥斺€旇矾寰?+ 鐘舵€?+ 鍚勬簮璇︽儏銆俙`status`` 鍖哄垎锛?
+            ``UPDATED``锛堟媺鍒版柊鏁版嵁锛夈€乣`UP_TO_DATE``锛堟簮纭鏃犳柊 bar锛夈€?
+            ``STALE_FALLBACK``锛堟墍鏈夋簮澶辫触銆佽繑鍥炴棫缂撳瓨锛夈€俙`path`` 瀹炵幇
+            ``__fspath__``锛屽彲鐩存帴浼犵粰 ``loader.load()`` / ``pd.read_parquet()``銆?
+    
+        Raises:
+            DataError: 鎵€鏈夋潵婧愬け璐?*涓旀棤浠讳綍鏈湴缂撳瓨**鍙敤鏃讹紙``context`` 鍚?
+                ``failures``鈥斺€旀瘡涓簮鐨勫け璐ュ師鍥狅紝涓?``NetworkSource`` 鍚屽彛寰勶級銆?
+        """
+        cache_path = self._cache_path(
+            symbol,
+            timeframe,
+            note=note,
+            # 鏄惧紡鎸囧畾 source 鏃舵妸 source_type 鍐欏叆鏂囦欢鍚嶏紙濡?XAUUSD_D1_Dukascopy.parquet锛夛紝
+            # 浣夸笉鍚屾潵婧愮殑缂撳瓨鍒嗙锛岄伩鍏嶇敤 Dukascopy 鎷夋暟鎹椂璇绘棫缂撳瓨鐨勬渶澶ф椂闂村仛"澧為噺"
+            # 璧扮┖銆佽杩斿洖鏃ф枃浠讹紱鍙湁鑷姩妯″紡锛坰ource=None锛変笉鍔犲墠缂€锛屼繚鎸佸巻鍙插吋瀹广€?
+            source_type=(source if source else None),
+        )
+        max_time = self._read_cache_max_time(cache_path)
+        sources = self._select_sources(source, allowed_types=allowed_types)
+    
+        # 纭畾澧為噺璧风偣锛氭樉寮?since > 缂撳瓨 max_time > None锛堝叏閲忥級
+        incremental_since = since
+        if incremental_since is None and max_time is not None:
+            incremental_since = max_time
+    
+        # 澧為噺灏濊瘯銆俢arry = 澧為噺闃舵鐨勫け璐ュ師鍥狅細鑻ラ殢鍚庡叏閲忔垚鍔熷垯闄嶇骇涓?
+        # warnings锛堟暟鎹槸鏂扮殑锛屼絾鏈夋簮涓嶅仴搴凤級锛岃嫢鍏ㄩ噺涔熷け璐ュ垯骞跺叆 errors銆?
+        carry: list[str] = []
+        if incremental_since is not None:
+            att = self._try_fetch_incremental(sources, symbol, timeframe, incremental_since)
+            if att.df is not None and len(att.df) > 0:
+                old_df = pd.DataFrame()
+                if cache_path.is_file():
+                    try:
+                        old_df = pd.read_parquet(cache_path)
+                    except Exception:  # noqa: BLE001 - 鏃х紦瀛樻崯鍧忓垯鎸夐璺戦噸鍐?
+                        old_df = pd.DataFrame()
+                merged = self._merge_and_dedup(old_df, att.df) if len(old_df) > 0 else att.df
+                self._write_parquet_atomic(merged, cache_path)
+                return FetchResult(
+                    path=cache_path,
+                    status=FetchStatus.UPDATED,
+                    source_used=att.source,
+                    warnings=_dedup(att.failures),
+                )
+            if att.ok and cache_path.is_file():
+                # 婧愭甯稿搷搴斾絾鏃犳柊 bar = 鏁版嵁宸叉槸鏈€鏂帮紙涓嶆槸澶辫触锛侊級銆?
+                # 鍏朵粬婧愮殑澶辫触鍙綔 warnings鈥斺€旀湁涓€涓簮纭杩囧氨澶熶簡銆?
+                return FetchResult(
+                    path=cache_path,
+                    status=FetchStatus.UP_TO_DATE,
+                    source_used=att.source,
+                    warnings=_dedup(att.failures),
+                )
+            # 澧為噺鍏ㄩ儴澶辫触锛堟垨鎴愬姛浣嗘湰鍦版棤缂撳瓨鍙垽瀹氾級鈫?璇曞叏閲?
+            carry = att.failures
+    
+        # 棣栬窇鎴栧閲忓け璐?鈫?鍏ㄩ噺鑾峰彇
+        att = self._try_fetch_full(sources, symbol, timeframe)
+        if att.df is not None and len(att.df) > 0:
+            self._write_parquet_atomic(att.df, cache_path)
+            return FetchResult(
+                path=cache_path,
+                status=FetchStatus.UPDATED,
+                source_used=att.source,
+                warnings=_dedup(carry + att.failures),
+            )
+    
+        # 鍏ㄩ噺涔熷け璐?鈫?鏃х紦瀛樺厹搴曪紝浣?*濡傚疄鏍囨敞 STALE_FALLBACK 骞跺甫涓婂け璐ュ師鍥?*
+        errors = _dedup(carry + att.failures)
+        if cache_path.is_file():
+            return FetchResult(
+                path=cache_path,
+                status=FetchStatus.STALE_FALLBACK,
+                source_used="",
+                errors=errors,
+            )
+    
+        available = " / ".join(s.describe() for s in sources)
+        detail = "锛?.join(errors) if errors else "鏃犲彲鐢ㄦ潵婧?
+>       raise DataError(
+            f"鏃犳硶鑾峰彇 {symbol} {timeframe} 鐨勮鎯呮暟鎹? {detail}",
+            context={
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "source": source,
+                "sources": available,
+                "failures": errors,
+            },
+        )
+E       miaosuan.errors.DataError: [E-DATA] 鏃犳硶鑾峰彇 XAUUSD H1 鐨勮鎯呮暟鎹? Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all(). | {'symbol': 'XAUUSD', 'timeframe': 'H1', 'source': None, 'sources': 'Dukascopy', 'failures': ['Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().']}
+
+src\miaosuan\data\acquisition.py:975: DataError
+------------------------------ Captured log call ------------------------------
+WARNING  miaosuan.data.acquisition:acquisition.py:1051 _try_fetch_full 鍏ㄩ儴鏉ユ簮澶辫触: XAUUSD H1 | Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().
+_____________ test_all_sources_fail_with_cache_is_stale_fallback ______________
+
+cache_dir = WindowsPath('D:/backup/BaoBao/PythonProgram/miaosuan/.pytest_fr1/test_all_sources_fail_with_cac0')
+
+    def test_all_sources_fail_with_cache_is_stale_fallback(cache_dir: Path) -> None:
+        """鎵€鏈夋簮澶辫触銆佹湰鍦版湁鏃х紦瀛?鈫?STALE_FALLBACK + errors 閫愭潯鎼哄甫鍘熷洜銆?""
+        good = ScriptedSource(stype="Dukascopy", full=_df(), incremental=_df())
+        acq = _acq(good)
+>       acq.fetch("XAUUSD", "H1")                   # 鍏堝缓涓€浠姐€屾棫缂撳瓨銆?
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_fetch_result.py:169: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <miaosuan.data.acquisition.DataAcquisition object at 0x000002C2D930AD50>
+symbol = 'XAUUSD', timeframe = 'H1', since = None, source = None, note = None
+allowed_types = None
+
+    def fetch(
+        self,
+        symbol: str,
+        timeframe: str,
+        since: int | None = None,
+        source: str | None = None,
+        note: str | None = None,
+        allowed_types: list[str] | None = None,
+    ) -> Path:
+        """鑾峰彇琛屾儏鏁版嵁骞剁紦瀛樹负鏈湴 parquet銆?
+    
+        Args:
+            symbol: 鍝佺鏍囪瘑锛堝 ``"XAUUSD"``锛夈€?
+            timeframe: 鍛ㄦ湡鏍囪瘑锛堝 ``"H1"``锛夈€?
+            since: 鍙€夌殑澧為噺璧峰 Unix 绉掞紙涓€鑸笉闇€瑕佷紶锛屾ā鍧楄嚜鍔ㄥ垽瀹氾級銆?
+            source: 鎸囧畾鍗曚竴鏁版嵁鏉ユ簮**绫诲瀷**锛堝 ``"Shenji"`` / ``"TradingView"`` / ``"OKX"``
+                / ``"Dukascopy"`` / ``"鍏朵粬"``锛夛紱绌?= 鎸変紭鍏堢骇鑷姩銆?
+            note: 澶囨敞锛岄潪绌烘椂杩藉姞鍒扮紦瀛樻枃浠跺悕锛坄`{symbol}_{timeframe}_{note}.parquet``锛夈€?
+            allowed_types: 浠呭厑璁哥殑鏉ユ簮绫诲瀷鍒楄〃锛堟寜甯傚満鐢诲儚绾︽潫锛夛紱绌?= 涓嶉檺鍒躲€?
+    
+        Returns:
+            :class:`FetchResult`鈥斺€旇矾寰?+ 鐘舵€?+ 鍚勬簮璇︽儏銆俙`status`` 鍖哄垎锛?
+            ``UPDATED``锛堟媺鍒版柊鏁版嵁锛夈€乣`UP_TO_DATE``锛堟簮纭鏃犳柊 bar锛夈€?
+            ``STALE_FALLBACK``锛堟墍鏈夋簮澶辫触銆佽繑鍥炴棫缂撳瓨锛夈€俙`path`` 瀹炵幇
+            ``__fspath__``锛屽彲鐩存帴浼犵粰 ``loader.load()`` / ``pd.read_parquet()``銆?
+    
+        Raises:
+            DataError: 鎵€鏈夋潵婧愬け璐?*涓旀棤浠讳綍鏈湴缂撳瓨**鍙敤鏃讹紙``context`` 鍚?
+                ``failures``鈥斺€旀瘡涓簮鐨勫け璐ュ師鍥狅紝涓?``NetworkSource`` 鍚屽彛寰勶級銆?
+        """
+        cache_path = self._cache_path(
+            symbol,
+            timeframe,
+            note=note,
+            # 鏄惧紡鎸囧畾 source 鏃舵妸 source_type 鍐欏叆鏂囦欢鍚嶏紙濡?XAUUSD_D1_Dukascopy.parquet锛夛紝
+            # 浣夸笉鍚屾潵婧愮殑缂撳瓨鍒嗙锛岄伩鍏嶇敤 Dukascopy 鎷夋暟鎹椂璇绘棫缂撳瓨鐨勬渶澶ф椂闂村仛"澧為噺"
+            # 璧扮┖銆佽杩斿洖鏃ф枃浠讹紱鍙湁鑷姩妯″紡锛坰ource=None锛変笉鍔犲墠缂€锛屼繚鎸佸巻鍙插吋瀹广€?
+            source_type=(source if source else None),
+        )
+        max_time = self._read_cache_max_time(cache_path)
+        sources = self._select_sources(source, allowed_types=allowed_types)
+    
+        # 纭畾澧為噺璧风偣锛氭樉寮?since > 缂撳瓨 max_time > None锛堝叏閲忥級
+        incremental_since = since
+        if incremental_since is None and max_time is not None:
+            incremental_since = max_time
+    
+        # 澧為噺灏濊瘯銆俢arry = 澧為噺闃舵鐨勫け璐ュ師鍥狅細鑻ラ殢鍚庡叏閲忔垚鍔熷垯闄嶇骇涓?
+        # warnings锛堟暟鎹槸鏂扮殑锛屼絾鏈夋簮涓嶅仴搴凤級锛岃嫢鍏ㄩ噺涔熷け璐ュ垯骞跺叆 errors銆?
+        carry: list[str] = []
+        if incremental_since is not None:
+            att = self._try_fetch_incremental(sources, symbol, timeframe, incremental_since)
+            if att.df is not None and len(att.df) > 0:
+                old_df = pd.DataFrame()
+                if cache_path.is_file():
+                    try:
+                        old_df = pd.read_parquet(cache_path)
+                    except Exception:  # noqa: BLE001 - 鏃х紦瀛樻崯鍧忓垯鎸夐璺戦噸鍐?
+                        old_df = pd.DataFrame()
+                merged = self._merge_and_dedup(old_df, att.df) if len(old_df) > 0 else att.df
+                self._write_parquet_atomic(merged, cache_path)
+                return FetchResult(
+                    path=cache_path,
+                    status=FetchStatus.UPDATED,
+                    source_used=att.source,
+                    warnings=_dedup(att.failures),
+                )
+            if att.ok and cache_path.is_file():
+                # 婧愭甯稿搷搴斾絾鏃犳柊 bar = 鏁版嵁宸叉槸鏈€鏂帮紙涓嶆槸澶辫触锛侊級銆?
+                # 鍏朵粬婧愮殑澶辫触鍙綔 warnings鈥斺€旀湁涓€涓簮纭杩囧氨澶熶簡銆?
+                return FetchResult(
+                    path=cache_path,
+                    status=FetchStatus.UP_TO_DATE,
+                    source_used=att.source,
+                    warnings=_dedup(att.failures),
+                )
+            # 澧為噺鍏ㄩ儴澶辫触锛堟垨鎴愬姛浣嗘湰鍦版棤缂撳瓨鍙垽瀹氾級鈫?璇曞叏閲?
+            carry = att.failures
+    
+        # 棣栬窇鎴栧閲忓け璐?鈫?鍏ㄩ噺鑾峰彇
+        att = self._try_fetch_full(sources, symbol, timeframe)
+        if att.df is not None and len(att.df) > 0:
+            self._write_parquet_atomic(att.df, cache_path)
+            return FetchResult(
+                path=cache_path,
+                status=FetchStatus.UPDATED,
+                source_used=att.source,
+                warnings=_dedup(carry + att.failures),
+            )
+    
+        # 鍏ㄩ噺涔熷け璐?鈫?鏃х紦瀛樺厹搴曪紝浣?*濡傚疄鏍囨敞 STALE_FALLBACK 骞跺甫涓婂け璐ュ師鍥?*
+        errors = _dedup(carry + att.failures)
+        if cache_path.is_file():
+            return FetchResult(
+                path=cache_path,
+                status=FetchStatus.STALE_FALLBACK,
+                source_used="",
+                errors=errors,
+            )
+    
+        available = " / ".join(s.describe() for s in sources)
+        detail = "锛?.join(errors) if errors else "鏃犲彲鐢ㄦ潵婧?
+>       raise DataError(
+            f"鏃犳硶鑾峰彇 {symbol} {timeframe} 鐨勮鎯呮暟鎹? {detail}",
+            context={
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "source": source,
+                "sources": available,
+                "failures": errors,
+            },
+        )
+E       miaosuan.errors.DataError: [E-DATA] 鏃犳硶鑾峰彇 XAUUSD H1 鐨勮鎯呮暟鎹? Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all(). | {'symbol': 'XAUUSD', 'timeframe': 'H1', 'source': None, 'sources': 'Dukascopy', 'failures': ['Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().']}
+
+src\miaosuan\data\acquisition.py:975: DataError
+------------------------------ Captured log call ------------------------------
+WARNING  miaosuan.data.acquisition:acquisition.py:1051 _try_fetch_full 鍏ㄩ儴鏉ユ簮澶辫触: XAUUSD H1 | Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().
+______________ test_stale_fallback_reports_every_failing_source _______________
+
+cache_dir = WindowsPath('D:/backup/BaoBao/PythonProgram/miaosuan/.pytest_fr1/test_stale_fallback_reports_ev0')
+
+    def test_stale_fallback_reports_every_failing_source(cache_dir: Path) -> None:
+        """涓や釜婧愰兘鎸?鈫?errors 閲屼袱涓簮鐨勫け璐ュ師鍥犻兘鍦紙閫愭潯閫忎紶锛屼笉鍘嬬缉鎴愪竴鍙ワ級銆?""
+        good = ScriptedSource(stype="Dukascopy", full=_df(), incremental=_df())
+>       _acq(good).fetch("XAUUSD", "H1")
+
+tests\test_fetch_result.py:190: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <miaosuan.data.acquisition.DataAcquisition object at 0x000002C2D927A520>
+symbol = 'XAUUSD', timeframe = 'H1', since = None, source = None, note = None
+allowed_types = None
+
+    def fetch(
+        self,
+        symbol: str,
+        timeframe: str,
+        since: int | None = None,
+        source: str | None = None,
+        note: str | None = None,
+        allowed_types: list[str] | None = None,
+    ) -> Path:
+        """鑾峰彇琛屾儏鏁版嵁骞剁紦瀛樹负鏈湴 parquet銆?
+    
+        Args:
+            symbol: 鍝佺鏍囪瘑锛堝 ``"XAUUSD"``锛夈€?
+            timeframe: 鍛ㄦ湡鏍囪瘑锛堝 ``"H1"``锛夈€?
+            since: 鍙€夌殑澧為噺璧峰 Unix 绉掞紙涓€鑸笉闇€瑕佷紶锛屾ā鍧楄嚜鍔ㄥ垽瀹氾級銆?
+            source: 鎸囧畾鍗曚竴鏁版嵁鏉ユ簮**绫诲瀷**锛堝 ``"Shenji"`` / ``"TradingView"`` / ``"OKX"``
+                / ``"Dukascopy"`` / ``"鍏朵粬"``锛夛紱绌?= 鎸変紭鍏堢骇鑷姩銆?
+            note: 澶囨敞锛岄潪绌烘椂杩藉姞鍒扮紦瀛樻枃浠跺悕锛坄`{symbol}_{timeframe}_{note}.parquet``锛夈€?
+            allowed_types: 浠呭厑璁哥殑鏉ユ簮绫诲瀷鍒楄〃锛堟寜甯傚満鐢诲儚绾︽潫锛夛紱绌?= 涓嶉檺鍒躲€?
+    
+        Returns:
+            :class:`FetchResult`鈥斺€旇矾寰?+ 鐘舵€?+ 鍚勬簮璇︽儏銆俙`status`` 鍖哄垎锛?
+            ``UPDATED``锛堟媺鍒版柊鏁版嵁锛夈€乣`UP_TO_DATE``锛堟簮纭鏃犳柊 bar锛夈€?
+            ``STALE_FALLBACK``锛堟墍鏈夋簮澶辫触銆佽繑鍥炴棫缂撳瓨锛夈€俙`path`` 瀹炵幇
+            ``__fspath__``锛屽彲鐩存帴浼犵粰 ``loader.load()`` / ``pd.read_parquet()``銆?
+    
+        Raises:
+            DataError: 鎵€鏈夋潵婧愬け璐?*涓旀棤浠讳綍鏈湴缂撳瓨**鍙敤鏃讹紙``context`` 鍚?
+                ``failures``鈥斺€旀瘡涓簮鐨勫け璐ュ師鍥狅紝涓?``NetworkSource`` 鍚屽彛寰勶級銆?
+        """
+        cache_path = self._cache_path(
+            symbol,
+            timeframe,
+            note=note,
+            # 鏄惧紡鎸囧畾 source 鏃舵妸 source_type 鍐欏叆鏂囦欢鍚嶏紙濡?XAUUSD_D1_Dukascopy.parquet锛夛紝
+            # 浣夸笉鍚屾潵婧愮殑缂撳瓨鍒嗙锛岄伩鍏嶇敤 Dukascopy 鎷夋暟鎹椂璇绘棫缂撳瓨鐨勬渶澶ф椂闂村仛"澧為噺"
+            # 璧扮┖銆佽杩斿洖鏃ф枃浠讹紱鍙湁鑷姩妯″紡锛坰ource=None锛変笉鍔犲墠缂€锛屼繚鎸佸巻鍙插吋瀹广€?
+            source_type=(source if source else None),
+        )
+        max_time = self._read_cache_max_time(cache_path)
+        sources = self._select_sources(source, allowed_types=allowed_types)
+    
+        # 纭畾澧為噺璧风偣锛氭樉寮?since > 缂撳瓨 max_time > None锛堝叏閲忥級
+        incremental_since = since
+        if incremental_since is None and max_time is not None:
+            incremental_since = max_time
+    
+        # 澧為噺灏濊瘯銆俢arry = 澧為噺闃舵鐨勫け璐ュ師鍥狅細鑻ラ殢鍚庡叏閲忔垚鍔熷垯闄嶇骇涓?
+        # warnings锛堟暟鎹槸鏂扮殑锛屼絾鏈夋簮涓嶅仴搴凤級锛岃嫢鍏ㄩ噺涔熷け璐ュ垯骞跺叆 errors銆?
+        carry: list[str] = []
+        if incremental_since is not None:
+            att = self._try_fetch_incremental(sources, symbol, timeframe, incremental_since)
+            if att.df is not None and len(att.df) > 0:
+                old_df = pd.DataFrame()
+                if cache_path.is_file():
+                    try:
+                        old_df = pd.read_parquet(cache_path)
+                    except Exception:  # noqa: BLE001 - 鏃х紦瀛樻崯鍧忓垯鎸夐璺戦噸鍐?
+                        old_df = pd.DataFrame()
+                merged = self._merge_and_dedup(old_df, att.df) if len(old_df) > 0 else att.df
+                self._write_parquet_atomic(merged, cache_path)
+                return FetchResult(
+                    path=cache_path,
+                    status=FetchStatus.UPDATED,
+                    source_used=att.source,
+                    warnings=_dedup(att.failures),
+                )
+            if att.ok and cache_path.is_file():
+                # 婧愭甯稿搷搴斾絾鏃犳柊 bar = 鏁版嵁宸叉槸鏈€鏂帮紙涓嶆槸澶辫触锛侊級銆?
+                # 鍏朵粬婧愮殑澶辫触鍙綔 warnings鈥斺€旀湁涓€涓簮纭杩囧氨澶熶簡銆?
+                return FetchResult(
+                    path=cache_path,
+                    status=FetchStatus.UP_TO_DATE,
+                    source_used=att.source,
+                    warnings=_dedup(att.failures),
+                )
+            # 澧為噺鍏ㄩ儴澶辫触锛堟垨鎴愬姛浣嗘湰鍦版棤缂撳瓨鍙垽瀹氾級鈫?璇曞叏閲?
+            carry = att.failures
+    
+        # 棣栬窇鎴栧閲忓け璐?鈫?鍏ㄩ噺鑾峰彇
+        att = self._try_fetch_full(sources, symbol, timeframe)
+        if att.df is not None and len(att.df) > 0:
+            self._write_parquet_atomic(att.df, cache_path)
+            return FetchResult(
+                path=cache_path,
+                status=FetchStatus.UPDATED,
+                source_used=att.source,
+                warnings=_dedup(carry + att.failures),
+            )
+    
+        # 鍏ㄩ噺涔熷け璐?鈫?鏃х紦瀛樺厹搴曪紝浣?*濡傚疄鏍囨敞 STALE_FALLBACK 骞跺甫涓婂け璐ュ師鍥?*
+        errors = _dedup(carry + att.failures)
+        if cache_path.is_file():
+            return FetchResult(
+                path=cache_path,
+                status=FetchStatus.STALE_FALLBACK,
+                source_used="",
+                errors=errors,
+            )
+    
+        available = " / ".join(s.describe() for s in sources)
+        detail = "锛?.join(errors) if errors else "鏃犲彲鐢ㄦ潵婧?
+>       raise DataError(
+            f"鏃犳硶鑾峰彇 {symbol} {timeframe} 鐨勮鎯呮暟鎹? {detail}",
+            context={
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "source": source,
+                "sources": available,
+                "failures": errors,
+            },
+        )
+E       miaosuan.errors.DataError: [E-DATA] 鏃犳硶鑾峰彇 XAUUSD H1 鐨勮鎯呮暟鎹? Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all(). | {'symbol': 'XAUUSD', 'timeframe': 'H1', 'source': None, 'sources': 'Dukascopy', 'failures': ['Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().']}
+
+src\miaosuan\data\acquisition.py:975: DataError
+------------------------------ Captured log call ------------------------------
+WARNING  miaosuan.data.acquisition:acquisition.py:1051 _try_fetch_full 鍏ㄩ儴鏉ユ簮澶辫触: XAUUSD H1 | Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().
+____________ test_partial_failure_success_has_warnings_not_errors _____________
+
+cache_dir = WindowsPath('D:/backup/BaoBao/PythonProgram/miaosuan/.pytest_fr1/test_partial_failure_success_h0')
+
+    def test_partial_failure_success_has_warnings_not_errors(cache_dir: Path) -> None:
+        """婧?A 鎸傘€佹簮 B 鎴愬姛 鈫?UPDATED + warnings锛圓 鐨勫け璐ュ師鍥狅級锛宔rrors=[]銆?""
+        res = _acq(
+            ScriptedSource(stype="TradingView", full=DataError("tv 鎸備簡"),
+                           incremental=DataError("tv 鎸備簡"), label="TradingView(dead)"),
+            ScriptedSource(stype="Dukascopy", full=_df(), incremental=_df()),
+>       ).fetch("XAUUSD", "H1")
+          ^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_fetch_result.py:236: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <miaosuan.data.acquisition.DataAcquisition object at 0x000002C2D9414DD0>
+symbol = 'XAUUSD', timeframe = 'H1', since = None, source = None, note = None
+allowed_types = None
+
+    def fetch(
+        self,
+        symbol: str,
+        timeframe: str,
+        since: int | None = None,
+        source: str | None = None,
+        note: str | None = None,
+        allowed_types: list[str] | None = None,
+    ) -> Path:
+        """鑾峰彇琛屾儏鏁版嵁骞剁紦瀛樹负鏈湴 parquet銆?
+    
+        Args:
+            symbol: 鍝佺鏍囪瘑锛堝 ``"XAUUSD"``锛夈€?
+            timeframe: 鍛ㄦ湡鏍囪瘑锛堝 ``"H1"``锛夈€?
+            since: 鍙€夌殑澧為噺璧峰 Unix 绉掞紙涓€鑸笉闇€瑕佷紶锛屾ā鍧楄嚜鍔ㄥ垽瀹氾級銆?
+            source: 鎸囧畾鍗曚竴鏁版嵁鏉ユ簮**绫诲瀷**锛堝 ``"Shenji"`` / ``"TradingView"`` / ``"OKX"``
+                / ``"Dukascopy"`` / ``"鍏朵粬"``锛夛紱绌?= 鎸変紭鍏堢骇鑷姩銆?
+            note: 澶囨敞锛岄潪绌烘椂杩藉姞鍒扮紦瀛樻枃浠跺悕锛坄`{symbol}_{timeframe}_{note}.parquet``锛夈€?
+            allowed_types: 浠呭厑璁哥殑鏉ユ簮绫诲瀷鍒楄〃锛堟寜甯傚満鐢诲儚绾︽潫锛夛紱绌?= 涓嶉檺鍒躲€?
+    
+        Returns:
+            :class:`FetchResult`鈥斺€旇矾寰?+ 鐘舵€?+ 鍚勬簮璇︽儏銆俙`status`` 鍖哄垎锛?
+            ``UPDATED``锛堟媺鍒版柊鏁版嵁锛夈€乣`UP_TO_DATE``锛堟簮纭鏃犳柊 bar锛夈€?
+            ``STALE_FALLBACK``锛堟墍鏈夋簮澶辫触銆佽繑鍥炴棫缂撳瓨锛夈€俙`path`` 瀹炵幇
+            ``__fspath__``锛屽彲鐩存帴浼犵粰 ``loader.load()`` / ``pd.read_parquet()``銆?
+    
+        Raises:
+            DataError: 鎵€鏈夋潵婧愬け璐?*涓旀棤浠讳綍鏈湴缂撳瓨**鍙敤鏃讹紙``context`` 鍚?
+                ``failures``鈥斺€旀瘡涓簮鐨勫け璐ュ師鍥狅紝涓?``NetworkSource`` 鍚屽彛寰勶級銆?
+        """
+        cache_path = self._cache_path(
+            symbol,
+            timeframe,
+            note=note,
+            # 鏄惧紡鎸囧畾 source 鏃舵妸 source_type 鍐欏叆鏂囦欢鍚嶏紙濡?XAUUSD_D1_Dukascopy.parquet锛夛紝
+            # 浣夸笉鍚屾潵婧愮殑缂撳瓨鍒嗙锛岄伩鍏嶇敤 Dukascopy 鎷夋暟鎹椂璇绘棫缂撳瓨鐨勬渶澶ф椂闂村仛"澧為噺"
+            # 璧扮┖銆佽杩斿洖鏃ф枃浠讹紱鍙湁鑷姩妯″紡锛坰ource=None锛変笉鍔犲墠缂€锛屼繚鎸佸巻鍙插吋瀹广€?
+            source_type=(source if source else None),
+        )
+        max_time = self._read_cache_max_time(cache_path)
+        sources = self._select_sources(source, allowed_types=allowed_types)
+    
+        # 纭畾澧為噺璧风偣锛氭樉寮?since > 缂撳瓨 max_time > None锛堝叏閲忥級
+        incremental_since = since
+        if incremental_since is None and max_time is not None:
+            incremental_since = max_time
+    
+        # 澧為噺灏濊瘯銆俢arry = 澧為噺闃舵鐨勫け璐ュ師鍥狅細鑻ラ殢鍚庡叏閲忔垚鍔熷垯闄嶇骇涓?
+        # warnings锛堟暟鎹槸鏂扮殑锛屼絾鏈夋簮涓嶅仴搴凤級锛岃嫢鍏ㄩ噺涔熷け璐ュ垯骞跺叆 errors銆?
+        carry: list[str] = []
+        if incremental_since is not None:
+            att = self._try_fetch_incremental(sources, symbol, timeframe, incremental_since)
+            if att.df is not None and len(att.df) > 0:
+                old_df = pd.DataFrame()
+                if cache_path.is_file():
+                    try:
+                        old_df = pd.read_parquet(cache_path)
+                    except Exception:  # noqa: BLE001 - 鏃х紦瀛樻崯鍧忓垯鎸夐璺戦噸鍐?
+                        old_df = pd.DataFrame()
+                merged = self._merge_and_dedup(old_df, att.df) if len(old_df) > 0 else att.df
+                self._write_parquet_atomic(merged, cache_path)
+                return FetchResult(
+                    path=cache_path,
+                    status=FetchStatus.UPDATED,
+                    source_used=att.source,
+                    warnings=_dedup(att.failures),
+                )
+            if att.ok and cache_path.is_file():
+                # 婧愭甯稿搷搴斾絾鏃犳柊 bar = 鏁版嵁宸叉槸鏈€鏂帮紙涓嶆槸澶辫触锛侊級銆?
+                # 鍏朵粬婧愮殑澶辫触鍙綔 warnings鈥斺€旀湁涓€涓簮纭杩囧氨澶熶簡銆?
+                return FetchResult(
+                    path=cache_path,
+                    status=FetchStatus.UP_TO_DATE,
+                    source_used=att.source,
+                    warnings=_dedup(att.failures),
+                )
+            # 澧為噺鍏ㄩ儴澶辫触锛堟垨鎴愬姛浣嗘湰鍦版棤缂撳瓨鍙垽瀹氾級鈫?璇曞叏閲?
+            carry = att.failures
+    
+        # 棣栬窇鎴栧閲忓け璐?鈫?鍏ㄩ噺鑾峰彇
+        att = self._try_fetch_full(sources, symbol, timeframe)
+        if att.df is not None and len(att.df) > 0:
+            self._write_parquet_atomic(att.df, cache_path)
+            return FetchResult(
+                path=cache_path,
+                status=FetchStatus.UPDATED,
+                source_used=att.source,
+                warnings=_dedup(carry + att.failures),
+            )
+    
+        # 鍏ㄩ噺涔熷け璐?鈫?鏃х紦瀛樺厹搴曪紝浣?*濡傚疄鏍囨敞 STALE_FALLBACK 骞跺甫涓婂け璐ュ師鍥?*
+        errors = _dedup(carry + att.failures)
+        if cache_path.is_file():
+            return FetchResult(
+                path=cache_path,
+                status=FetchStatus.STALE_FALLBACK,
+                source_used="",
+                errors=errors,
+            )
+    
+        available = " / ".join(s.describe() for s in sources)
+        detail = "锛?.join(errors) if errors else "鏃犲彲鐢ㄦ潵婧?
+>       raise DataError(
+            f"鏃犳硶鑾峰彇 {symbol} {timeframe} 鐨勮鎯呮暟鎹? {detail}",
+            context={
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "source": source,
+                "sources": available,
+                "failures": errors,
+            },
+        )
+E       miaosuan.errors.DataError: [E-DATA] 鏃犳硶鑾峰彇 XAUUSD H1 鐨勮鎯呮暟鎹? TradingView(dead): [E-DATA] tv 鎸備簡锛汥ukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all(). | {'symbol': 'XAUUSD', 'timeframe': 'H1', 'source': None, 'sources': 'TradingView(dead) / Dukascopy', 'failures': ['TradingView(dead): [E-DATA] tv 鎸備簡', 'Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().']}
+
+src\miaosuan\data\acquisition.py:975: DataError
+------------------------------ Captured log call ------------------------------
+WARNING  miaosuan.data.acquisition:acquisition.py:1051 _try_fetch_full 鍏ㄩ儴鏉ユ簮澶辫触: XAUUSD H1 | TradingView(dead): [E-DATA] tv 鎸備簡锛汥ukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().
+________________________ test_result_path_is_pathlike _________________________
+
+cache_dir = WindowsPath('D:/backup/BaoBao/PythonProgram/miaosuan/.pytest_fr1/test_result_path_is_pathlike0')
+
+    def test_result_path_is_pathlike(cache_dir: Path) -> None:
+        """``__fspath__`` 浣?pd.read_parquet(res) 鐩存帴鍙敤锛堟棫璋冪敤鏂瑰紡涓嶇牬鍧忥級銆?""
+        src = ScriptedSource(stype="Dukascopy", full=_df(), incremental=_df())
+>       res = _acq(src).fetch("XAUUSD", "H1")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_fetch_result.py:250: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <miaosuan.data.acquisition.DataAcquisition object at 0x000002C2D9410270>
+symbol = 'XAUUSD', timeframe = 'H1', since = None, source = None, note = None
+allowed_types = None
+
+    def fetch(
+        self,
+        symbol: str,
+        timeframe: str,
+        since: int | None = None,
+        source: str | None = None,
+        note: str | None = None,
+        allowed_types: list[str] | None = None,
+    ) -> Path:
+        """鑾峰彇琛屾儏鏁版嵁骞剁紦瀛樹负鏈湴 parquet銆?
+    
+        Args:
+            symbol: 鍝佺鏍囪瘑锛堝 ``"XAUUSD"``锛夈€?
+            timeframe: 鍛ㄦ湡鏍囪瘑锛堝 ``"H1"``锛夈€?
+            since: 鍙€夌殑澧為噺璧峰 Unix 绉掞紙涓€鑸笉闇€瑕佷紶锛屾ā鍧楄嚜鍔ㄥ垽瀹氾級銆?
+            source: 鎸囧畾鍗曚竴鏁版嵁鏉ユ簮**绫诲瀷**锛堝 ``"Shenji"`` / ``"TradingView"`` / ``"OKX"``
+                / ``"Dukascopy"`` / ``"鍏朵粬"``锛夛紱绌?= 鎸変紭鍏堢骇鑷姩銆?
+            note: 澶囨敞锛岄潪绌烘椂杩藉姞鍒扮紦瀛樻枃浠跺悕锛坄`{symbol}_{timeframe}_{note}.parquet``锛夈€?
+            allowed_types: 浠呭厑璁哥殑鏉ユ簮绫诲瀷鍒楄〃锛堟寜甯傚満鐢诲儚绾︽潫锛夛紱绌?= 涓嶉檺鍒躲€?
+    
+        Returns:
+            :class:`FetchResult`鈥斺€旇矾寰?+ 鐘舵€?+ 鍚勬簮璇︽儏銆俙`status`` 鍖哄垎锛?
+            ``UPDATED``锛堟媺鍒版柊鏁版嵁锛夈€乣`UP_TO_DATE``锛堟簮纭鏃犳柊 bar锛夈€?
+            ``STALE_FALLBACK``锛堟墍鏈夋簮澶辫触銆佽繑鍥炴棫缂撳瓨锛夈€俙`path`` 瀹炵幇
+            ``__fspath__``锛屽彲鐩存帴浼犵粰 ``loader.load()`` / ``pd.read_parquet()``銆?
+    
+        Raises:
+            DataError: 鎵€鏈夋潵婧愬け璐?*涓旀棤浠讳綍鏈湴缂撳瓨**鍙敤鏃讹紙``context`` 鍚?
+                ``failures``鈥斺€旀瘡涓簮鐨勫け璐ュ師鍥狅紝涓?``NetworkSource`` 鍚屽彛寰勶級銆?
+        """
+        cache_path = self._cache_path(
+            symbol,
+            timeframe,
+            note=note,
+            # 鏄惧紡鎸囧畾 source 鏃舵妸 source_type 鍐欏叆鏂囦欢鍚嶏紙濡?XAUUSD_D1_Dukascopy.parquet锛夛紝
+            # 浣夸笉鍚屾潵婧愮殑缂撳瓨鍒嗙锛岄伩鍏嶇敤 Dukascopy 鎷夋暟鎹椂璇绘棫缂撳瓨鐨勬渶澶ф椂闂村仛"澧為噺"
+            # 璧扮┖銆佽杩斿洖鏃ф枃浠讹紱鍙湁鑷姩妯″紡锛坰ource=None锛変笉鍔犲墠缂€锛屼繚鎸佸巻鍙插吋瀹广€?
+            source_type=(source if source else None),
+        )
+        max_time = self._read_cache_max_time(cache_path)
+        sources = self._select_sources(source, allowed_types=allowed_types)
+    
+        # 纭畾澧為噺璧风偣锛氭樉寮?since > 缂撳瓨 max_time > None锛堝叏閲忥級
+        incremental_since = since
+        if incremental_since is None and max_time is not None:
+            incremental_since = max_time
+    
+        # 澧為噺灏濊瘯銆俢arry = 澧為噺闃舵鐨勫け璐ュ師鍥狅細鑻ラ殢鍚庡叏閲忔垚鍔熷垯闄嶇骇涓?
+        # warnings锛堟暟鎹槸鏂扮殑锛屼絾鏈夋簮涓嶅仴搴凤級锛岃嫢鍏ㄩ噺涔熷け璐ュ垯骞跺叆 errors銆?
+        carry: list[str] = []
+        if incremental_since is not None:
+            att = self._try_fetch_incremental(sources, symbol, timeframe, incremental_since)
+            if att.df is not None and len(att.df) > 0:
+                old_df = pd.DataFrame()
+                if cache_path.is_file():
+                    try:
+                        old_df = pd.read_parquet(cache_path)
+                    except Exception:  # noqa: BLE001 - 鏃х紦瀛樻崯鍧忓垯鎸夐璺戦噸鍐?
+                        old_df = pd.DataFrame()
+                merged = self._merge_and_dedup(old_df, att.df) if len(old_df) > 0 else att.df
+                self._write_parquet_atomic(merged, cache_path)
+                return FetchResult(
+                    path=cache_path,
+                    status=FetchStatus.UPDATED,
+                    source_used=att.source,
+                    warnings=_dedup(att.failures),
+                )
+            if att.ok and cache_path.is_file():
+                # 婧愭甯稿搷搴斾絾鏃犳柊 bar = 鏁版嵁宸叉槸鏈€鏂帮紙涓嶆槸澶辫触锛侊級銆?
+                # 鍏朵粬婧愮殑澶辫触鍙綔 warnings鈥斺€旀湁涓€涓簮纭杩囧氨澶熶簡銆?
+                return FetchResult(
+                    path=cache_path,
+                    status=FetchStatus.UP_TO_DATE,
+                    source_used=att.source,
+                    warnings=_dedup(att.failures),
+                )
+            # 澧為噺鍏ㄩ儴澶辫触锛堟垨鎴愬姛浣嗘湰鍦版棤缂撳瓨鍙垽瀹氾級鈫?璇曞叏閲?
+            carry = att.failures
+    
+        # 棣栬窇鎴栧閲忓け璐?鈫?鍏ㄩ噺鑾峰彇
+        att = self._try_fetch_full(sources, symbol, timeframe)
+        if att.df is not None and len(att.df) > 0:
+            self._write_parquet_atomic(att.df, cache_path)
+            return FetchResult(
+                path=cache_path,
+                status=FetchStatus.UPDATED,
+                source_used=att.source,
+                warnings=_dedup(carry + att.failures),
+            )
+    
+        # 鍏ㄩ噺涔熷け璐?鈫?鏃х紦瀛樺厹搴曪紝浣?*濡傚疄鏍囨敞 STALE_FALLBACK 骞跺甫涓婂け璐ュ師鍥?*
+        errors = _dedup(carry + att.failures)
+        if cache_path.is_file():
+            return FetchResult(
+                path=cache_path,
+                status=FetchStatus.STALE_FALLBACK,
+                source_used="",
+                errors=errors,
+            )
+    
+        available = " / ".join(s.describe() for s in sources)
+        detail = "锛?.join(errors) if errors else "鏃犲彲鐢ㄦ潵婧?
+>       raise DataError(
+            f"鏃犳硶鑾峰彇 {symbol} {timeframe} 鐨勮鎯呮暟鎹? {detail}",
+            context={
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "source": source,
+                "sources": available,
+                "failures": errors,
+            },
+        )
+E       miaosuan.errors.DataError: [E-DATA] 鏃犳硶鑾峰彇 XAUUSD H1 鐨勮鎯呮暟鎹? Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all(). | {'symbol': 'XAUUSD', 'timeframe': 'H1', 'source': None, 'sources': 'Dukascopy', 'failures': ['Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().']}
+
+src\miaosuan\data\acquisition.py:975: DataError
+------------------------------ Captured log call ------------------------------
+WARNING  miaosuan.data.acquisition:acquisition.py:1051 _try_fetch_full 鍏ㄩ儴鏉ユ簮澶辫触: XAUUSD H1 | Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().
+________________________ test_to_dict_is_json_friendly ________________________
+
+cache_dir = WindowsPath('D:/backup/BaoBao/PythonProgram/miaosuan/.pytest_fr1/test_to_dict_is_json_friendly0')
+
+    def test_to_dict_is_json_friendly(cache_dir: Path) -> None:
+        """to_dict 杈撳嚭 JSON 鍙嬪ソ瀛楁锛圵ebUI 閫忎紶缁欏墠绔敤锛夈€?""
+        import json
+    
+        src = ScriptedSource(stype="Dukascopy", full=_df(), incremental=_df())
+>       res = _acq(src).fetch("XAUUSD", "H1")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_fetch_result.py:264: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <miaosuan.data.acquisition.DataAcquisition object at 0x000002C2D92BFCE0>
+symbol = 'XAUUSD', timeframe = 'H1', since = None, source = None, note = None
+allowed_types = None
+
+    def fetch(
+        self,
+        symbol: str,
+        timeframe: str,
+        since: int | None = None,
+        source: str | None = None,
+        note: str | None = None,
+        allowed_types: list[str] | None = None,
+    ) -> Path:
+        """鑾峰彇琛屾儏鏁版嵁骞剁紦瀛樹负鏈湴 parquet銆?
+    
+        Args:
+            symbol: 鍝佺鏍囪瘑锛堝 ``"XAUUSD"``锛夈€?
+            timeframe: 鍛ㄦ湡鏍囪瘑锛堝 ``"H1"``锛夈€?
+            since: 鍙€夌殑澧為噺璧峰 Unix 绉掞紙涓€鑸笉闇€瑕佷紶锛屾ā鍧楄嚜鍔ㄥ垽瀹氾級銆?
+            source: 鎸囧畾鍗曚竴鏁版嵁鏉ユ簮**绫诲瀷**锛堝 ``"Shenji"`` / ``"TradingView"`` / ``"OKX"``
+                / ``"Dukascopy"`` / ``"鍏朵粬"``锛夛紱绌?= 鎸変紭鍏堢骇鑷姩銆?
+            note: 澶囨敞锛岄潪绌烘椂杩藉姞鍒扮紦瀛樻枃浠跺悕锛坄`{symbol}_{timeframe}_{note}.parquet``锛夈€?
+            allowed_types: 浠呭厑璁哥殑鏉ユ簮绫诲瀷鍒楄〃锛堟寜甯傚満鐢诲儚绾︽潫锛夛紱绌?= 涓嶉檺鍒躲€?
+    
+        Returns:
+            :class:`FetchResult`鈥斺€旇矾寰?+ 鐘舵€?+ 鍚勬簮璇︽儏銆俙`status`` 鍖哄垎锛?
+            ``UPDATED``锛堟媺鍒版柊鏁版嵁锛夈€乣`UP_TO_DATE``锛堟簮纭鏃犳柊 bar锛夈€?
+            ``STALE_FALLBACK``锛堟墍鏈夋簮澶辫触銆佽繑鍥炴棫缂撳瓨锛夈€俙`path`` 瀹炵幇
+            ``__fspath__``锛屽彲鐩存帴浼犵粰 ``loader.load()`` / ``pd.read_parquet()``銆?
+    
+        Raises:
+            DataError: 鎵€鏈夋潵婧愬け璐?*涓旀棤浠讳綍鏈湴缂撳瓨**鍙敤鏃讹紙``context`` 鍚?
+                ``failures``鈥斺€旀瘡涓簮鐨勫け璐ュ師鍥狅紝涓?``NetworkSource`` 鍚屽彛寰勶級銆?
+        """
+        cache_path = self._cache_path(
+            symbol,
+            timeframe,
+            note=note,
+            # 鏄惧紡鎸囧畾 source 鏃舵妸 source_type 鍐欏叆鏂囦欢鍚嶏紙濡?XAUUSD_D1_Dukascopy.parquet锛夛紝
+            # 浣夸笉鍚屾潵婧愮殑缂撳瓨鍒嗙锛岄伩鍏嶇敤 Dukascopy 鎷夋暟鎹椂璇绘棫缂撳瓨鐨勬渶澶ф椂闂村仛"澧為噺"
+            # 璧扮┖銆佽杩斿洖鏃ф枃浠讹紱鍙湁鑷姩妯″紡锛坰ource=None锛変笉鍔犲墠缂€锛屼繚鎸佸巻鍙插吋瀹广€?
+            source_type=(source if source else None),
+        )
+        max_time = self._read_cache_max_time(cache_path)
+        sources = self._select_sources(source, allowed_types=allowed_types)
+    
+        # 纭畾澧為噺璧风偣锛氭樉寮?since > 缂撳瓨 max_time > None锛堝叏閲忥級
+        incremental_since = since
+        if incremental_since is None and max_time is not None:
+            incremental_since = max_time
+    
+        # 澧為噺灏濊瘯銆俢arry = 澧為噺闃舵鐨勫け璐ュ師鍥狅細鑻ラ殢鍚庡叏閲忔垚鍔熷垯闄嶇骇涓?
+        # warnings锛堟暟鎹槸鏂扮殑锛屼絾鏈夋簮涓嶅仴搴凤級锛岃嫢鍏ㄩ噺涔熷け璐ュ垯骞跺叆 errors銆?
+        carry: list[str] = []
+        if incremental_since is not None:
+            att = self._try_fetch_incremental(sources, symbol, timeframe, incremental_since)
+            if att.df is not None and len(att.df) > 0:
+                old_df = pd.DataFrame()
+                if cache_path.is_file():
+                    try:
+                        old_df = pd.read_parquet(cache_path)
+                    except Exception:  # noqa: BLE001 - 鏃х紦瀛樻崯鍧忓垯鎸夐璺戦噸鍐?
+                        old_df = pd.DataFrame()
+                merged = self._merge_and_dedup(old_df, att.df) if len(old_df) > 0 else att.df
+                self._write_parquet_atomic(merged, cache_path)
+                return FetchResult(
+                    path=cache_path,
+                    status=FetchStatus.UPDATED,
+                    source_used=att.source,
+                    warnings=_dedup(att.failures),
+                )
+            if att.ok and cache_path.is_file():
+                # 婧愭甯稿搷搴斾絾鏃犳柊 bar = 鏁版嵁宸叉槸鏈€鏂帮紙涓嶆槸澶辫触锛侊級銆?
+                # 鍏朵粬婧愮殑澶辫触鍙綔 warnings鈥斺€旀湁涓€涓簮纭杩囧氨澶熶簡銆?
+                return FetchResult(
+                    path=cache_path,
+                    status=FetchStatus.UP_TO_DATE,
+                    source_used=att.source,
+                    warnings=_dedup(att.failures),
+                )
+            # 澧為噺鍏ㄩ儴澶辫触锛堟垨鎴愬姛浣嗘湰鍦版棤缂撳瓨鍙垽瀹氾級鈫?璇曞叏閲?
+            carry = att.failures
+    
+        # 棣栬窇鎴栧閲忓け璐?鈫?鍏ㄩ噺鑾峰彇
+        att = self._try_fetch_full(sources, symbol, timeframe)
+        if att.df is not None and len(att.df) > 0:
+            self._write_parquet_atomic(att.df, cache_path)
+            return FetchResult(
+                path=cache_path,
+                status=FetchStatus.UPDATED,
+                source_used=att.source,
+                warnings=_dedup(carry + att.failures),
+            )
+    
+        # 鍏ㄩ噺涔熷け璐?鈫?鏃х紦瀛樺厹搴曪紝浣?*濡傚疄鏍囨敞 STALE_FALLBACK 骞跺甫涓婂け璐ュ師鍥?*
+        errors = _dedup(carry + att.failures)
+        if cache_path.is_file():
+            return FetchResult(
+                path=cache_path,
+                status=FetchStatus.STALE_FALLBACK,
+                source_used="",
+                errors=errors,
+            )
+    
+        available = " / ".join(s.describe() for s in sources)
+        detail = "锛?.join(errors) if errors else "鏃犲彲鐢ㄦ潵婧?
+>       raise DataError(
+            f"鏃犳硶鑾峰彇 {symbol} {timeframe} 鐨勮鎯呮暟鎹? {detail}",
+            context={
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "source": source,
+                "sources": available,
+                "failures": errors,
+            },
+        )
+E       miaosuan.errors.DataError: [E-DATA] 鏃犳硶鑾峰彇 XAUUSD H1 鐨勮鎯呮暟鎹? Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all(). | {'symbol': 'XAUUSD', 'timeframe': 'H1', 'source': None, 'sources': 'Dukascopy', 'failures': ['Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().']}
+
+src\miaosuan\data\acquisition.py:975: DataError
+------------------------------ Captured log call ------------------------------
+WARNING  miaosuan.data.acquisition:acquisition.py:1051 _try_fetch_full 鍏ㄩ儴鏉ユ簮澶辫触: XAUUSD H1 | Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().
+__________________ test_explicit_source_separates_cache_file __________________
+
+cache_dir = WindowsPath('D:/backup/BaoBao/PythonProgram/miaosuan/.pytest_fr1/test_explicit_source_separates0')
+
+    def test_explicit_source_separates_cache_file(cache_dir: Path) -> None:
+        """鎸囧畾 source=Dukascopy 鈫?缂撳瓨鏂囦欢鍚嶅惈 _Dukascopy锛堜笌鑷姩妯″紡涓嶄簰韪╋級銆?""
+        src = ScriptedSource(stype="Dukascopy", full=_df(), incremental=_df())
+>       res = _acq(src).fetch("XAUUSD", "D1", source="Dukascopy")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_fetch_result.py:279: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <miaosuan.data.acquisition.DataAcquisition object at 0x000002C2D924F050>
+symbol = 'XAUUSD', timeframe = 'D1', since = None, source = 'Dukascopy'
+note = None, allowed_types = None
+
+    def fetch(
+        self,
+        symbol: str,
+        timeframe: str,
+        since: int | None = None,
+        source: str | None = None,
+        note: str | None = None,
+        allowed_types: list[str] | None = None,
+    ) -> Path:
+        """鑾峰彇琛屾儏鏁版嵁骞剁紦瀛樹负鏈湴 parquet銆?
+    
+        Args:
+            symbol: 鍝佺鏍囪瘑锛堝 ``"XAUUSD"``锛夈€?
+            timeframe: 鍛ㄦ湡鏍囪瘑锛堝 ``"H1"``锛夈€?
+            since: 鍙€夌殑澧為噺璧峰 Unix 绉掞紙涓€鑸笉闇€瑕佷紶锛屾ā鍧楄嚜鍔ㄥ垽瀹氾級銆?
+            source: 鎸囧畾鍗曚竴鏁版嵁鏉ユ簮**绫诲瀷**锛堝 ``"Shenji"`` / ``"TradingView"`` / ``"OKX"``
+                / ``"Dukascopy"`` / ``"鍏朵粬"``锛夛紱绌?= 鎸変紭鍏堢骇鑷姩銆?
+            note: 澶囨敞锛岄潪绌烘椂杩藉姞鍒扮紦瀛樻枃浠跺悕锛坄`{symbol}_{timeframe}_{note}.parquet``锛夈€?
+            allowed_types: 浠呭厑璁哥殑鏉ユ簮绫诲瀷鍒楄〃锛堟寜甯傚満鐢诲儚绾︽潫锛夛紱绌?= 涓嶉檺鍒躲€?
+    
+        Returns:
+            :class:`FetchResult`鈥斺€旇矾寰?+ 鐘舵€?+ 鍚勬簮璇︽儏銆俙`status`` 鍖哄垎锛?
+            ``UPDATED``锛堟媺鍒版柊鏁版嵁锛夈€乣`UP_TO_DATE``锛堟簮纭鏃犳柊 bar锛夈€?
+            ``STALE_FALLBACK``锛堟墍鏈夋簮澶辫触銆佽繑鍥炴棫缂撳瓨锛夈€俙`path`` 瀹炵幇
+            ``__fspath__``锛屽彲鐩存帴浼犵粰 ``loader.load()`` / ``pd.read_parquet()``銆?
+    
+        Raises:
+            DataError: 鎵€鏈夋潵婧愬け璐?*涓旀棤浠讳綍鏈湴缂撳瓨**鍙敤鏃讹紙``context`` 鍚?
+                ``failures``鈥斺€旀瘡涓簮鐨勫け璐ュ師鍥狅紝涓?``NetworkSource`` 鍚屽彛寰勶級銆?
+        """
+        cache_path = self._cache_path(
+            symbol,
+            timeframe,
+            note=note,
+            # 鏄惧紡鎸囧畾 source 鏃舵妸 source_type 鍐欏叆鏂囦欢鍚嶏紙濡?XAUUSD_D1_Dukascopy.parquet锛夛紝
+            # 浣夸笉鍚屾潵婧愮殑缂撳瓨鍒嗙锛岄伩鍏嶇敤 Dukascopy 鎷夋暟鎹椂璇绘棫缂撳瓨鐨勬渶澶ф椂闂村仛"澧為噺"
+            # 璧扮┖銆佽杩斿洖鏃ф枃浠讹紱鍙湁鑷姩妯″紡锛坰ource=None锛変笉鍔犲墠缂€锛屼繚鎸佸巻鍙插吋瀹广€?
+            source_type=(source if source else None),
+        )
+        max_time = self._read_cache_max_time(cache_path)
+        sources = self._select_sources(source, allowed_types=allowed_types)
+    
+        # 纭畾澧為噺璧风偣锛氭樉寮?since > 缂撳瓨 max_time > None锛堝叏閲忥級
+        incremental_since = since
+        if incremental_since is None and max_time is not None:
+            incremental_since = max_time
+    
+        # 澧為噺灏濊瘯銆俢arry = 澧為噺闃舵鐨勫け璐ュ師鍥狅細鑻ラ殢鍚庡叏閲忔垚鍔熷垯闄嶇骇涓?
+        # warnings锛堟暟鎹槸鏂扮殑锛屼絾鏈夋簮涓嶅仴搴凤級锛岃嫢鍏ㄩ噺涔熷け璐ュ垯骞跺叆 errors銆?
+        carry: list[str] = []
+        if incremental_since is not None:
+            att = self._try_fetch_incremental(sources, symbol, timeframe, incremental_since)
+            if att.df is not None and len(att.df) > 0:
+                old_df = pd.DataFrame()
+                if cache_path.is_file():
+                    try:
+                        old_df = pd.read_parquet(cache_path)
+                    except Exception:  # noqa: BLE001 - 鏃х紦瀛樻崯鍧忓垯鎸夐璺戦噸鍐?
+                        old_df = pd.DataFrame()
+                merged = self._merge_and_dedup(old_df, att.df) if len(old_df) > 0 else att.df
+                self._write_parquet_atomic(merged, cache_path)
+                return FetchResult(
+                    path=cache_path,
+                    status=FetchStatus.UPDATED,
+                    source_used=att.source,
+                    warnings=_dedup(att.failures),
+                )
+            if att.ok and cache_path.is_file():
+                # 婧愭甯稿搷搴斾絾鏃犳柊 bar = 鏁版嵁宸叉槸鏈€鏂帮紙涓嶆槸澶辫触锛侊級銆?
+                # 鍏朵粬婧愮殑澶辫触鍙綔 warnings鈥斺€旀湁涓€涓簮纭杩囧氨澶熶簡銆?
+                return FetchResult(
+                    path=cache_path,
+                    status=FetchStatus.UP_TO_DATE,
+                    source_used=att.source,
+                    warnings=_dedup(att.failures),
+                )
+            # 澧為噺鍏ㄩ儴澶辫触锛堟垨鎴愬姛浣嗘湰鍦版棤缂撳瓨鍙垽瀹氾級鈫?璇曞叏閲?
+            carry = att.failures
+    
+        # 棣栬窇鎴栧閲忓け璐?鈫?鍏ㄩ噺鑾峰彇
+        att = self._try_fetch_full(sources, symbol, timeframe)
+        if att.df is not None and len(att.df) > 0:
+            self._write_parquet_atomic(att.df, cache_path)
+            return FetchResult(
+                path=cache_path,
+                status=FetchStatus.UPDATED,
+                source_used=att.source,
+                warnings=_dedup(carry + att.failures),
+            )
+    
+        # 鍏ㄩ噺涔熷け璐?鈫?鏃х紦瀛樺厹搴曪紝浣?*濡傚疄鏍囨敞 STALE_FALLBACK 骞跺甫涓婂け璐ュ師鍥?*
+        errors = _dedup(carry + att.failures)
+        if cache_path.is_file():
+            return FetchResult(
+                path=cache_path,
+                status=FetchStatus.STALE_FALLBACK,
+                source_used="",
+                errors=errors,
+            )
+    
+        available = " / ".join(s.describe() for s in sources)
+        detail = "锛?.join(errors) if errors else "鏃犲彲鐢ㄦ潵婧?
+>       raise DataError(
+            f"鏃犳硶鑾峰彇 {symbol} {timeframe} 鐨勮鎯呮暟鎹? {detail}",
+            context={
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "source": source,
+                "sources": available,
+                "failures": errors,
+            },
+        )
+E       miaosuan.errors.DataError: [E-DATA] 鏃犳硶鑾峰彇 XAUUSD D1 鐨勮鎯呮暟鎹? Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all(). | {'symbol': 'XAUUSD', 'timeframe': 'D1', 'source': 'Dukascopy', 'sources': 'Dukascopy', 'failures': ['Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().']}
+
+src\miaosuan\data\acquisition.py:975: DataError
+------------------------------ Captured log call ------------------------------
+WARNING  miaosuan.data.acquisition:acquisition.py:1051 _try_fetch_full 鍏ㄩ儴鏉ユ簮澶辫触: XAUUSD D1 | Dukascopy: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().
+=========================== short test summary info ===========================
+ERROR tests/test_fetch_result.py::test_full_fetch_success_is_updated - OSErro...
+FAILED tests/test_fetch_result.py::test_incremental_merge_is_updated - miaosu...
+FAILED tests/test_fetch_result.py::test_incremental_no_new_bar_is_up_to_date
+FAILED tests/test_fetch_result.py::test_all_sources_fail_with_cache_is_stale_fallback
+FAILED tests/test_fetch_result.py::test_stale_fallback_reports_every_failing_source
+FAILED tests/test_fetch_result.py::test_partial_failure_success_has_warnings_not_errors
+FAILED tests/test_fetch_result.py::test_result_path_is_pathlike - miaosuan.er...
+FAILED tests/test_fetch_result.py::test_to_dict_is_json_friendly - miaosuan.e...
+FAILED tests/test_fetch_result.py::test_explicit_source_separates_cache_file
+==================== 8 failed, 1 passed, 1 error in 8.29s =====================

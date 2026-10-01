@@ -417,6 +417,10 @@ class MT4BridgeFetcher(BaseFetcher):
         off_s = f"{off:+g}h" if off is not None else "待实测"
         return f"MT4 Bridge: {self._host}:{self._port} (time_base={base}, broker偏移={off_s})"
 
+    def supported_timeframes(self) -> list[str]:
+        """返回 MT4 Bridge 支持的周期列表（与 MT4_TIMEFRAME 键一致）。"""
+        return list(MT4_TIMEFRAME.keys())
+
     def fetch_full(self, symbol: str, timeframe: str) -> pd.DataFrame:
         """全量取 ``symbol`` + ``timeframe`` 的历史 K 线。
 

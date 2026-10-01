@@ -1,0 +1,6 @@
+status=up_to_date
+path=D:\K线数据\XAUUSD_D1.parquet
+source_used=Dukascopy
+errors=[]
+warnings=[]
+append_to=D:\K线数据\XAUUSD_D1.parquet

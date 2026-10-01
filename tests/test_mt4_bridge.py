@@ -643,8 +643,14 @@ def test_data_acquisition_fetch_from_mt4_end_to_end(
     acq = DataAcquisition(
         sources=[TypedNetworkSource(fetcher(ea.port, utc_offset_hours=BROKER_OFFSET_H))]
     )
-    path = acq.fetch("XAUUSD", "H1", source=SOURCE_TYPE_MT4, note="unit-test")
+    res = acq.fetch("XAUUSD", "H1", source=SOURCE_TYPE_MT4, note="unit-test")
+    path = res.path
     try:
+        # 新契约：fetch() 返回 FetchResult——状态必须是 UPDATED（真的拉到数据）
+        from miaosuan.data.acquisition import FetchStatus
+
+        assert res.status is FetchStatus.UPDATED, f"预期 UPDATED，实际 {res.status}"
+        assert res.source_used == SOURCE_TYPE_MT4
         back = pd.read_parquet(path)
         assert len(back) == 250
         assert list(back.columns) == list(REQUIRED_COLUMNS)

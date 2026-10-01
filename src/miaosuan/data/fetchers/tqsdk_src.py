@@ -68,6 +68,10 @@ class TqsdkFetcher(BaseFetcher):
         # 缺依赖时给可行动提示（本包禁止 print，故借 describe 透出给 UI）
         return "tqsdk: 未安装 tqsdk（pip install tqsdk）"
 
+    def supported_timeframes(self) -> list[str]:
+        """返回 tqsdk 支持的周期列表（与 _TQ_SECONDS 键一致）。"""
+        return list(_TQ_SECONDS.keys())
+
     @staticmethod
     def _to_unix_seconds(series: pd.Series) -> pd.Series:
         """tqsdk 的 ``datetime`` 列（tz-aware）转为 Unix 秒（int）。"""

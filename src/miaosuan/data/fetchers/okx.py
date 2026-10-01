@@ -70,6 +70,10 @@ class OkxFetcher(BaseFetcher):
         # 故描述里显式点明，避免被误读成「该源被钉死在 XAUUSD 上」。
         return f"OKX: public REST（品种按调用入参，默认 {self._inst_id}）"
 
+    def supported_timeframes(self) -> list[str]:
+        """返回 OKX 支持的周期列表。"""
+        return list(_OKX_BAR.keys())
+
     # ── 内部 ─────────────────────────────────────────────────────────────
 
     def _fetch_raw(self, symbol: str, timeframe: str) -> list[list[Any]]:
