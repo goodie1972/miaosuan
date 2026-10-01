@@ -30,15 +30,16 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from ..adapters.shenji.generator import readable_formula
 from ..adapters.shenji.lint import lint_source
 from ..adapters.shenji.realtime import (
-    ShenjiReadOnlyClient,
     RealtimeOutcome,
+    ShenjiReadOnlyClient,
     env_config,
     safe_call,
 )
@@ -48,6 +49,7 @@ from ..data.loader import load
 from ..ir.provenance import MIAOSUAN_VERSION
 from ..market.profiles import EXPECTED_PROFILE_NAMES, all_profiles
 from ..pipeline import _SYMBOL_PROFILE_FALLBACK
+from ..settings import Settings, _deep_update, get_config, get_settings_manager
 
 __all__ = ["create_app"]
 
@@ -67,6 +69,9 @@ _DATA_DIRS: tuple[Path, ...] = (
 
 _DATA_SUFFIXES = {".parquet", ".csv"}
 _EXCLUDED_JSON = {"magic_registry.json", "holdout_seals.json", "config_snapshot.json"}
+
+#: 进程启动时刻（Unix 秒），供 ``/api/health`` 报 uptime。
+_BOOT_TS: float = time.time()
 
 
 # ── 工具 ─────────────────────────────────────────────────────────────────────
@@ -455,6 +460,7 @@ class FetchRequest(BaseModel):
     source: str = ""  # 单选数据来源类名（空 = 按优先级自动）
     note: str = ""  # 备注，追加至生成的缓存文件名
     market_profile: str = ""  # 市场画像（前端联动；后端仅透传/校验）
+    append_to: str = ""  # 追加目标文件（空 = 常规按命名规则缓存；非空 = 增量接到该文件后）
 
 
 class TuneRequest(BaseModel):
@@ -468,12 +474,35 @@ class TuneRequest(BaseModel):
     seed: int = 42
 
 
+class ConfigUpdateRequest(BaseModel):
+    """配置更新请求体（部分字段更新，写入 settings.yaml 并触发热重载）。"""
+
+    webui: dict[str, Any] | None = None
+    shenji: dict[str, Any] | None = None
+    mt4: dict[str, Any] | None = None
+    paths: dict[str, Any] | None = None
+    data: dict[str, Any] | None = None
+    logging: dict[str, Any] | None = None
+    features: dict[str, Any] | None = None
+
+
 # ── App ──────────────────────────────────────────────────────────────────────
 
 
 def create_app() -> FastAPI:
     """构造仪表盘 FastAPI 应用。"""
     app = FastAPI(title="妙算仪表盘", docs_url=None, redoc_url=None)
+
+    # CORS 兜底：HTML 与 API 正常同源部署时用不到；一旦用 file:// 打开
+    # index.html 或从别的端口/主机服务，跨源 fetch 会被浏览器拦掉，
+    # 表现为人人可见的「Failed to fetch」。仅回显允许的源、不带
+    # credentials，且服务本就只绑 127.0.0.1，不扩大暴露面。
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     _STATIC_DIR: Path = Path(__file__).resolve().parent / "static"
 
@@ -482,6 +511,19 @@ def create_app() -> FastAPI:
         return FileResponse(_INDEX_HTML)
 
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
+
+    @app.get("/api/health")
+    def health() -> dict[str, Any]:
+        """存活探针（前端 / launcher 判定后端是否活着）。
+
+        不做任何 IO，恒 200；「Failed to fetch」= 连不上，本端点能通 =
+        进程活着。``uptime_s`` 供展示「已运行」时长。
+        """
+        return {
+            "status": "ok",
+            "version": MIAOSUAN_VERSION,
+            "uptime_s": round(time.time() - _BOOT_TS, 1),
+        }
 
     # ── 数据与产物只读视图 ───────────────────────────────────────────────
     @app.get("/api/data")
@@ -544,7 +586,6 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=400, detail=f"数据加载失败：{exc}") from exc
         stamps = panel.time
         span = int(stamps[-1]) - int(stamps[0]) if len(stamps) > 1 else 0
-        fmt = "%Y-%m-%d"
         return {
             "path": str(file_path),
             "name": file_path.name,
@@ -899,26 +940,85 @@ def create_app() -> FastAPI:
             row["end"] = rng[1] if rng else ""
         return rows
 
+    @app.delete("/api/acquisition/cached")
+    def acquisition_cached_delete(path: str) -> dict[str, Any]:
+        """删除一个本地缓存文件（**回收站式删除**：移入系统回收站而非硬删）。
+
+        路径经 :func:`_resolve_data_file` 白名单约束（拒绝任意路径 / 路径穿越）。
+        使用 ``send2trash`` 走系统回收站，误删可恢复；后端进程若没有
+        ``send2trash``（可选依赖），降级为 ``os.remove`` 并返回 ``trashed=False``。
+        删除成功或文件原本就不存在（幂等）都返回 200。
+        """
+        target = _resolve_data_file(path)
+        if not target.is_file():
+            return {"ok": True, "trashed": False, "path": str(target), "reason": "not_found"}
+
+        trashed = False
+        try:
+            import send2trash  # 可选依赖，缺失时降级硬删
+
+            send2trash.send2trash(str(target))
+            # Windows 某些环境下 send2trash 会抛非 ImportError 异常但实际已移动文件；
+            # 因此调用后再检查一次文件是否还在，不在即算成功。
+            if not target.is_file():
+                trashed = True
+        except ImportError:
+            # 真正没有装 send2trash，走硬删
+            target.unlink()
+            trashed = True
+        except Exception as exc:  # noqa: BLE001  (send2trash 平台异常 → 看是否真的删除了)
+            # 例如：路径太长、权限不足等导致 send2trash 抛 OSError 等；
+            # 只要文件不存在了，就当作删除成功；仍在则重试硬删。
+            if not target.is_file():
+                trashed = True
+            else:
+                try:
+                    target.unlink()
+                    trashed = True
+                except OSError:
+                    raise HTTPException(status_code=400, detail=f"删除失败：{exc}") from exc
+        return {"ok": True, "trashed": trashed, "path": str(target)}
+
     @app.post("/api/acquisition/fetch")
     def acquisition_fetch(req: FetchRequest) -> dict[str, Any]:
-        """触发数据获取（指定单一来源，可选备注）。"""
+        """触发数据获取（指定单一来源，可选备注）。
+
+        返回 :meth:`FetchResult.to_dict` 全部字段：``status`` 三色语义——
+        ``updated`` / ``up_to_date``（绿）、``stale_fallback``（黄，附
+        ``errors`` 说明各源失败原因）；``warnings`` 为部分源失败的非致命告警。
+
+        ``append_to`` 非空时进入**追加模式**：增量接到该文件后面，后端写入前
+        做连续性校验（品种/周期/时间单位/缺口），不通过则 400 且不写文件。
+        路径经 :func:`_resolve_data_file` 约束（拒绝任意路径 / 路径穿越）。
+        """
         from ..data.acquisition import fetch as acquire
 
+        append_target: Path | None = None
+        if req.append_to:
+            # 先做路径白名单校验，再确认文件存在（追加目标必须是已有文件）
+            append_target = _resolve_data_file(req.append_to)
+            if not append_target.is_file():
+                raise HTTPException(
+                    status_code=400, detail=f"追加目标不存在：{req.append_to}"
+                )
+
         try:
-            path = acquire(
+            result = acquire(
                 req.symbol,
                 req.timeframe,
                 since=req.since or None,
                 source=req.source or None,
                 note=req.note or None,
+                append_to=append_target,
             )
             return {
                 "ok": True,
-                "path": str(path),
                 "symbol": req.symbol,
                 "timeframe": req.timeframe,
                 "source": req.source or None,
                 "note": req.note or None,
+                "append_to": str(append_target) if append_target else None,
+                **result.to_dict(),
             }
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=400, detail=f"数据获取失败：{exc}") from exc
@@ -1331,5 +1431,74 @@ def create_app() -> FastAPI:
     def get_spec_plural(name: str) -> dict[str, Any]:
         """向后兼容：复数形式 /api/specs/{name} 重定向到单数形式逻辑。"""
         return get_spec(name)
+
+    # ── 配置管理 ──────────────────────────────────────────────────────────
+    @app.get("/api/config")
+    def get_config_endpoint() -> dict[str, Any]:
+        """获取当前生效配置（含默认值、YAML、环境变量合并后的结果）。"""
+        cfg = get_config()
+        return cfg.model_dump(mode="python")
+
+    @app.post("/api/config")
+    def update_config_endpoint(req: ConfigUpdateRequest) -> dict[str, Any]:
+        """
+        更新配置并持久化到 settings.yaml。
+
+        仅接收非空字段进行深度合并；写入后自动触发热重载，无需重启进程。
+        返回更新后的完整配置。
+        """
+        import yaml
+
+        # 1. 读取现有 YAML（或空 dict）
+        manager = get_settings_manager()
+        config_path = manager._get_config_path()
+        try:
+            with config_path.open("rt", encoding="utf-8") as f:
+                yaml_data = yaml.safe_load(f) or {}
+        except (OSError, yaml.YAMLError):
+            yaml_data = {}
+
+        # 2. 深度合并请求字段
+        #    exclude_none 只剔除顶层 section（如整个 webui 未传），**不递归 dict
+        #    内部**——客户端把 parseInt("")=NaN 序列化成 null 后，None 会穿透进
+        #    合并结果，导致 pydantic 对 int/float 字段报 input_value=None（8 连挂）。
+        #    这里在合并前递归剥掉所有 None：None = 「未提供」，不该覆盖 yaml 原值；
+        #    剥完变空 dict 的 section 同样视为未提供（否则会把 `mt4: {}` 写进 yaml）。
+        def _strip_none(obj: Any) -> Any:
+            if isinstance(obj, dict):
+                out: dict[str, Any] = {}
+                for k, v in obj.items():
+                    if v is None:
+                        continue
+                    sv = _strip_none(v)
+                    if isinstance(sv, dict) and not sv:
+                        continue
+                    out[k] = sv
+                return out
+            if isinstance(obj, list):
+                return [_strip_none(v) for v in obj]
+            return obj
+
+        update_dict = _strip_none(req.model_dump(exclude_none=True))
+        merged = _deep_update(yaml_data, update_dict)
+
+        # 3. 验证合并后的配置（无效则 400，绝不把坏配置写进 yaml）
+        try:
+            Settings.model_validate(merged)
+        except ValidationError as exc:
+            raise HTTPException(status_code=400, detail=f"配置验证失败: {exc}") from exc
+
+        # 4. 写入 YAML 文件
+        try:
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            with config_path.open("wt", encoding="utf-8") as f:
+                yaml.safe_dump(merged, f, allow_unicode=True, sort_keys=False)
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=f"写入配置文件失败: {exc}") from exc
+
+        # 5. 触发热重载（通知所有观察者，包括后端组件）
+        new_config = manager.reload()
+
+        return {"ok": True, "config": new_config.model_dump(mode="python")}
 
     return app

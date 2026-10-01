@@ -42,6 +42,7 @@ __all__ = [
 def all_network_sources(
     dukascopy_user: str | None = None,
     dukascopy_password: str | None = None,
+    proxy: str | None = None,
     mt4_bridge_host: str | None = None,
     mt4_bridge_port: int | None = None,
     mt4_time_base: str | None = None,
@@ -60,6 +61,7 @@ def all_network_sources(
     Args:
         dukascopy_user: Dukascopy 实盘用户名（可选，预留；默认 ``None``）。
         dukascopy_password: Dukascopy 实盘密码（可选；默认 ``None``）。
+        proxy: 网络 fetcher 代理（如 ``http://127.0.0.1:10808``）。
         mt4_bridge_host: MT4 Bridge 监听地址（如 ``127.0.0.1``）；
             ``None`` 或空串 = 不启用 MT4 来源。
         mt4_bridge_port: MT4 Bridge 监听端口；默认 ``None`` 时从统一设置系统读取。
@@ -74,7 +76,7 @@ def all_network_sources(
         TqsdkFetcher(),
         OkxFetcher(),
         BinanceFetcher(),
-        DukascopyFetcher(user=dukascopy_user, password=dukascopy_password),
+        DukascopyFetcher(user=dukascopy_user, password=dukascopy_password, proxy=proxy),
     ]
     mt4_host = (mt4_bridge_host or "").strip()
     if mt4_host:
@@ -91,6 +93,7 @@ def all_network_sources(
 def list_network_sources(
     dukascopy_user: str | None = None,
     dukascopy_password: str | None = None,
+    proxy: str | None = None,
     mt4_bridge_host: str | None = None,
     mt4_bridge_port: int | None = None,
     mt4_time_base: str | None = None,
@@ -106,6 +109,7 @@ def list_network_sources(
     Args:
         dukascopy_user: Dukascopy 实盘用户名（可选，预留；默认 ``None``）。
         dukascopy_password: Dukascopy 实盘密码（可选；默认 ``None``）。
+        proxy: 网络 fetcher 代理（如 ``http://127.0.0.1:10808``）。
         mt4_bridge_host / mt4_bridge_port / mt4_time_base: 同
             :func:`all_network_sources`；host 为空则不纳入 MT4 来源。
 
@@ -115,6 +119,7 @@ def list_network_sources(
     candidates = all_network_sources(
         dukascopy_user=dukascopy_user,
         dukascopy_password=dukascopy_password,
+        proxy=proxy,
         mt4_bridge_host=mt4_bridge_host,
         mt4_bridge_port=mt4_bridge_port,
         mt4_time_base=mt4_time_base,

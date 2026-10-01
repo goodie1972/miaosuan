@@ -1,0 +1,1 @@
+﻿HTTP 400 {"detail":"鏁版嵁鑾峰彇澶辫触锛歔E-DATA] 鏈壘鍒版寚瀹氱殑鏁版嵁鏉ユ簮锛歂oSuchSource | {'available': ['AkShare', 'Binance', 'Dukascopy', 'MT4', 'OKX', 'Shenji', 'TradingView', '鍏朵粬']}"}

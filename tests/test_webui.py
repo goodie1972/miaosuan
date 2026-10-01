@@ -27,6 +27,7 @@ import asyncio
 import json
 import urllib.error
 import urllib.parse
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -658,3 +659,80 @@ def test_api_acquisition_cached_exposes_start_end(
     assert st2 == 200, meta
     assert rows[0]["start"] == meta["start"], (rows[0], meta)
     assert rows[0]["end"] == meta["end"], (rows[0], meta)
+
+
+# ── /api/health 存活探针 ─────────────────────────────────────────────────
+
+
+def test_api_health_returns_200(app: Any) -> None:
+    """``/api/health`` 恒 200，前端/launcher 用它判活——连不上=后端死。"""
+    status, data = _call(app, "GET", "/api/health")
+    assert status == 200
+    assert data["status"] == "ok"
+    assert "version" in data and data["version"]
+    assert isinstance(data["uptime_s"], (int, float))
+    assert data["uptime_s"] >= 0
+
+
+# ── CORS 中间件 ──────────────────────────────────────────────────────────
+
+
+def test_cors_header_present_on_health(app: Any) -> None:
+    """CORS 兜底：跨源请求必须回 ``Access-Control-Allow-Origin`` 头。
+
+    同源部署时用不到，一旦从别的端口 / file:// 打开 index.html，缺这个
+    头的 fetch 会被浏览器拦掉，表现为人人可见的「Failed to fetch」。
+    """
+    scope: dict[str, Any] = {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": "/api/health",
+        "raw_path": b"/api/health",
+        "query_string": b"",
+        "root_path": "",
+        "headers": [
+            (b"host", b"testserver"),
+            (b"origin", b"http://evil.example.com"),
+        ],
+        "client": ("testclient", 123),
+        "server": ("testserver", 80),
+    }
+    sent: list[dict[str, Any]] = []
+
+    async def receive() -> dict[str, Any]:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: dict[str, Any]) -> None:
+        sent.append(message)
+
+    async def drive() -> None:
+        await app(scope, receive, send)
+
+    asyncio.run(drive())
+    start = next(m for m in sent if m["type"] == "http.response.start")
+    headers = {k.decode(): v.decode() for k, v in start.get("headers", [])}
+    assert "access-control-allow-origin" in headers, headers
+
+
+# ── list_cached 路径必须绝对 ─────────────────────────────────────────────
+
+
+def test_list_cached_returns_absolute_paths(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    """``list_cached()`` 返回的 ``path`` 必须是绝对路径。
+
+    相对路径会跟随进程 CWD 漂移：前端把相对 path 回传给 ``/api/inspect``，
+    后端按服务端 CWD 解析，CWD 不在仓库根（launcher exe / 切目录启动）就 400。
+    """
+    import miaosuan.data.acquisition as acq_mod
+
+    _tiny_parquet(tmp_path)
+    monkeypatch.setattr(acq_mod, "_cache_dirs_from_config", lambda: (tmp_path,))
+    rows = acq_mod.list_cached()
+    assert len(rows) == 1
+    p = rows[0]["path"]
+    assert Path(p).is_absolute(), f"path 必须绝对，实际为 {p!r}"

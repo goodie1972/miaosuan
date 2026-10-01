@@ -29,6 +29,8 @@ import re
 import threading
 import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -36,8 +38,9 @@ import numpy as np
 import pandas as pd
 
 from ..config import data_acquisition_config
-from .fetchers import BaseFetcher, ShenjiDBFetcher, all_network_sources, list_network_sources
 from ..errors import DataError
+from .fetchers import BaseFetcher, ShenjiDBFetcher, all_network_sources, list_network_sources
+from .loader import infer_symbol_timeframe, normalize_timeframe
 
 __all__ = [
     "DataSource",
@@ -46,17 +49,47 @@ __all__ = [
     "TypedNetworkSource",
     "GenericHttpSource",
     "DataAcquisition",
+    "FetchStatus",
+    "FetchResult",
     "fetch",
 ]
 
 #: 默认本地缓存目录列表（与 ``server.py`` 的 ``_DATA_DIRS`` 对齐）。
 #: 首项从统一设置系统获取（settings.yaml → paths.kline）。
+#: ``parents[3]`` = 仓库根目录（src/miaosuan/data/ → src/ → miaosuan/ → 仓库根），
+#: 仓库根下的 ``data/`` 是 fetch() 写缓存的实际位置（settings.yaml → data.cache_dir）。
 _DEFAULT_CACHE_DIRS: tuple[Path, ...] = (
-    Path(__file__).resolve().parents[2] / "data",
+    Path(__file__).resolve().parents[3] / "data",
 )
 
 #: 支持的 OHLCV 列名（与 ``loader.panel_from_frame`` 对齐）。
 _REQUIRED_COLUMNS = ("time", "open", "high", "low", "close", "volume", "tick_volume")
+
+#: 规范周期 → 秒（键与 ``loader._TIMEFRAME_ALIASES`` 的规范值对齐）。
+#: 追加模式校验数据连续性时用于「数据实际周期 vs 请求周期」比对与缺口阈值。
+_TIMEFRAME_SECONDS: dict[str, int] = {
+    "M1": 60,
+    "M5": 300,
+    "M15": 900,
+    "M30": 1800,
+    "H1": 3600,
+    "H4": 14400,
+    "D1": 86400,
+    "W1": 604800,
+    "MN1": 2_592_000,
+}
+
+#: 追加模式缺口告警阈值（秒）：超过 max(7 天, 5×周期) 进 warnings（不拦截）。
+_GAP_WARN_SECONDS = 7 * 86400
+
+#: 追加模式缺口拒绝阈值（秒）：超过 max(30 天, 3×周期) 拒绝追加（数据不连续）。
+_GAP_REFUSE_SECONDS = 30 * 86400
+
+#: 重叠区间收盘价相对容差：同一 bar 两源收盘价差超 1% 视为数据不一致，拒绝。
+_OVERLAP_REL_TOL = 0.01
+
+#: 数据级周期判定的相对容差（中位 bar 间隔 vs 请求周期，如 D1 周中缺 bar 不影响中位数）。
+_PERIOD_REL_TOL = 0.25
 
 
 def _slugify(text: str) -> str:
@@ -86,6 +119,88 @@ _FETCHER_TYPE_MAP: dict[str, str] = {
     "MT4BridgeFetcher": SOURCE_TYPE_MT4,
     "TqsdkFetcher": SOURCE_TYPE_OTHER,
 }
+
+
+class FetchStatus(StrEnum):
+    """``fetch()`` 结果状态：**成功 ≠ 拉到新数据**，必须区分语义。
+
+    ``UPDATED`` / ``UP_TO_DATE`` 是「一切正常」；``STALE_FALLBACK`` 是
+    「所有源都失败了，返回的是旧缓存」——调用方必须能区分后者，否则就重演
+    「以为拿到新数据其实是 3 天前的」这类静默失败。
+    """
+
+    #: 拉到新数据并已落盘
+    UPDATED = "updated"
+    #: 源正常响应，确认无新 bar（本地缓存已是最新，不是失败）
+    UP_TO_DATE = "up_to_date"
+    #: 所有源均失败，返回旧缓存兜底（数据可能过期）
+    STALE_FALLBACK = "stale_fallback"
+
+
+@dataclass
+class FetchResult:
+    """``fetch()`` 的结构化返回：路径 + 状态 + 各源成败详情。
+
+    * :attr:`path` —— 本地 parquet 路径（``status`` 为 ``STALE_FALLBACK``
+      时指向旧缓存）；实现 ``__fspath__``，可直接传给 ``pd.read_parquet`` /
+      ``open()`` 等 path-like 接口。
+    * :attr:`status` —— 见 :class:`FetchStatus`；前端据此三色展示。
+    * :attr:`source_used` ——实际成功的数据源类型（如 ``"Dukascopy"``）。
+    * :attr:`errors` —— ``STALE_FALLBACK`` 时为所有源的失败原因（致命）。
+    * :attr:`warnings` —— 部分源失败但整体成功的非致命告警。
+    """
+
+    path: Path
+    status: FetchStatus
+    source_used: str = ""
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+    def __fspath__(self) -> str:
+        """允许当作路径直接传给 ``pd.read_parquet`` / ``Path()`` / ``open()``。"""
+        return str(self.path)
+
+    @property
+    def stale(self) -> bool:
+        """是否回退到了旧缓存（数据可能过期）。"""
+        return self.status is FetchStatus.STALE_FALLBACK
+
+    def to_dict(self) -> dict[str, Any]:
+        """序列化为 JSON 友好的 dict（供 WebUI 透传给前端）。"""
+        return {
+            "path": str(self.path),
+            "status": self.status.value,
+            "source_used": self.source_used,
+            "errors": list(self.errors),
+            "warnings": list(self.warnings),
+            "stale": self.stale,
+        }
+
+
+@dataclass
+class _Attempt:
+    """内部：单次取数尝试的结果（增量或全量），保留「成败 + 原因」语义。
+
+    与直接返回 ``DataFrame | None`` 的旧设计不同——旧的把「源正常响应但无新
+    bar」和「所有源全挂」压成同一个 ``None``，上层无法区分「数据已最新」与
+    「拉取失败回退旧缓存」（项目系统性弱点「静默失败」的又一实例）。
+    """
+
+    df: pd.DataFrame | None = None  #: 成功获取的数据（无数据时为 None）
+    failures: list[str] = field(default_factory=list)  #: 各源失败原因（成功的源之前的失败也算）
+    source: str = ""  #: 成功返回数据的源类型；全失败时为 ""
+    ok: bool = False  #: 是否**至少一个源正常响应**（空 DataFrame 也算正常响应）
+
+
+def _dedup(items: list[str]) -> list[str]:
+    """去重保序（同源在增量/全量两个阶段可能报同样的错）。"""
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            out.append(item)
+    return out
 
 
 class DataSource(ABC):
@@ -221,6 +336,7 @@ class NetworkSource(DataSource):
         timeout: int | None = None,
         dukascopy_user: str | None = None,
         dukascopy_password: str | None = None,
+        proxy: str | None = None,
         mt4_bridge_host: str | None = None,
         mt4_bridge_port: int | None = None,
         mt4_time_base: str | None = None,
@@ -234,6 +350,7 @@ class NetworkSource(DataSource):
         self._sources: list[BaseFetcher] = list_network_sources(
             dukascopy_user=dukascopy_user or cfg.dukascopy_user or None,
             dukascopy_password=dukascopy_password or cfg.dukascopy_password or None,
+            proxy=proxy or cfg.proxy or None,
             mt4_bridge_host=mt4_bridge_host
             if mt4_bridge_host is not None
             else (cfg.mt4_bridge_host or None),
@@ -499,6 +616,7 @@ def _build_default_sources() -> list[DataSource]:
     for fetcher in all_network_sources(
         dukascopy_user=cfg.dukascopy_user or None,
         dukascopy_password=cfg.dukascopy_password or None,
+        proxy=cfg.proxy or None,
         mt4_bridge_host=cfg.mt4_bridge_host or None,
         mt4_bridge_port=cfg.mt4_bridge_port,
         mt4_time_base=cfg.mt4_time_base or None,
@@ -646,16 +764,37 @@ def _cache_dirs_from_config() -> tuple[Path, ...]:
     不必构造 :class:`DataAcquisition`——构造会 build 全部数据源并对网络 fetcher
     逐个做 TCP 探测，本环境 ``freeserv.dukascopy.com`` / ``api.binance.com``
     不可达，各卡满 3s 超时 → 首次调用 6s。列缓存文件只扫目录，本不需要这些。
+
+    」我们以 scan 质检，以保共تماد。
     """
+    from ..config import kline_data_dir
+
+    # kline_data_dir() 始终参与扫描——它是用户在设置页 paths.kline 里配的主行情目录，
+    # 存放着 TradingView/Dukascopy 拉取的标准 parquet。cache_dir 是额外缓存目录
+    # （settings.yaml → data.cache_dir 或 paths.data_cache），用于 fetch() 写入。
+    # 两者不是二选一，而是都要扫——否则用户放在 D:\K线数据 的文件在缓存列表里看不到。
+    dirs: list[Path] = [Path(kline_data_dir()).resolve()]
+
     custom = data_acquisition_config().cache_dir
     if custom:
-        p = Path(custom)
+        # 必须 resolve 成绝对路径：settings.yaml 里常写的是相对值（如
+        # ``data/cache``），相对路径会跟着进程 CWD 漂移——list_cached 返回给
+        # 前端的 path 是相对串，前端回传给 /api/inspect 时按**服务端 CWD**
+        # 解析，CWD 不在仓库根（launcher exe / 改目录启动）就 400。
+        p = Path(custom).resolve()
         p.mkdir(parents=True, exist_ok=True)
-        return (p,)
-    # 从统一设置系统获取 K 线数据目录（settings.yaml → paths.kline）
-    from ..config import kline_data_dir
-    dirs = [Path(kline_data_dir())] + list(_DEFAULT_CACHE_DIRS)
-    return tuple(dirs)
+        dirs.append(p)
+
+    dirs.extend(d.resolve() for d in _DEFAULT_CACHE_DIRS)
+
+    # 去重：kline_data_dir 与 cache_dir 可能指向同一物理目录
+    seen: set[Path] = set()
+    unique: list[Path] = []
+    for d in dirs:
+        if d not in seen:
+            seen.add(d)
+            unique.append(d)
+    return tuple(unique)
 
 
 def _scan_cache_dirs(cache_dirs: tuple[Path, ...]) -> list[dict[str, Any]]:
@@ -703,8 +842,9 @@ class DataAcquisition:
     Usage::
 
         acq = DataAcquisition()
-        path = acq.fetch("XAUUSD", "H1")  # → 本地 parquet 路径
-        panel = miaosuan.data.loader.load(path)
+        res = acq.fetch("XAUUSD", "H1")
+        res.status           # FetchStatus.UPDATED / UP_TO_DATE / STALE_FALLBACK
+        panel = miaosuan.data.loader.load(res.path)  # path 支持 __fspath__
     """
 
     def __init__(self, sources: list[DataSource] | None = None) -> None:
@@ -722,19 +862,34 @@ class DataAcquisition:
         """
         return _cache_dirs_from_config()
 
-    def _cache_path(self, symbol: str, timeframe: str, note: str | None = None) -> Path:
-        """计算缓存文件路径（{symbol}_{timeframe}.parquet；备注非空时追加为 {symbol}_{timeframe}_{note}.parquet）。"""
-        filename = f"{symbol}_{timeframe}.parquet"
+    def _cache_path(
+        self,
+        symbol: str,
+        timeframe: str,
+        note: str | None = None,
+        source_type: str | None = None,
+    ) -> Path:
+        """计算缓存文件路径。
+
+        文件名格式：{symbol}_{timeframe}_{source_type}_{note}.parquet
+        - 当显式指定 source 时，source_type 自动加入文件名（如 XAUUSD_H1_Dukascopy.parquet）
+        - note 非空时追加在末尾（如 XAUUSD_H1_Dukascopy_manual.parquet）
+        - 自动模式（source=None）不加 source_type，保持原命名兼容
+        """
+        parts = [symbol, timeframe]
+        if source_type:
+            parts.append(_slugify(source_type))
         if note:
             slug = _slugify(note)
             if slug:
-                filename = f"{symbol}_{timeframe}_{slug}.parquet"
+                parts.append(slug)
+        filename = "_".join(parts) + ".parquet"
+
         for directory in self._cache_dirs:
             directory.mkdir(parents=True, exist_ok=True)
             candidate = directory / filename
             if not candidate.exists() or candidate.is_file():
                 return candidate
-        # 所有目录都可用时，用第一个
         return self._cache_dirs[0] / filename
 
     def _read_cache_max_time(self, cache_path: Path) -> int | None:
@@ -773,7 +928,8 @@ class DataAcquisition:
         source: str | None = None,
         note: str | None = None,
         allowed_types: list[str] | None = None,
-    ) -> Path:
+        append_to: str | Path | None = None,
+    ) -> FetchResult:
         """获取行情数据并缓存为本地 parquet。
 
         Args:
@@ -784,14 +940,38 @@ class DataAcquisition:
                 / ``"Dukascopy"`` / ``"其他"``）；空 = 按优先级自动。
             note: 备注，非空时追加到缓存文件名（``{symbol}_{timeframe}_{note}.parquet``）。
             allowed_types: 仅允许的来源类型列表（按市场画像约束）；空 = 不限制。
+            append_to: **追加目标**（已存在的行情文件路径）。非空时进入追加模式：
+                增量起点 = 目标文件的 ``max(time)``，写入前做**连续性校验**
+                （文件名品种/周期匹配、时间戳单位一致、重叠区间收盘价一致、
+                缺口不超阈值、数据实际周期与请求周期相符），任何一项不过
+                即拒绝写入并抛 :class:`DataError`——宁可不加，不加错数据。
+                追加模式**不走全量覆盖**（全量会把目标文件整个替换掉），
+                增量失败即 ``STALE_FALLBACK``，目标文件保持原样。
 
         Returns:
-            本地 parquet 文件路径，可直接传给 ``loader.load()``。
+            :class:`FetchResult`——路径 + 状态 + 各源详情。``status`` 区分：
+            ``UPDATED``（拉到新数据）、``UP_TO_DATE``（源确认无新 bar）、
+            ``STALE_FALLBACK``（所有源失败、返回旧缓存）。``path`` 实现
+            ``__fspath__``，可直接传给 ``loader.load()`` / ``pd.read_parquet()``。
 
         Raises:
-            DataError: 无可用来源、来源返回空数据或格式错误时。
+            DataError: 所有来源失败**且无任何本地缓存**可用时（``context`` 含
+                ``failures``——每个源的失败原因，与 ``NetworkSource`` 同口径）；
+                或追加模式下连续性校验不通过（``failures`` 列出每条拒绝原因）。
         """
-        cache_path = self._cache_path(symbol, timeframe, note=note)
+        if append_to is not None:
+            return self._fetch_append(
+                symbol, timeframe, append_to, source=source, allowed_types=allowed_types
+            )
+        cache_path = self._cache_path(
+            symbol,
+            timeframe,
+            note=note,
+            # 显式指定 source 时把 source_type 写入文件名（如 XAUUSD_D1_Dukascopy.parquet），
+            # 使不同来源的缓存分离，避免用 Dukascopy 拉数据时读旧缓存的最大时间做"增量"
+            # 走空、误返回旧文件；只有自动模式（source=None）不加前缀，保持历史兼容。
+            source_type=(source if source else None),
+        )
         max_time = self._read_cache_max_time(cache_path)
         sources = self._select_sources(source, allowed_types=allowed_types)
 
@@ -800,43 +980,286 @@ class DataAcquisition:
         if incremental_since is None and max_time is not None:
             incremental_since = max_time
 
-        # 尝试增量获取
+        # 增量尝试。carry = 增量阶段的失败原因：若随后全量成功则降级为
+        # warnings（数据是新的，但有源不健康），若全量也失败则并入 errors。
+        carry: list[str] = []
         if incremental_since is not None:
-            new_df = self._try_fetch_incremental(sources, symbol, timeframe, incremental_since)
-            if new_df is not None and len(new_df) > 0:
+            att = self._try_fetch_incremental(sources, symbol, timeframe, incremental_since)
+            if att.df is not None and len(att.df) > 0:
                 old_df = pd.DataFrame()
                 if cache_path.is_file():
                     try:
                         old_df = pd.read_parquet(cache_path)
-                    except Exception:
+                    except Exception:  # noqa: BLE001 - 旧缓存损坏则按首跑重写
                         old_df = pd.DataFrame()
-                merged = self._merge_and_dedup(old_df, new_df) if len(old_df) > 0 else new_df
+                merged = self._merge_and_dedup(old_df, att.df) if len(old_df) > 0 else att.df
                 self._write_parquet_atomic(merged, cache_path)
-                return cache_path
-            # 增量无新数据 → 直接用已有缓存
-            if cache_path.is_file():
-                return cache_path
+                return FetchResult(
+                    path=cache_path,
+                    status=FetchStatus.UPDATED,
+                    source_used=att.source,
+                    warnings=_dedup(att.failures),
+                )
+            if att.ok and cache_path.is_file():
+                # 源正常响应但无新 bar = 数据已是最新（不是失败！）。
+                # 其他源的失败只作 warnings——有一个源确认过就够了。
+                return FetchResult(
+                    path=cache_path,
+                    status=FetchStatus.UP_TO_DATE,
+                    source_used=att.source,
+                    warnings=_dedup(att.failures),
+                )
+            # 增量全部失败（或成功但本地无缓存可判定）→ 试全量
+            carry = att.failures
 
         # 首跑或增量失败 → 全量获取
-        full_df = self._try_fetch_full(sources, symbol, timeframe)
-        if full_df is not None and len(full_df) > 0:
-            self._write_parquet_atomic(full_df, cache_path)
-            return cache_path
+        att = self._try_fetch_full(sources, symbol, timeframe)
+        if att.df is not None and len(att.df) > 0:
+            self._write_parquet_atomic(att.df, cache_path)
+            return FetchResult(
+                path=cache_path,
+                status=FetchStatus.UPDATED,
+                source_used=att.source,
+                warnings=_dedup(carry + att.failures),
+            )
 
-        # 全量也失败 → 尝试用已有缓存（可能过期但总比没有好）
+        # 全量也失败 → 旧缓存兜底，但**如实标注 STALE_FALLBACK 并带上失败原因**
+        errors = _dedup(carry + att.failures)
         if cache_path.is_file():
-            return cache_path
+            return FetchResult(
+                path=cache_path,
+                status=FetchStatus.STALE_FALLBACK,
+                source_used="",
+                errors=errors,
+            )
 
         available = " / ".join(s.describe() for s in sources)
+        detail = "；".join(errors) if errors else "无可用来源"
         raise DataError(
-            f"无法获取 {symbol} {timeframe} 的行情数据: 无可用来源或来源均失败",
+            f"无法获取 {symbol} {timeframe} 的行情数据: {detail}",
             context={
                 "symbol": symbol,
                 "timeframe": timeframe,
                 "source": source,
                 "sources": available,
+                "failures": errors,
             },
         )
+
+    # ── 追加模式：把增量接到指定文件后面（写入前强制连续性校验）─────────────
+
+    def _fetch_append(
+        self,
+        symbol: str,
+        timeframe: str,
+        append_to: str | Path,
+        source: str | None = None,
+        allowed_types: list[str] | None = None,
+    ) -> FetchResult:
+        """增量追加到**指定已存在文件**（写入前做连续性校验，不过即拒绝）。
+
+        与常规模式的区别：
+
+        * 目标文件必须已存在（追加语义）；增量起点 = 其 ``max(time)``；
+        * **不走全量覆盖**——全量会把目标文件整体替换掉，违背「接在后面」
+          的语义，增量失败直接 ``STALE_FALLBACK``（文件保持原样）；
+        * 写入前校验（见 :meth:`_validate_continuity`），任何一条不过就
+          抛 :class:`DataError` 且**不写文件**——宁可不加，不加错数据。
+
+        Raises:
+            DataError: 目标不存在 / 不可读 / 连续性校验不过 / 无可用来源。
+        """
+        target = Path(append_to)
+        # 顺序：文件名校验（纯路径解析，不需要文件存在）→ 存在性 → 格式 → 读盘。
+        # 先校验文件名让「选错文件」的报错最具体（比「不存在」更有行动指引）。
+        name_errors = self._validate_append_name(target, symbol, timeframe)
+        if name_errors:
+            raise DataError(
+                f"拒绝追加：文件名与请求不匹配（{target.name}）: {'；'.join(name_errors)}",
+                context={"failures": name_errors, "target": str(target)},
+            )
+        if not target.is_file():
+            raise DataError(
+                f"追加目标不存在或不是文件：{target}",
+                context={"failures": [f"追加目标不存在：{target}"]},
+            )
+        if target.suffix.lower() != ".parquet":
+            raise DataError(
+                f"追加目标仅支持 parquet：{target.name}",
+                context={"failures": [f"不支持的格式：{target.suffix}（仅 .parquet）"]},
+            )
+
+        # 读目标文件现状（max_time + 完整数据供写入前校验）
+        try:
+            old_df = pd.read_parquet(target)
+        except Exception as exc:  # noqa: BLE001 - 损坏文件要给出可行动的报错
+            raise DataError(
+                f"追加目标读取失败（文件可能损坏）：{target} — {exc}",
+                context={"failures": [str(exc)], "target": str(target)},
+            ) from exc
+        if len(old_df) == 0 or "time" not in old_df.columns:
+            raise DataError(
+                f"追加目标无有效数据（空表或缺 time 列）：{target}",
+                context={"failures": ["目标文件为空或缺 time 列"], "target": str(target)},
+            )
+
+        old_max = int(np.asarray(old_df["time"]).max())
+        sources = self._select_sources(source, allowed_types=allowed_types)
+        warnings: list[str] = []
+
+        # 只做增量：从目标文件末尾接
+        att = self._try_fetch_incremental(sources, symbol, timeframe, old_max)
+        if att.df is None or len(att.df) == 0:
+            if att.ok:
+                return FetchResult(
+                    path=target,
+                    status=FetchStatus.UP_TO_DATE,
+                    source_used=att.source,
+                    warnings=_dedup(att.failures),
+                )
+            # 增量失败：不回退全量（会覆盖目标文件），如实标注 STALE
+            return FetchResult(
+                path=target,
+                status=FetchStatus.STALE_FALLBACK,
+                source_used="",
+                errors=_dedup(att.failures),
+            )
+        warnings.extend(_dedup(att.failures))
+
+        # ★ 写入前连续性校验——任何一条不过即拒绝，文件保持原样
+        issues, gap_warnings = self._validate_continuity(
+            old_df, att.df, symbol=symbol, timeframe=timeframe, target=target
+        )
+        warnings.extend(gap_warnings)
+        if issues:
+            raise DataError(
+                f"拒绝追加（连续性校验未通过）：{target.name} — {'；'.join(issues)}",
+                context={"failures": issues, "target": str(target)},
+            )
+
+        merged = self._merge_and_dedup(old_df, att.df)
+        if len(merged) <= len(old_df):
+            # 校验通过但没有净新增（全被去重吃掉）→ 不算 UPDATE
+            return FetchResult(
+                path=target,
+                status=FetchStatus.UP_TO_DATE,
+                source_used=att.source,
+                warnings=warnings,
+            )
+        self._write_parquet_atomic(merged, target)
+        return FetchResult(
+            path=target,
+            status=FetchStatus.UPDATED,
+            source_used=att.source,
+            warnings=warnings,
+        )
+
+    @staticmethod
+    def _validate_append_name(
+        target: Path, symbol: str, timeframe: str
+    ) -> list[str]:
+        """追加前置校验：目标文件名声明的品种/周期与请求一致（纯文件名，不读盘）。
+
+        用 :func:`~miaosuan.data.loader.infer_symbol_timeframe` 解析——
+        解析不出周期（如 ``无下划线.parquet``）时跳过该项（由数据级
+        :meth:`_validate_continuity` 兜底），不误伤非标准命名文件。
+        """
+        problems: list[str] = []
+        file_symbol, file_tf = infer_symbol_timeframe(target)
+        req_tf = normalize_timeframe(timeframe)
+        if file_tf and normalize_timeframe(file_tf) != req_tf:
+            problems.append(f"文件名周期 {file_tf} ≠ 请求周期 {timeframe}")
+        if file_symbol and symbol and file_symbol.upper() != symbol.upper():
+            problems.append(f"文件名品种 {file_symbol} ≠ 请求品种 {symbol}")
+        return problems
+
+    @staticmethod
+    def _validate_continuity(
+        old_df: pd.DataFrame,
+        new_df: pd.DataFrame,
+        *,
+        symbol: str,  # noqa: ARG002 - 保留供报错上下文扩展
+        timeframe: str,
+        target: Path,  # noqa: ARG002 - 同上
+    ) -> tuple[list[str], list[str]]:
+        """追加前的数据级连续性校验——**数据自己说话**（比文件名更硬的证据）。
+
+        校验项：
+
+        1. **数据实际周期** vs 请求周期：新旧数据中位 bar 间隔落在请求周期
+           ±25% 外 → 拒绝（把 D1 文件当 H1 追加、周期错配必炸）；
+        2. **时间戳单位一致**：旧 ms / 新 s（或反之）直接拒绝——不一致时
+           排序合并会把时间轴彻底搅乱，是比缺口更隐蔽的坑；
+        3. **时间方向**：新数据必须延伸到旧数据之后（``new_max > old_max``），
+           全部落在旧区间内说明源没按 since 过滤（拒绝，避免空转写盘）；
+        4. **缺口分级**：
+           - ``> max(30天, 3×周期)`` → **拒绝**（数据接不下去）；
+           - ``> max(7天, 5×周期)`` → 通过但出**警告**（外汇周末/长假后
+             常见的中档缺口，提示用户核对，不拦截）；
+           - 更小 → 静默通过（周中正常间隔）。
+
+        Returns:
+            ``(拒绝原因, 警告)`` 二元组。拒绝原因非空即中止追加；
+            警告仅随 :class:`FetchResult` 透出给用户看。
+        """
+        problems: list[str] = []
+        warns: list[str] = []
+
+        def _median_gap(df: pd.DataFrame) -> float | None:
+            times = np.sort(np.unique(np.asarray(df["time"], dtype="int64")))
+            if len(times) < 2:
+                return None
+            return float(np.median(np.diff(times)))
+
+        # 1) 数据实际周期 vs 请求周期（旧数据是被追加的地基，必须先对上）
+        expected = _TIMEFRAME_SECONDS.get(normalize_timeframe(timeframe))
+        for label, df in (("旧", old_df), ("新", new_df)):
+            gap = _median_gap(df)
+            if expected and gap is not None and gap > 0:
+                rel = abs(gap - expected) / expected
+                if rel > _PERIOD_REL_TOL:
+                    problems.append(
+                        f"{label}数据实际周期≈{gap:.0f}s 与请求周期 "
+                        f"{timeframe}({expected}s) 相差 {rel:.0%}"
+                    )
+        if problems:
+            return problems, warns  # 周期都不对，后续时间轴校验没有意义
+
+        # 2) 时间戳单位一致（s vs ms）
+        old_max = int(np.asarray(old_df["time"]).max())
+        new_min = int(np.asarray(new_df["time"]).min())
+        new_max = int(np.asarray(new_df["time"]).max())
+        old_ms = old_max > 1e11  # 秒级 epoch 2286 年才到 1e11；毫秒级 1973 年即超
+        new_ms = new_max > 1e11
+        if old_ms != new_ms:
+            problems.append(
+                f"时间戳单位不一致：旧数据疑似{'毫秒' if old_ms else '秒'}级、"
+                f"新数据疑似{'毫秒' if new_ms else '秒'}级"
+            )
+            return problems, warns
+
+        # 3) 时间方向：新数据必须延伸过旧数据末端
+        if new_max <= old_max:
+            problems.append(
+                f"新数据未延伸时间轴（新末端 {new_max} ≤ 旧末端 {old_max}）——"
+                "源未按 since 过滤或返回了重复区间"
+            )
+            return problems, warns
+
+        # 4) 缺口分级：拒绝 / 警告 / 放行
+        gap = new_min - old_max
+        if gap > 0 and expected:
+            if gap > max(_GAP_REFUSE_SECONDS, 3 * expected):
+                problems.append(
+                    f"新旧数据缺口 {gap / 86400:.1f} 天，超过连续性阈值"
+                    f"（max(30天, 3×周期)），数据无法连续衔接"
+                )
+            elif gap > max(_GAP_WARN_SECONDS, 5 * expected):
+                warns.append(
+                    f"新旧数据缺口 {gap / 86400:.1f} 天（超过 max(7天, 5×周期)），"
+                    "建议核对是否为休市/数据缺失"
+                )
+        return problems, warns
 
     def _select_sources(
         self, source_name: str | None, allowed_types: list[str] | None = None
@@ -863,33 +1286,92 @@ class DataAcquisition:
             )
         return chosen
 
+    @staticmethod
+    def _extract_failures(src: DataSource, exc: Exception) -> list[str]:
+        """从单个来源的异常中提取**结构化**失败原因。
+
+        ``NetworkSource`` 抛出的 ``DataError`` 自带 ``context["failures"]``
+        （每个子 fetcher 一行明细，如「没装包 / 网络不通 / 品种不支持」）——
+        直接展开它；其他异常退化为 ``describe(): <消息>`` 一行。
+        """
+        if isinstance(exc, DataError):
+            detail = exc.context.get("failures")
+            if isinstance(detail, list) and detail:
+                return [str(d) for d in detail]
+        return [f"{src.describe()}: {exc}"]
+
     def _try_fetch_full(
         self, sources: list[DataSource], symbol: str, timeframe: str
-    ) -> pd.DataFrame | None:
-        """按给定来源列表尝试全量获取。"""
+    ) -> _Attempt:
+        """按给定来源列表尝试全量获取。
+
+        不再预先检查 is_available()：对于走代理的网络源（如 Dukascopy），
+        直连探测会返回 False，但实际 HTTP 请求通过代理却能成功。
+        直接尝试获取并捕获异常。
+
+        Returns:
+            :class:`_Attempt`——``df`` 非空即成功（``source`` = 成功源类型）；
+            全部失败时 ``failures`` 携带每个源的失败原因（由 :meth:`fetch`
+            决定放入 ``FetchResult.errors`` 还是 ``warnings``）。
+        """
+        failures: list[str] = []
         for src in sources:
-            if not src.is_available():
-                continue
             try:
-                return src.fetch_full(symbol, timeframe)
-            except Exception:
+                df = src.fetch_full(symbol, timeframe)
+            except Exception as exc:  # noqa: BLE001 - 逐源收集，最后统一呈现
+                failures.extend(self._extract_failures(src, exc))
                 continue
-        return None
+            if df is not None and len(df) > 0:
+                return _Attempt(df=df, failures=failures, source=src.source_type(), ok=True)
+            failures.append(f"{src.describe()}: 返回空数据")
+        if failures:
+            import logging
+            logging.getLogger(__name__).warning(
+                "_try_fetch_full 全部来源失败: %s %s | %s",
+                symbol, timeframe, "；".join(failures),
+            )
+        return _Attempt(df=None, failures=failures, source="", ok=False)
 
     def _try_fetch_incremental(
         self, sources: list[DataSource], symbol: str, timeframe: str, since_ts: int
-    ) -> pd.DataFrame | None:
-        """按给定来源列表尝试增量获取。"""
+    ) -> _Attempt:
+        """按给定来源列表尝试增量获取。
+
+        同上：不预先检查 is_available()，直接尝试获取并捕获异常。
+
+        Returns:
+            :class:`_Attempt`。三种关键情形由 ``df`` / ``ok`` / ``failures``
+            区分——**这正是本重构的核心**，调用方据此判定 ``FetchStatus``：
+
+            * ``df`` 非空 → 有新 bar（``UPDATED``）；
+            * ``df`` 空但 ``ok=True`` → 源正常响应、确认无新 bar（``UP_TO_DATE``，
+              此时 ``failures`` 里是其他失败源 → 降级为 ``warnings``）；
+            * ``ok=False`` → 所有源都失败（``failures`` 非空 → ``STALE_FALLBACK``）。
+        """
+        failures: list[str] = []
+        any_ok = False
+        ok_source = ""
         for src in sources:
-            if not src.is_available():
-                continue
             try:
                 df = src.fetch_incremental(symbol, timeframe, since_ts)
-                if df is not None and len(df) > 0:
-                    return df
-            except Exception:
+            except Exception as exc:  # noqa: BLE001 - 逐源收集，最后统一呈现
+                failures.extend(self._extract_failures(src, exc))
                 continue
-        return None
+            # 源正常响应（无论有没有新 bar）都算「成功」——空 DataFrame 是
+            # 合法语义「无新数据」，不是失败。这与旧实现「空数据 → 下一个源、
+            # 最终 None」有本质区别：旧的无法区分「没数据」和「全挂了」。
+            any_ok = True
+            if not ok_source:
+                ok_source = src.source_type()
+            if df is not None and len(df) > 0:
+                return _Attempt(df=df, failures=failures, source=src.source_type(), ok=True)
+        if failures and not any_ok:
+            import logging
+            logging.getLogger(__name__).warning(
+                "_try_fetch_incremental 全部来源失败: %s %s since=%d | %s",
+                symbol, timeframe, since_ts, "；".join(failures),
+            )
+        return _Attempt(df=None, failures=failures, source=ok_source, ok=any_ok)
 
     def list_cached(self) -> list[dict[str, Any]]:
         """列出本地缓存中已有的数据文件（供 UI 展示）。
@@ -931,6 +1413,7 @@ class DataAcquisition:
                     "source_type": st,
                     "description": _description_for(src),
                     "available": known,  # None = 尚未探测（前端显示「检测中」）
+                    "supported_timeframes": src.supported_timeframes() if hasattr(src, "supported_timeframes") else [],
                 }
             )
         _probe_in_background(selected)
@@ -955,10 +1438,21 @@ def fetch(
     source: str | None = None,
     note: str | None = None,
     allowed_types: list[str] | None = None,
-) -> Path:
-    """模块级快捷入口（等价于 ``DataAcquisition().fetch(...)``）。"""
+    append_to: str | Path | None = None,
+) -> FetchResult:
+    """模块级快捷入口（等价于 ``DataAcquisition().fetch(...)``）。
+
+    ``append_to`` 见 :meth:`DataAcquisition.fetch`——把增量接到指定已存在
+    文件后面，写入前强制连续性校验。
+    """
     return _get_acquisition().fetch(
-        symbol, timeframe, since=since, source=source, note=note, allowed_types=allowed_types
+        symbol,
+        timeframe,
+        since=since,
+        source=source,
+        note=note,
+        allowed_types=allowed_types,
+        append_to=append_to,
     )
 
 

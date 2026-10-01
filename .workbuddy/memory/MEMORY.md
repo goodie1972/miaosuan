@@ -14,6 +14,31 @@
 - 本项目的系统性弱点是**静默失败**：已三度踩坑——Dukascopy `except DataError: break` 把网络不通报成"无数据"；`acquisition.py` 四处 `except Exception: pass/continue` 丢光失败原因；OKX `fetch_full` 丢弃入参 symbol 恒用默认品种（取到错数据且不报错）。**新增数据源/错误分支时，务必让失败可见**：错误向上抛、原因进消息、依赖缺失要提示怎么装。
 - 依赖纪律：`fastapi`/`uvicorn` 属于 `web` extra，`tvdatafeed`/`akshare`/`tqsdk`/`websocket-client` 属于 `datasource` extra，均在 pyproject 显式声明；惰性 import 缺失时 `describe()` 必须给可行动提示，禁止静默返回 False。env 读取只允许在 `config.py`/`cli.py`，新增硬编码路径要配套 accessor（如 `MIAOSUAN_KLINE_DIR`）。
 - **Spec 管理方案**（2026-09-25 设计，文档 `docs/spec-management.md`）：核心设计为新增 `SpecRegistry`（`artifacts/spec_registry.json`）作为独立索引层，不侵入 spec 四段结构。Provenance 计划新增 `parent_spec_id`/`lineage`/`derivation` 三字段（向后兼容）。当前缺口：无 spec 索引/注册表、无谱系追踪、无 spec↔.py 反向映射、tune 不产出派生 spec。实施分四阶段：registry 基础 → 谱系追踪 → 回测/tune 记录 → 导出策略与自动化。
+- **`supported_timeframes()` API**（2026-09-26）：所有 fetcher 类（base/tradingview/akshare_src/okx/mt4_bridge/tqsdk_src/dukascopy/binance/shenji_db）均实现 `supported_timeframes() -> list[str]`，通过 `acquisition.py` 的 `list_sources()` 暴露给前端。ShenjiDB 实现为查询 DB 中 `SELECT DISTINCT timeframe FROM ohlcv`。**H2 周期无任何数据源支持**（不在任何 fetcher 的周期映射中）。Akshare AU0 分钟级（M5/M15/M30/H1）仅 1023 根，但 H4/D1 有 4560 根（18 年）。
+- **`_EPS` 不可改动**（2026-09-26 教训）：ops.py 的 `_EPS` 从 1e-6 改为 1e-4 会导致 `tests/parity/` 下 11 个测试失败（DIV/JUMP/SCALE/TS_STD/TS_SKEW 等算子与冻结 PyTorch 基线超差）。`_EPS` 是与 AM 原生实现对齐的数值常量，**禁止修改**，否则 parity 测试全红。已恢复为 1e-6，基线恢复 939 passed / 3 skipped / 0 failed。
+- **多源 K 线对比验证管线**（2026-09-28）：`scripts/compare_tv_duk.py` 实现 TradingView vs Dukascopy 全周期对比：
+  - 支持品种映射（XAUUSD/EURUSD/BTCUSDT 等）、日期范围、容差配置（价差 ≤0.01%、量差 ≤1%）
+  - 双源并行拉取 → 时间戳对齐 → 逐根 OHLCV 比对 → 详细报告（一致率、不一致明细、缺失统计）
+  - 验证通过（≥95%一致率）的数据标准化存为 CSV/Parquet 到 `D:/K线数据/{symbol}/{timeframe}.*`
+  - 记录 `.data_root.json` 作为唯一数据根目录配置，供后续调用
+  - 支持 `--local-only` 模式（离线自检本地 cache）、环境变量代理自动探测
+  - 当前已完成 XAUUSD D1/H4/H1/M30/M15 标准化落盘（2026-07~09，共 9672 根）
+- **Dukascopy fetcher 完全重写**（2026-09-29）：迁移到新版 `jetta.dukascopy.com/v1/candles` API，修复旧版 freeserv.dukascopy.com 返回 204/404/429 的问题：
+  - API 基址：`https://jetta.dukascopy.com/v1/candles`，instrument code 格式 `XAU-USD`（参考 dukascopy-node 源码）
+  - 数据格式为 delta-encoded 增量编码（timestamp/shift/times/opens/highs/lows/closes/volumes/multiplier），参考 dukascopy-node `normaliseCandles` 实现累加解析
+  - 支持全周期：M1/M5/M15/M30（从 minute 过滤）、H1/H4（从 hour 过滤）、D1/W1/MN1（day 聚合）
+  - XAUUSD 最早数据：tick/minute/hour 2003-05-05，day 1999-06-03（实测 D1 从 2006-10 起）
+  - v2rayN HTTP 代理 `http://127.0.0.1:10808` 可用（出口 IP: 104.28.156.217）
+  - `is_available()` 改用基类 `_probe_host` 做 TCP 探测（兼容测试契约，socket 必关闭、结果缓存），代理仅用于实际数据获取
+  - 移除 `_get_env_proxy()` 读取 `os.environ`（违反依赖方向约定），`proxy` 仅通过构造参数注入
+  - 重试逻辑：3 次重试（1s/2s/3s），400/timeout 错误跳过而非中断
+  - 验证：全测试套件 1056 passed / 3 skipped / 0 failed；实测 D1 7022 行（2006~2025）、H4 8351 行（2 年）、W1 459 行、M5 1260 行（7 天）
+- **代理配置链修复**（2026-09-29）：Dukascopy 在应用中无法获取数据的根因是**配置链缺少代理传递路径**。修复方案：
+  - `settings.yaml` 新增 `data.proxy`，`settings.py` DataConfig 新增 `proxy` 字段 + ENV `MIAOSUAN_DATA_PROXY`
+  - `config.py` DataAcquisitionConfig 新增 `proxy` 字段，两个 return 路径均传递
+  - `fetchers/__init__.py` 的 `all_network_sources` / `list_network_sources` 新增 `proxy` 参数
+  - `acquisition.py` 的 `_build_default_sources` 传递 proxy，`_try_fetch_full` / `_try_fetch_incremental` 移除 `is_available()` 预检查（代理可达但直连探测失败的源不应被跳过）
+  - **关键教训**：`is_available()` 做直连 TCP 探测，对于走代理才能连通的主机会返回 False，不应在取数路径中据此跳过——直接尝试 fetch 并捕获异常才是正确做法
 
 ## 2026-09-25
 

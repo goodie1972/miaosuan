@@ -380,6 +380,7 @@ ENV_DATA_TIMEOUT: str = "MIAOSUAN_DATA_TIMEOUT"
 ENV_DATA_SOURCE: str = "MIAOSUAN_DATA_SOURCE"
 ENV_DUKASCOPY_USER: str = "MIAOSUAN_DUKASCOPY_USER"
 ENV_DUKASCOPY_PASS: str = "MIAOSUAN_DUKASCOPY_PASS"
+ENV_DATA_PROXY: str = "MIAOSUAN_DATA_PROXY"
 ENV_MT4_BRIDGE_HOST: str = "MIAOSUAN_MT4_BRIDGE_HOST"
 ENV_MT4_BRIDGE_PORT: str = "MIAOSUAN_MT4_BRIDGE_PORT"
 ENV_MT4_TIME_BASE: str = "MIAOSUAN_MT4_TIME_BASE"
@@ -423,6 +424,7 @@ class DataAcquisitionConfig:
     data_source: str = ""
     dukascopy_user: str = ""
     dukascopy_password: str = ""
+    proxy: str = ""
     mt4_bridge_host: str = DEFAULT_MT4_BRIDGE_HOST
     mt4_bridge_port: int = DEFAULT_MT4_BRIDGE_PORT
     mt4_time_base: str = DEFAULT_MT4_TIME_BASE
@@ -527,6 +529,7 @@ def data_acquisition_config(env: Mapping[str, str] | None = None) -> DataAcquisi
             data_source=env.get(ENV_DATA_SOURCE, ""),
             dukascopy_user=env.get(ENV_DUKASCOPY_USER, ""),
             dukascopy_password=env.get(ENV_DUKASCOPY_PASS, ""),
+            proxy=env.get(ENV_DATA_PROXY, ""),
             mt4_bridge_host=(env.get(ENV_MT4_BRIDGE_HOST, "") or "").strip()
             or DEFAULT_MT4_BRIDGE_HOST,
             mt4_bridge_port=_int_or_default(
@@ -553,6 +556,7 @@ def data_acquisition_config(env: Mapping[str, str] | None = None) -> DataAcquisi
     data_source = os.environ.get(ENV_DATA_SOURCE, "") or cfg.data.source
     dukascopy_user = os.environ.get(ENV_DUKASCOPY_USER, "") or cfg.data.dukascopy_user
     dukascopy_password = os.environ.get(ENV_DUKASCOPY_PASS, "") or cfg.data.dukascopy_password
+    proxy = os.environ.get(ENV_DATA_PROXY, "") or cfg.data.proxy
 
     # 超时：环境变量优先，否则用设置系统的值
     raw_timeout = os.environ.get(ENV_DATA_TIMEOUT, "")
@@ -579,6 +583,7 @@ def data_acquisition_config(env: Mapping[str, str] | None = None) -> DataAcquisi
         data_source=data_source,
         dukascopy_user=dukascopy_user,
         dukascopy_password=dukascopy_password,
+        proxy=proxy,
         mt4_bridge_host=mt4_host,
         mt4_bridge_port=mt4_port,
         mt4_time_base=mt4_time_base,

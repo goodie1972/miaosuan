@@ -1,0 +1,2 @@
+HTTP 400
+{"detail":"追加目标不存在：D:\\K线数据\\XAUUSD_D1_Dukascopy_direct.parquet"}

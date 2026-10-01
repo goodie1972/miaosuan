@@ -88,6 +88,13 @@ class AkshareFetcher(BaseFetcher):
         # 缺依赖时给可行动提示（本包禁止 print，故借 describe 透出给 UI）
         return "akshare: 未安装 akshare（pip install akshare）"
 
+    def supported_timeframes(self) -> list[str]:
+        """返回支持的周期列表（按市场类型区分）。"""
+        if self._market == "futures":
+            return sorted(set(_AK_MINUTE.keys()) | set(_AK_DAILY))
+        else:
+            return sorted(set(_AK_EQUITY_PERIOD.keys()) | set(_AK_EQUITY_MINUTE.keys()))
+
     @staticmethod
     def _to_unix_seconds(series: pd.Series) -> pd.Series:
         """把日期列（字符串 / datetime，可能 tz-aware）转为 Unix 秒（int）。"""

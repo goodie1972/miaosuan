@@ -1,0 +1,23 @@
+11:03:50 ============================================================
+11:03:50 XAUUSD 完整数据合成开始
+11:03:50 ============================================================
+11:03:50 发现已有 H1 缓存：D:\backup\BaoBao\PythonProgram\miaosuan\data\cache\XAUUSD_H1_Dukascopy_full.parquet，读取...
+11:03:50 读取 H1：173332 根
+11:03:50 开始重采样生成 D1/W1/MN1...
+11:03:50 D1 生成：7231 根 → D:\backup\BaoBao\PythonProgram\miaosuan\data\cache\XAUUSD_D1_Dukascopy_full.parquet
+11:03:50   范围：2006-10-05 00:00:00+00:00 → 2026-08-31 00:00:00+00:00
+11:03:50 W1 生成：1039 根 → D:\backup\BaoBao\PythonProgram\miaosuan\data\cache\XAUUSD_W1_Dukascopy_full.parquet
+11:03:50 MN1 生成：239 根 → D:\backup\BaoBao\PythonProgram\miaosuan\data\cache\XAUUSD_MN1_Dukascopy_full.parquet
+11:03:50 === 连续性验证 ===
+11:03:50 H1: 173332 根，异常间隙 59 个，最早 2006-10-05 03:00:00+00:00, 最新 2026-08-31 23:00:00+00:00
+11:03:50   异常间隙样例: [100800, 100800, 14400, 100800, 14400]
+11:03:50 D1: 7231 根，异常间隙 0 个，最早 2006-10-05 00:00:00+00:00, 最新 2026-08-31 00:00:00+00:00
+11:03:50 W1: 1039 根，异常间隙 0 个，最早 2006-10-09 00:00:00+00:00, 最新 2026-08-31 00:00:00+00:00
+11:03:50 MN1: 239 根，异常间隙 0 个，最早 2006-10-01 00:00:00+00:00, 最新 2026-08-01 00:00:00+00:00
+11:03:50 ============================================================
+11:03:50 完成！输出文件：
+11:03:50   H1:  D:\backup\BaoBao\PythonProgram\miaosuan\data\cache\XAUUSD_H1_Dukascopy_full.parquet
+11:03:50   D1:  D:\backup\BaoBao\PythonProgram\miaosuan\data\cache\XAUUSD_D1_Dukascopy_full.parquet
+11:03:50   W1:  D:\backup\BaoBao\PythonProgram\miaosuan\data\cache\XAUUSD_W1_Dukascopy_full.parquet
+11:03:50   MN1: D:\backup\BaoBao\PythonProgram\miaosuan\data\cache\XAUUSD_MN1_Dukascopy_full.parquet
+11:03:50 ============================================================

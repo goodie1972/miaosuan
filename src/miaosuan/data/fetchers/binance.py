@@ -101,6 +101,10 @@ class BinanceFetcher(BaseFetcher):
             return f"Binance: {self._default_symbol} (public REST, no key)"
         return "Binance: (主机不可达)"
 
+    def supported_timeframes(self) -> list[str]:
+        """返回 Binance 支持的周期列表（与 _BINANCE_INTERVAL 键一致）。"""
+        return list(_BINANCE_INTERVAL.keys())
+
     # ── 内部 ─────────────────────────────────────────────────────────────
 
     def _http_get(self, url: str) -> list[Any]:

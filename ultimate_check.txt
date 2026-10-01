@@ -1,0 +1,1 @@
+﻿XAUUSD_D1_ultimate.parquet | 363721 | 09/30/2026 11:27:24 XAUUSD_H1_ultimate.parquet | 6329789 | 09/30/2026 11:39:13 XAUUSD_H4_ultimate.parquet | 1803668 | 09/30/2026 11:43:52

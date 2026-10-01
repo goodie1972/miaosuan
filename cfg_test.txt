@@ -1,0 +1,10 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.13.14, pytest-9.1.1, pluggy-1.6.0
+rootdir: D:\backup\BaoBao\PythonProgram\miaosuan
+configfile: pyproject.toml
+plugins: anyio-4.15.1, hypothesis-6.168.0, cov-7.1.0
+collected 5 items
+
+tests\test_config_endpoint.py .....                                      [100%]
+
+============================= 5 passed in 16.10s ==============================

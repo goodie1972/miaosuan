@@ -1,0 +1,1 @@
+﻿[{"name":"XAUUSD_D1.parquet","path":"data\\cache\\XAUUSD_D1.parquet","size_mb":0.37,"mtime":"2026-09-30 11:12","source":"cache","start":"2006-10-05","end":"2026-09-30"},{"name":"XAUUSD_D1_Dukascopy_direct.parquet","path":"data\\cache\\XAUUSD_D1_Dukascopy_direct.parquet","size_mb":0.36,"mtime":"2026-

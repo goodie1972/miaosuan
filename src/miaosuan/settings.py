@@ -93,6 +93,7 @@ DEFAULT_SETTINGS = {
         "cache_dir": "",  # 数据缓存目录（留空则用 paths.data_cache）
         "dukascopy_user": "",  # Dukascopy 实盘用户名
         "dukascopy_password": "",  # Dukascopy 实盘密码
+        "proxy": "",  # 网络 fetcher 代理（如 http://127.0.0.1:10808）
     },
     # 日志
     "logging": {
@@ -176,6 +177,7 @@ _ENV_ALIASES: dict[str, tuple[str, ...]] = {
     "MIAOSUAN_DATA_SOURCE": ("data", "source"),
     "MIAOSUAN_DUKASCOPY_USER": ("data", "dukascopy_user"),
     "MIAOSUAN_DUKASCOPY_PASS": ("data", "dukascopy_password"),
+    "MIAOSUAN_DATA_PROXY": ("data", "proxy"),
     "MIAOSUAN_KLINE_DIR": ("paths", "kline"),
     "MIAOSUAN_BUNDLED": ("_bundled",),        # 特殊标记，不进 Settings 模型
 }
@@ -309,6 +311,7 @@ class DataSettings(BaseModel):
     cache_dir: str = Field(default="")  # 空则使用 paths.data_cache
     dukascopy_user: str = Field(default="")
     dukascopy_password: str = Field(default="")
+    proxy: str = Field(default="")  # 网络 fetcher 代理（如 http://127.0.0.1:10808）
 
 
 class LoggingSettings(BaseModel):

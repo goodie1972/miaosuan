@@ -47,6 +47,20 @@ class ShenjiDBFetcher(BaseFetcher):
             return f"ShenjiDB: {self._db_path}"
         return "ShenjiDB: (未配置)"
 
+    def supported_timeframes(self) -> list[str]:
+        """查询数据库中实际存在的周期。"""
+        if not self.is_available():
+            return []
+        try:
+            conn = self._connect()
+            try:
+                cur = conn.execute("SELECT DISTINCT timeframe FROM ohlcv")
+                return [row[0] for row in cur.fetchall()]
+            finally:
+                conn.close()
+        except Exception:
+            return []
+
     # ── 内部 ─────────────────────────────────────────────────────────────
 
     def _connect(self) -> sqlite3.Connection:
