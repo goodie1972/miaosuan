@@ -3,7 +3,7 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""M5 评估器数值对拍：妙算 numpy 实现 vs 冻结 AM 的 torch 基准。
+"""M5 评估器数值回归验证：妙算 numpy 实现 vs 冻结基准 的 torch 基准。
 
 覆盖（team-lead M5 难点 4 —— IC/RankIC/Score/退化/``_align_causal`` **原样保留**）：
 
@@ -16,8 +16,8 @@
 * 类封装：``EffectivenessEvaluator`` 与模块级函数一致；
 * ``report.persist`` 的 IO 往返（新搬迁的 IO 半边）。
 
-基准由 ``scripts/gen_m5_baseline.py`` 在真实 torch 环境用 AM 原始实现生成
-（``generated_at`` 已在基准侧冻结，便于对拍）。
+基准由 ``scripts/gen_m5_baseline.py`` 在真实 torch 环境用 妙算 原始实现生成
+（``generated_at`` 已在基准侧冻结，便于回归验证）。
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ from miaosuan.report.persist import (  # noqa: E402
     save_report,
 )
 
-pytestmark = pytest.mark.parity
+pytestmark = pytest.mark.regression
 
 # 评估器全程 float64 打分；仅输入张量为 float32。实测 Δ ≤ 1e-8，容差留 3 个数量级。
 _SC_ATOL = 1e-6
@@ -80,7 +80,7 @@ def _npz_cases(m5_npz: dict) -> tuple[dict[str, np.ndarray], np.ndarray, int]:
     return cands, m5_npz["ev_target"], 2
 
 
-# ── 底层函数对拍 ────────────────────────────────────────────────────────────
+# ── 底层函数回归验证 ────────────────────────────────────────────────────────────
 
 
 def test_input_consistency(m5_npz: dict) -> None:
@@ -91,7 +91,7 @@ def test_input_consistency(m5_npz: dict) -> None:
     assert np.array_equal(target, m5_npz["ev_target"]), "target 输入不一致"
 
 
-def test_align_causal_parity(m5_npz: dict, m5_meta: dict) -> None:
+def test_align_causal_regression(m5_npz: dict, m5_meta: dict) -> None:
     """``_align_causal`` 原样保留：末端裁掉 horizon 步，形状与数值逐点一致。"""
     ev = m5_meta["evaluator"]
     cands, target, _cats, horizon = _cases()
@@ -119,7 +119,7 @@ def test_ic_rankic_mi_degenerate_pearson(m5_npz: dict, m5_meta: dict) -> None:
     assert _close(_pearson_corr(cands["A"], cands["D"]), ev["pearson_corr_AD"])
 
 
-def test_rank_normalize_parity(m5_meta: dict) -> None:
+def test_rank_normalize_regression(m5_meta: dict) -> None:
     ev = m5_meta["evaluator"]
     got = _rank_normalize(list(ev["rank_normalize_in"]))
     exp = ev["rank_normalize_out"]
@@ -128,10 +128,10 @@ def test_rank_normalize_parity(m5_meta: dict) -> None:
         assert _close(g, e, atol=1e-12, rtol=0.0), f"秩归一 {g} != {e}"
 
 
-# ── 打分 / 剪枝 / 消融 对拍 ────────────────────────────────────────────────
+# ── 打分 / 剪枝 / 消融 回归验证 ────────────────────────────────────────────────
 
 
-def test_score_single_parity(m5_npz: dict, m5_meta: dict) -> None:
+def test_score_single_regression(m5_npz: dict, m5_meta: dict) -> None:
     ev = m5_meta["evaluator"]["score_single"]
     cands, target, _cats, horizon = _cases()
     for name, exp in ev.items():
@@ -149,7 +149,7 @@ def test_score_single_parity(m5_npz: dict, m5_meta: dict) -> None:
             assert _close(sr.importance_score, exp["importance_score"])
 
 
-def test_score_all_parity(m5_npz: dict, m5_meta: dict) -> None:
+def test_score_all_regression(m5_npz: dict, m5_meta: dict) -> None:
     exp_all = m5_meta["evaluator"]["score_all"]
     cands, target, cats, horizon = _cases()
     got = score_all(cands, target, categories=cats, horizon=horizon)
@@ -165,7 +165,7 @@ def test_score_all_parity(m5_npz: dict, m5_meta: dict) -> None:
             assert _close(r.importance_score, e["importance_score"])
 
 
-def test_prune_parity(m5_npz: dict, m5_meta: dict) -> None:
+def test_prune_regression(m5_npz: dict, m5_meta: dict) -> None:
     ev = m5_meta["evaluator"]
     cands, target, cats, horizon = _cases()
     all_sr = score_all(cands, target, categories=cats, horizon=horizon)
@@ -177,7 +177,7 @@ def test_prune_parity(m5_npz: dict, m5_meta: dict) -> None:
         assert r.pruned_in_favor_of == e["pruned_in_favor_of"], f"{r.candidate} 剪枝去向不一致"
 
 
-def test_ablate_parity(m5_npz: dict, m5_meta: dict) -> None:
+def test_ablate_regression(m5_npz: dict, m5_meta: dict) -> None:
     ev = m5_meta["evaluator"]
     cands, target, _cats, horizon = _cases()
     a_exp = ev["ablate_A"]
@@ -195,7 +195,7 @@ def test_ablate_parity(m5_npz: dict, m5_meta: dict) -> None:
 
 
 def test_ablate_missing_name_returns_error() -> None:
-    """消融不存在的候选 → 返回 error 而非抛异常（与 AM 一致）。"""
+    """消融不存在的候选 → 返回 error 而非抛异常（与 妙算 一致）。"""
     cands, target, _cats, horizon = _cases()
     res = ablate("NOT_IN_SET", cands, target, horizon=horizon)
     assert res.error is not None
@@ -203,10 +203,10 @@ def test_ablate_missing_name_returns_error() -> None:
     assert res.drop_recommendation is False
 
 
-# ── 报告 / Active_Subset 对拍 ──────────────────────────────────────────────
+# ── 报告 / Active_Subset 回归验证 ──────────────────────────────────────────────
 
 
-def test_report_and_active_subset_parity(m5_npz: dict, m5_meta: dict) -> None:
+def test_report_and_active_subset_regression(m5_npz: dict, m5_meta: dict) -> None:
     ev = m5_meta["evaluator"]
     cands, target, cats, horizon = _cases()
     all_sr = score_all(cands, target, categories=cats, horizon=horizon)

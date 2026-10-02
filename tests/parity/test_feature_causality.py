@@ -39,7 +39,7 @@ import feature_cases  # noqa: E402
 
 from miaosuan.core.features import FEATURE_NAMES, compute_features  # noqa: E402
 
-pytestmark = pytest.mark.parity
+pytestmark = pytest.mark.regression
 
 _FIELDS = feature_cases.FIELDS
 

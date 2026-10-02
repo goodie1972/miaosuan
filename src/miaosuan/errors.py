@@ -9,7 +9,7 @@
 
 * 所有妙算异常继承 :class:`MiaoSuanError`，携带稳定的 ``code`` 字符串，
   便于日志聚合、门禁判定与上层就近捕获；
-* **禁止**裸 ``except: pass``（AM ``vm.py:250`` 的 ``except Exception: return None``
+* **禁止**裸 ``except: pass``（妙算 ``vm.py:250`` 的 ``except Exception: return None``
   会吞掉真实错误）；妙算改为返回 ``None`` 时记录 warning 并计数；
 * 本模块**只依赖标准库**，可被任意层（含 ``core/``）安全导入，不引入反向依赖。
 

@@ -1,0 +1,105 @@
+{
+  "evidence": {
+    "cost_sensitivity": {
+      "0.5": 5.5248639048899735,
+      "1": 5.393944917233241,
+      "2": 5.131887185398594,
+      "3": 4.869572676212304
+    },
+    "deflated_sharpe": 0.5861215448205039,
+    "gate_reasons": [
+      "dsr<0.95"
+    ],
+    "gate_verdict": "RESEARCH_ONLY",
+    "holdout_sharpe": null,
+    "n_trials": 2351,
+    "val_score": 5.1992887829461925,
+    "wf_folds": 5
+  },
+  "name": "d1_au0_miaosuan",
+  "notes": "",
+  "payload": {
+    "kind": "factor",
+    "tokens": [
+      56,
+      62,
+      22,
+      122,
+      126,
+      88,
+      89,
+      119
+    ],
+    "vocab_version": "v9217a2c0d91a"
+  },
+  "provenance": {
+    "budget": "quick",
+    "config_snapshot": {
+      "budget": {
+        "explore_generations": 100,
+        "max_generations": 300,
+        "min_delta": 0.005,
+        "patience": 40,
+        "profile": "standard",
+        "wall_clock_hours": 2.0
+      },
+      "budget_profile": "quick",
+      "cost": {
+        "cost_profile": "FOREX_XAUUSD",
+        "cost_rate": 0.0002,
+        "sensitivity": [
+          0.5,
+          1.0,
+          2.0,
+          3.0
+        ]
+      },
+      "logging": {
+        "json_lines": true,
+        "level": "INFO"
+      },
+      "search": {
+        "elite_size": 8,
+        "formula_len": 8,
+        "immigrant_ratio": 0.3,
+        "island_migrate_every": 100,
+        "island_migrate_top": 5,
+        "min_hamming": 2,
+        "n_islands": 1,
+        "p_crossover": 0.3,
+        "p_mutate_point": 0.5,
+        "p_mutate_subtree": 0.2,
+        "pop_size": 64,
+        "tournament_k": 3
+      },
+      "seed": 9999,
+      "split": {
+        "embargo": 4,
+        "holdout_ratio": 0.2,
+        "n_wf_folds": 4,
+        "purge_gap": 20,
+        "train_ratio": 0.6,
+        "val_ratio": 0.2
+      },
+      "symbol": "AU0",
+      "timeframe": "D1",
+      "wf_folds": 5
+    },
+    "created_at": "2026-09-27T13:29:48+00:00",
+    "data_fingerprint": "sha256:44236c9783c6018f49d1f089c7a93775ae70b741faf0c6c2c39e99541956f404",
+    "git_sha": "9b1ed72f676afb07d3458948e344983ac71003b2",
+    "market": "FOREX_XAUUSD",
+    "miaosuan_version": "0.1.0",
+    "seed": 9999,
+    "vocab_version": "v9217a2c0d91a"
+  },
+  "semantics": {
+    "long_short": true,
+    "neutral_band": 0.05,
+    "position_fn": "tanh",
+    "roll_window": 500,
+    "timeframe": "D1",
+    "warmup_bars": 499
+  },
+  "spec_version": "1.0"
+}

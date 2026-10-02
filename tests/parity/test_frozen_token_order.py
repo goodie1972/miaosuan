@@ -5,9 +5,9 @@
 
 """名称/顺序冻结锁回归（M3）：妙算注册表必须与 ``frozen_token_order.json`` 逐项一致。
 
-这份 fixture 由 ``scripts/gen_frozen_fixture.py`` 从**冻结的 AlphaMaster**实时提取
+这份 fixture 由 ``scripts/gen_frozen_fixture.py`` 从**冻结的 妙算**实时提取
 （见 ``tests/fixtures/frozen_token_order.json``）。此后 M3/M4 的回归**只读 fixture、
-不再依赖 AM 可导入** —— 这是后续 numpy 化移植的「名称/顺序锁」：
+不再依赖 妙算 可导入** —— 这是后续 numpy实现的「名称/顺序锁」：
 
 * 名称、顺序任一改变 -> ``VOCAB_VERSION`` 漂移 -> M3/M4 会静默把旧产物判为「不兼容」；
 * 本测试在 CI 阶段就把这种漂移拦下。
@@ -24,7 +24,7 @@ from miaosuan.core.features import FEATURE_REGISTRY
 from miaosuan.core.ops import OPERATOR_REGISTRY
 from miaosuan.core.vocab import FORMULA_VOCAB, VOCAB_VERSION
 
-pytestmark = pytest.mark.parity
+pytestmark = pytest.mark.regression
 
 _FIXTURE = Path(__file__).resolve().parent.parent / "fixtures" / "frozen_token_order.json"
 

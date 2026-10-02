@@ -1,6 +1,6 @@
 {
-  "_comment": "从冻结的 AlphaMaster 实时提取的「名称/顺序冻结清单」。由 scripts/gen_frozen_fixture.py 生成，请勿手工编辑。M3/M4 回归测试只读本文件，不依赖 AM 可导入。",
-  "source": "AlphaMaster-main/model_core/{features,ops,vocab}.py",
+  "_comment": "从冻结的 妙算 实时提取的「名称/顺序冻结清单」。由 scripts/gen_frozen_fixture.py 生成，请勿手工编辑。M3/M4 回归测试只读本文件，不依赖 妙算 可导入。",
+  "source": "妙算/model_core/{features,ops,vocab}.py",
   "vocab_version": "v9217a2c0d91a",
   "vocab_schema_tag": "4.0-registry",
   "feature_count": 65,

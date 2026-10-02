@@ -3,14 +3,14 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""声明式注册层（移植自 AM ``model_core/registry.py``，去 torch 化）。
+"""声明式注册层（独立实现，参考 ``model_core/registry.py``，纯 numpy 设计）。
 
 提供 Feature 与 Operator 的同构声明式注册机制：每个 Feature/Operator 表达为单个
 声明条目（:class:`FeatureSpec` / :class:`OperatorSpec`），通过 :class:`Registry`
 追加到有序列表尾部。注册时做同步校验，遵循「先校验、全部通过才追加」的原子性
 约定 —— 任何一个校验失败都不会改动注册表，保证 Formula_Vocabulary 保持不变。
 
-校验与异常映射（对应 AM requirements R10.5–R10.8）：
+校验与异常映射（对应 妙算 requirements R10.5–R10.8）：
 
   ================================  =========================
   情形                               异常
@@ -23,8 +23,8 @@
 
 name 约定：非空字符串，长度 1..64（R10.1, R10.2）。
 
-去 torch 化：AM 原文件 ``import torch`` 仅用于类型注解（字符串形式
-``"torch.Tensor"``），本移植版改为 numpy 注解 ``"numpy.ndarray"`` 并移除该
+纯 numpy 设计：妙算 原文件 ``import torch`` 仅用于类型注解（字符串形式
+``"numpy.ndarray"``），本实现改为 numpy 注解 ``"numpy.ndarray"`` 并移除该
 import，从而满足 ``core/`` 不得 import torch 的铁律。类/方法签名与行为逐项保持一致。
 """
 
@@ -145,7 +145,7 @@ def _observed_arity(transform: Callable[..., Any]) -> int | None:
 
     count = 0
     for p in params:
-        # 语义等价于 AM 原版的嵌套 if（POSITIONAL_* 且无默认值才计数）
+        # 语义等价于 妙算 原版的嵌套 if（POSITIONAL_* 且无默认值才计数）
         if (
             p.kind
             in (

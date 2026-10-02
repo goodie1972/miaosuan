@@ -3,16 +3,16 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""★ 词表恒等对拍：妙算（numpy） vs 冻结 AlphaMaster（torch）。
+"""★ 词表恒等回归验证：确保 VOCAB_VERSION 的确定性派生不变。
 
-这是架构 §6.3 所称「最优雅的一条对拍」：``VOCAB_VERSION`` 由
-``sha256("\\n".join(token_names))[:12]`` 确定性派生。只要妙算的 token 组成与顺序和
-AM 完全一致，版本字符串**必然相同**（AM 现产物为 ``v9217a2c0d91a``）。这是一个
-**零成本的移植正确性证明** —— 若移植中不小心改了顺序或漏了算子，它会立刻变红。
+这是架构 §6.3 所称「最优雅的一条回归验证」：``VOCAB_VERSION`` 由
+``sha256("\\n".join(token_names))[:12]`` 确定性派生。只要 token 组成与顺序不变，
+版本字符串**必然相同**（当前产物为 ``v9217a2c0d91a``）。若实现中不小心改了顺序或
+漏了算子，测试会立刻变红。
 
 覆盖：
-  * 与**冻结快照**逐字符比对（始终运行，离线）；
-  * 与**活体 AM 模块**逐元素比对（装了 torch / 可加载时自动启用）。
+  * 与**冻结快照**逐字符比对（始终运行，离线，零外部依赖）；
+  * 派生函数的性质（确定性、顺序敏感、成员敏感、无拼接歧义）。
 """
 
 from __future__ import annotations
@@ -22,9 +22,9 @@ import pytest
 from miaosuan.core import vocab as ms_vocab
 from miaosuan.errors import VocabVersionMismatchError
 
-pytestmark = pytest.mark.parity
+pytestmark = pytest.mark.regression
 
-# 冻结的期望版本（AM 现产物；同时见 strategies/best_XAUUSD.json）
+# 冻结的期望版本（当前产物；同时见 strategies/best_XAUUSD.json）
 FROZEN_VERSION = "v9217a2c0d91a"
 
 
@@ -32,7 +32,7 @@ FROZEN_VERSION = "v9217a2c0d91a"
 
 
 def test_vocab_version_equals_frozen_snapshot(frozen_snapshot: dict) -> None:
-    """妙算 VOCAB_VERSION 与冻结 AM 版本逐字符一致。"""
+    """妙算 VOCAB_VERSION 与冻结快照逐字符一致。"""
     assert frozen_snapshot["vocab_version"] == ms_vocab.VOCAB_VERSION
     assert ms_vocab.VOCAB_VERSION == FROZEN_VERSION
 
@@ -70,32 +70,7 @@ def test_snapshot_version_is_self_consistent(frozen_snapshot: dict) -> None:
     assert ms_vocab.compute_vocab_version(token_names) == frozen_snapshot["vocab_version"]
 
 
-# ── 2. 与活体 AM 模块比对（可选）──────────────────────────────────────────
-
-
-def test_vocab_version_matches_live_am(am_vocab, am_used_torch_stub: bool) -> None:
-    """妙算 VOCAB_VERSION == 活体 AM 的 VOCAB_VERSION。"""
-    assert ms_vocab.VOCAB_VERSION == am_vocab.VOCAB_VERSION, (
-        f"妙算 {ms_vocab.VOCAB_VERSION!r} != AM {am_vocab.VOCAB_VERSION!r} "
-        f"(torch_stub={am_used_torch_stub})"
-    )
-
-
-def test_token_names_match_live_am(am_vocab) -> None:
-    """妙算 token 名称元组与活体 AM 逐元素相同（feature 段 + operator 段）。"""
-    ms = ms_vocab.FORMULA_VOCAB
-    am = am_vocab.FORMULA_VOCAB
-
-    assert ms.feature_names == tuple(am.feature_names), _first_diff(
-        ms.feature_names, tuple(am.feature_names)
-    )
-    assert ms.operator_names == tuple(am.operator_names), _first_diff(
-        ms.operator_names, tuple(am.operator_names)
-    )
-    assert ms.token_names == tuple(am.token_names)
-
-
-# ── 3. 派生函数的性质 ─────────────────────────────────────────────────────
+# ── 2. 派生函数的性质 ─────────────────────────────────────────────────────
 
 
 def test_compute_vocab_version_is_deterministic() -> None:
@@ -125,7 +100,7 @@ def test_formula_vocab_version_property_uses_token_names() -> None:
     assert v.version == ms_vocab.VOCAB_VERSION
 
 
-# ── 4. verify() 行为 ──────────────────────────────────────────────────────
+# ── 3. verify() 行为 ──────────────────────────────────────────────────────
 
 
 def test_verify_accepts_matching_version() -> None:

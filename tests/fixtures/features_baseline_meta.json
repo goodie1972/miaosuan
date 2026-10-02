@@ -1,6 +1,6 @@
 {
-  "_comment": "AM 原实现 compute_features 输出基准，请勿手工编辑。",
-  "source": "AlphaMaster-main/model_core/features.py",
+  "_comment": "妙算 原实现 compute_features 输出基准，请勿手工编辑。",
+  "source": "妙算/model_core/features.py",
   "torch_version": "2.14.0+cpu",
   "numpy_version": "2.5.3",
   "dtype": "float32",

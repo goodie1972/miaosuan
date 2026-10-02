@@ -19,7 +19,7 @@ magic 一律以 ``int`` 表示与落盘：妙算 侧是 ``magic: int``
   否则 CLI 重跑会污染号段；
 * 账本落盘后可由人工审阅 / 回滚。
 
-账本默认落在 ``<仓库根>/artifacts/magic_registry.json``（可由调用方注入路径，
+账本默认落在 ``<仓库根>/data/state/magic_registry.json``（可由调用方注入路径，
 测试用 ``tmp_path``）。写盘动作由 :func:`allocate_magic` 内部完成——这是平台的
 **持久化状态**，不是临时文件；其余临时产物仍只在 ``artifacts/``。
 """
@@ -54,7 +54,7 @@ __all__ = [
 
 #: 默认账本路径（相对仓库根：``src/miaosuan/adapters/shenji`` 往上 5 层）。
 DEFAULT_LEDGER_PATH: Path = (
-    Path(__file__).resolve().parents[4] / "artifacts" / "magic_registry.json"
+    Path(__file__).resolve().parents[4] / "data" / "state" / "magic_registry.json"
 )
 
 #: 序号上限（两位十进制）。

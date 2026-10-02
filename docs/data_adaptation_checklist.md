@@ -1,12 +1,12 @@
 # 数据适配坑清单（T02 输入）
 
 > 状态：**记录，未实现**。本文档由 M5（T01 收官）沉淀，用于指导 T02 的 `data/` 层实现。
-> 所有条目均来自端到端对拍（XAUUSD_H1）实测，
+> 所有条目均来自端到端回归验证（XAUUSD_H1）实测，
 > 而非臆测。妙算 `core/` **不做任何数据 IO / 适配**；适配逻辑一律下沉到 T02 的 `data/`。
 >
 > 预留接口见 `src/miaosuan/core/ports.py`（`DataSource` / `MarketProfile` / `CostModelProtocol`）。
 
-数据源文件（对拍用）：`D:\K线数据\XAUUSD_H1.parquet`（8000 根 H1）。
+数据源文件（回归验证用）：`D:\K线数据\XAUUSD_H1.parquet`（8000 根 H1）。
 基准事实（`tests/fixtures/e2e_xauusd_meta.json` → `data_facts`）：
 `rows_raw = rows_used = 8000`，列为 `[time, open, high, low, close, volume]`，
 `time ∈ [1746442800, 1788962400]`，`has_tick_volume = false`。
@@ -23,8 +23,8 @@
   - `DataSource.adjustment_mode` 显式声明口径（`none | qfq | hfq | backadj`），**默认 `none`**；
   - 复权在**加载后、特征前**统一施加，禁止只改部分字段；
   - 期货连续合约需支持「价差调整 / 比例调整」开关，并在 `MarketProfile` 标注 `is_continuous`。
-- **对拍影响**：端到端对拍用 `none` 口径；任何复权模式都是**新语义**，
-  必须单独建对拍基准，不得混用。
+- **回归验证影响**：端到端回归验证用 `none` 口径；任何复权模式都是**新语义**，
+  必须单独建回归验证基准，不得混用。
 
 ## 2. 时间戳单位修复（`time` 被误存为「秒/1000」）
 
@@ -55,7 +55,7 @@
   - **`keep="last"` 是明确选择**（保留最新写入），与 `keep="first"` 结果不同，必须对齐。
 - **T02 动作**：`DataSource.load()` 内固定「按 `time` 升序 + `duplicated(keep="last")`」，
   并统计 `n_dropped_duplicates` 写入元信息。
-- **对拍**：端到端测试 `test_e2e_data_path` 已断言重建面板与 AM 基准**逐位一致**，
+- **回归验证**：端到端测试 `test_e2e_data_path` 已断言重建面板与 妙算 基准**逐位一致**，
   含去重/排序语义。
 
 ## 4. 多品种时间轴对齐（alignment）
@@ -84,7 +84,7 @@
 - **坑**：MT5 导出为 `tick_volume`，第三方导出为 `volume`；若列选择错误，`volume` 相关特征
   （`VWAP` / `VWAP_DEV` / 量价类）全错或抛 `KeyError`。
 - **T02 动作**：`MarketProfile.volume_semantics ∈ {tick, real}`；列解析按 `tick_volume` 优先级，并在
-  元信息记录实际使用的列名。对拍数据为 `volume`（`has_tick_volume = false`）。
+  元信息记录实际使用的列名。回归验证数据为 `volume`（`has_tick_volume = false`）。
 
 ## 6. 目标收益 `target_ret`（前视 horizon = 2）
 
@@ -98,14 +98,14 @@
   - 用**开盘价**而非收盘价，且是 `t+1 → t+2` 而非 `t → t+1`（与「次日开盘进场」的交易语义对齐）；
   - 末两根**必须零填充**，否则 `_align_causal`（裁掉末尾 horizon=2 步）会把边界错位；
   - 分母为 0 的防御处理必须保留（否则出 `inf`）。
-- **T02 动作**：`TargetPort` 暴露 `compute_target_ret(open, horizon=2)`，语义与 AM 逐点一致；
+- **T02 动作**：`TargetPort` 暴露 `compute_target_ret(open, horizon=2)`，语义与 妙算 逐点一致；
   `horizon` 与 `EffectivenessEvaluator.target_horizon` 必须**同源**（默认均为 2）。
-- **对拍口径**：评估器 `_align_causal` 与特征层 warm-up 必须一致到同一时间基准
+- **回归验证口径**：评估器 `_align_causal` 与特征层 warm-up 必须一致到同一时间基准
   （见 `core/evaluator.py` / `core/vm.py`）。
 
 ## 7. 年化期数 `periods_per_year`（按周期）
 
-- **AM 语义**：H1 固定用 **6240**（24h 市场，`MT5Backtest(periods_per_year=6240)`）；
+- **妙算 语义**：H1 固定用 **6240**（24h 市场，`MT5Backtest(periods_per_year=6240)`）；
   另可从实际时间跨度估算年数（`inspect_parquet_file`：`span_seconds / (365.25*24*3600)`）。
 - **坑**：年内期数错 → Sharpe/Sortino/Calmar 年化系数错，回测打分失真；不同周期（M1/M5/…/D1）
   期数不同。
@@ -115,9 +115,9 @@
 
 ## 8. 其它工程约束
 
-| 项 | AM 语义 | 妙算约定 |
+| 项 | 妙算 语义 | 妙算约定 |
 | --- | --- | --- |
-| 最小 bar 数 | `Config.MIN_BARS`（不足则排除品种） | T02 显式参数，默认对齐 AM |
+| 最小 bar 数 | `Config.MIN_BARS`（不足则排除品种） | T02 显式参数，默认对齐 妙算 |
 | dtype | OHLCV → `float32` | 一致（float32），避免精度漂移 |
 | 文件名契约 | `{symbol}_{timeframe}.parquet`（支持别名） | T02 复用 `parse_parquet_filename` 语义 |
 | 列集合 | `time, open, high, low, close, volume` | `DataSource.load()` 返回同构 `raw_dict` |
@@ -125,16 +125,16 @@
 
 ---
 
-## 9. 端到端对拍实测结论（M5）
+## 9. 端到端回归验证实测结论（M5）
 
-- 数据路径：妙算独立重建 `raw_dict` 与 AM 基准**逐位一致**（`test_e2e_data_path` 通过）。
+- 数据路径：妙算独立重建 `raw_dict` 与 妙算 基准**逐位一致**（`test_e2e_data_path` 通过）。
 - 特征层：65 维逐点 `max|Δ| ≈ 2.8e-2`（主要来自 `TRIX_SIGNAL` / `TRIX_15` 零点附近的
   float32 归约噪声）；`|Δ|>1e-2` 的占比 ≤ 1e-3。
 - 因子层：`p99.9|Δ| ≈ 4.3e-3`；`|Δ|>0.1` 仅 **1** 根 bar（`t=6231`），系 `GATE` 条件
   （`feat33 = TRIX_15`，`0.0` vs `+9.4e-4`）的**双线性不连续**（1-ULP 符号翻转），
-  非移植 bug；剔除近零条件 bar 后 `max|Δ| ≈ 4.4e-3`。
-- 聚合统计（妙算 vs AM）：`mean 0.258978 vs 0.258959`、`std 0.811758 vs 0.811755`、
+  非实现 bug；剔除近零条件 bar 后 `max|Δ| ≈ 4.4e-3`。
+- 聚合统计（妙算 vs 妙算）：`mean 0.258978 vs 0.258959`、`std 0.811758 vs 0.811755`、
   `max 3.0 = 3.0`、在市占比 `0.920625 = 0.920625`。
 
 > **给 T02 的提醒**：任何复权 / 对齐策略的改变都会**同时改变特征与因子**，
-> 必须重建独立对拍基准；不要把「上游数据口径差异」误判为「移植数值误差」。
+> 必须重建独立回归验证基准；不要把「上游数据口径差异」误判为「实现数值误差」。

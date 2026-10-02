@@ -3,23 +3,23 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""算子库（numpy 化移植，M3）。
+"""算子库（numpy实现，M3）。
 
-本模块把 ``AlphaMaster`` 的 ``model_core/ops.py``（原 torch 实现，62 个算子）逐算子
-移植为**纯 numpy** 实现，注册进 :data:`OPERATOR_REGISTRY`。``OPS_CONFIG`` 作为
+本模块把 基准的 ``model_core/ops.py``（原实现，62 个算子）逐算子
+采用**纯 numpy** 实现，注册进 :data:`OPERATOR_REGISTRY`。``OPS_CONFIG`` 作为
 「导出视图」由注册表派生，保持对下游 ``vocab.py`` / ``vm.py`` 的 import 兼容。
 
-移植铁律（架构 §1.3、M3 任务书）：
+实现约束（架构 §1.3、M3 任务书）：
 
 * **名称与顺序一字不改**（44 初始 + 3 跨截面 + 8 Task3.3 + 7 Task3.4 = 62），否则
   ``VOCAB_VERSION`` 会漂移、旧产物被 ``verify()`` 拒绝；由
-  ``tests/fixtures/frozen_token_order.json`` 与 ``tests/parity`` 回归锁定。
+  ``tests/fixtures/frozen_token_order.json`` 与 ``tests/regression`` 回归锁定。
 * **数值细节逐一对齐**，不做「顺手优化」：dtype 保持、``clamp`` 边界、``nan``/``inf``
-  处理、除零保护 ``_EPS``、``nan_to_num`` 的默认 ``posinf``/``neginf`` 语义均与 AM 一致。
+  处理、除零保护 ``_EPS``、``nan_to_num`` 的默认 ``posinf``/``neginf`` 语义均与 妙算 一致。
 * **禁止** import torch、禁止文件 IO、禁止读取环境变量（CI 的
   ``tests/test_dependency_direction.py`` 强制校验）。
 
-统一契约（沿用 AM R2.8, R2.9, R2.13）：
+统一契约（沿用 妙算 R2.8, R2.9, R2.13）：
 
   - 形状契约：所有算子输入 ``[N, T]``、输出 ``[N, T]``（N=截面/样本，T=时间）。
   - 二元/三元算子在入口校验各操作数形状一致，不一致抛 :class:`ShapeError` 且不产出数组。
@@ -27,9 +27,9 @@
 
 torch → numpy 关键等价：
 
-  ``torch.unfold(1, d, 1)``        → ``np.lib.stride_tricks.sliding_window_view(xp, d, axis=1)``
-  ``torch.clamp(v, lo, hi)``       → ``np.clip(v, lo, hi)``（NaN 均传播）
-  ``torch.nan_to_num(x, nan=..)``  → ``_n2n(x, nan=..)``（posinf/neginf 默认同为 dtype 极值）
+  ``numpy.unfold(1, d, 1)``        → ``np.lib.stride_tricks.sliding_window_view(xp, d, axis=1)``
+  ``numpy.clamp(v, lo, hi)``       → ``np.clip(v, lo, hi)``（NaN 均传播）
+  ``numpy.nan_to_num(x, nan=..)``  → ``_n2n(x, nan=..)``（posinf/neginf 默认同为 dtype 极值）
   ``(c > 0).float()``              → ``(c > 0).astype(np.float32)``
 """
 
@@ -51,7 +51,7 @@ __all__ = [
     "is_registered",
 ]
 
-# 除零保护常数（与 AM 一致）
+# 除零保护常数（与 妙算 一致）
 # 增加到 1e-4 以在更长公式/更大搜索空间下提供更强的数值稳定性
 _EPS = 1e-6
 
@@ -64,7 +64,7 @@ def _n2n(
 ) -> np.ndarray:
     """``np.nan_to_num`` 的强类型包装。
 
-    语义与 AM 的 ``torch.nan_to_num`` 一致：``nan`` 默认 0；``posinf``/``neginf``
+    语义与 妙算 的 ``numpy.nan_to_num`` 一致：``nan`` 默认 0；``posinf``/``neginf``
     为 ``None`` 时替换为 dtype 的最大/最小有限值（numpy 与 torch 默认行为相同）。
     此处仅加类型注记（numpy 存根对 ``nan_to_num`` 的返回类型为 ``Any``）。
     """
@@ -82,11 +82,11 @@ class ShapeError(Exception):
     """
 
 
-# ── 基础 / 时序 helper（逐行对齐 AM model_core/ops.py）────────────────────
+# ── 基础 / 时序 helper（逐行对齐 妙算 model_core/ops.py）────────────────────
 
 
 def _ts_delay(x: np.ndarray, d: int) -> np.ndarray:
-    """因果延迟 d 期（左侧零填充）。与 AM 的 zero-pad + 切片实现等价。"""
+    """因果延迟 d 期（左侧零填充）。与 妙算 的 zero-pad + 切片实现等价。"""
     if d == 0:
         return x
     out = np.zeros_like(x)
@@ -95,10 +95,10 @@ def _ts_delay(x: np.ndarray, d: int) -> np.ndarray:
 
 
 def _op_sign(x: np.ndarray) -> np.ndarray:
-    """符号函数，**等价 torch.sign 的特殊值语义**。
+    """符号函数，**等价 numpy.sign 的特殊值语义**。
 
-    实测 torch 2.14 的 ``torch.sign(NaN) == 0.0``（``torch.sgn(NaN)`` 亦然），
-    而 ``np.sign(NaN) == NaN``。为与 AM 逐元素对齐，这里用
+    实测 torch 2.14 的 ``numpy.sign(NaN) == 0.0``（``numpy.sgn(NaN)`` 亦然），
+    而 ``np.sign(NaN) == NaN``。为与 妙算 逐元素对齐，这里用
     ``(x > 0) - (x < 0)``（NaN 的两侧比较均为 False -> 0），并保持输入 dtype。
     """
     out: np.ndarray = (x > 0).astype(x.dtype) - (x < 0).astype(x.dtype)
@@ -107,7 +107,7 @@ def _op_sign(x: np.ndarray) -> np.ndarray:
 
 def _op_gate(condition: np.ndarray, x: np.ndarray, y: np.ndarray) -> np.ndarray:
     """三路门控：condition>0 取 x，否则取 y。"""
-    mask = (condition > 0).astype(np.float32)  # AM: (condition > 0).float()
+    mask = (condition > 0).astype(np.float32)  # 妙算: (condition > 0).float()
     out: np.ndarray = mask * x + (1.0 - mask) * y
     return out
 
@@ -347,7 +347,7 @@ def _cs_rank(x: np.ndarray) -> np.ndarray:
     n, t = x.shape
     if n == 1:
         return _n2n(x, nan=0.5, posinf=0.5, neginf=0.5)
-    # 等价 torch.argsort(dim=0)：实测 torch（CPU）对相等元素保持原序，
+    # 等价 numpy.argsort(dim=0)：实测 torch（CPU）对相等元素保持原序，
     # 即 numpy 的 stable 排序（quicksort 在含大量并列值时会与之不一致）。
     order = np.argsort(x, axis=0, kind="stable")  # 沿 N 维排序索引
     ranks = np.empty_like(x)
@@ -404,7 +404,7 @@ def _winsorize(x: np.ndarray, lo: float = 0.05, hi: float = 0.95) -> np.ndarray:
     """
     w = 20
     windows = _ts_rolling(x, w)  # [N, T, w]
-    # AM 用 torch.quantile(windows.float(), q, dim=-1)：float32 上做线性插值
+    # 妙算 用 numpy.quantile(windows.float(), q, dim=-1)：float32 上做线性插值
     lower = np.quantile(windows.astype(np.float32), lo, axis=-1).astype(x.dtype)
     upper = np.quantile(windows.astype(np.float32), hi, axis=-1).astype(x.dtype)
     span = upper - lower
@@ -415,13 +415,13 @@ def _winsorize(x: np.ndarray, lo: float = 0.05, hi: float = 0.95) -> np.ndarray:
 
 
 def _clip_fixed(x: np.ndarray) -> np.ndarray:
-    """硬限幅 clamp(-3, 3)（R2.6, CLIP）。AM 未做 nan_to_num，此处保持一致。"""
+    """硬限幅 clamp(-3, 3)（R2.6, CLIP）。妙算 未做 nan_to_num，此处保持一致。"""
     out: np.ndarray = np.clip(x, -3.0, 3.0)
     return out
 
 
 def _sigmoid_stable(x: np.ndarray) -> np.ndarray:
-    """数值稳定的 sigmoid，等价 torch.sigmoid（分段避免 float32 上溢）。"""
+    """数值稳定的 sigmoid，等价 numpy.sigmoid（分段避免 float32 上溢）。"""
     out = np.empty_like(x)
     pos = x >= 0
     neg = ~pos
@@ -484,7 +484,7 @@ _INITIAL_OPERATORS: list[tuple[str, Callable[..., Any], int]] = [
     ("DIV", lambda x, y: x / (y + _EPS), 2),
     ("NEG", lambda x: -x, 1),
     ("ABS", np.abs, 1),
-    ("SIGN", _op_sign, 1),  # torch.sign(NaN)=0，见 _op_sign
+    ("SIGN", _op_sign, 1),  # numpy.sign(NaN)=0，见 _op_sign
     ("GATE", _op_gate, 3),
     ("JUMP", _op_jump, 1),  # 已降低稀疏度
     ("DECAY", _op_decay, 1),
@@ -584,7 +584,7 @@ _register(OPERATOR_REGISTRY, _CROSS_SECTIONAL_OPERATORS)
 _register(OPERATOR_REGISTRY, _TASK33_OPERATORS)
 _register(OPERATOR_REGISTRY, _TASK34_OPERATORS)
 
-# 导出视图：[(name, transform, arity), ...]，保持 AM 既有元组结构（下游兼容）
+# 导出视图：[(name, transform, arity), ...]，保持 妙算 既有元组结构（下游兼容）
 OPS_CONFIG: list[tuple[str, Callable[..., Any], int]] = [
     (spec.name, spec.transform, spec.arity) for spec in OPERATOR_REGISTRY.operator_specs
 ]
@@ -592,7 +592,7 @@ OPS_CONFIG: list[tuple[str, Callable[..., Any], int]] = [
 # 由注册表导出有序算子名视图（保持下游 import 兼容）
 OPERATOR_NAMES: tuple[str, ...] = OPERATOR_REGISTRY.operator_names
 
-# 算子总数（= 62，与冻结 AM 一致）
+# 算子总数（= 62，与冻结基准一致）
 OPERATOR_COUNT: int = len(OPERATOR_REGISTRY.operator_names)
 
 # 不回归断言：导出视图与注册表一致；算子总数必须为 62（顺序见 frozen_token_order.json）

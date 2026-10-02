@@ -3,9 +3,9 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""M5 backtest 数值对拍：妙算 numpy vs 冻结 AM ``model_core/backtest.py``。
+"""M5 backtest 数值回归验证：妙算 numpy vs 冻结基准 ``model_core/backtest.py``。
 
-AM 运行态：``MT5Backtest(cost_rate=0.0003, periods_per_year=6240)``，``REWARD_MODE="ftmo"``
+妙算 运行态：``MT5Backtest(cost_rate=0.0003, periods_per_year=6240)``，``REWARD_MODE="ftmo"``
 （根目录 config / ModelConfig 当前取值）。妙算以参数注入同值。
 """
 
@@ -16,7 +16,7 @@ import pytest
 
 from miaosuan.core.backtest import MT5Backtest, estimate_periods_per_year
 
-pytestmark = pytest.mark.parity
+pytestmark = pytest.mark.regression
 
 _ATOL = 1e-4
 _RTOL = 1e-4
@@ -27,7 +27,7 @@ def _bt() -> MT5Backtest:
 
 
 @pytest.mark.parametrize("name", ("single", "multi5", "short"))
-def test_evaluate_parity(name: str, m5_npz: dict, m5_meta: dict) -> None:
+def test_evaluate_regression(name: str, m5_npz: dict, m5_meta: dict) -> None:
     factors = m5_npz[f"bt_factors__{name}"]
     target = m5_npz[f"bt_target__{name}"]
     score, mean_oos = _bt().evaluate(factors, {}, target)
@@ -37,7 +37,7 @@ def test_evaluate_parity(name: str, m5_npz: dict, m5_meta: dict) -> None:
 
 
 @pytest.mark.parametrize("name", ("single", "multi5", "short"))
-def test_evaluate_fold_parity(name: str, m5_npz: dict, m5_meta: dict) -> None:
+def test_evaluate_fold_regression(name: str, m5_npz: dict, m5_meta: dict) -> None:
     factors = m5_npz[f"bt_factors__{name}"]
     target = m5_npz[f"bt_target__{name}"]
     exp = m5_meta["backtest"][name]
@@ -62,11 +62,11 @@ _SECONDS_PER_YEAR = 365.25 * 86400.0
 
 
 def test_estimate_periods_per_year_span_based() -> None:
-    """年化因子 = 样本数 / 时间跨度（年），与 AM ``estimate_periods_per_year`` 同公式。
+    """年化因子 = 样本数 / 时间跨度（年），与 妙算 ``estimate_periods_per_year`` 同公式。
 
     * N 根 bar 恰跨 1 年 → ≈ N 根/年（数据驱动，自动适配市场/周期）；
     * 连续小时序列（24h × 365.25）→ ≈ 8766 根/年（H1 连续市场，含周末）；
-      注意：AM 的 ``6240`` 仅是「时间戳不可用」时的**兜底**（24 × 260 交易日），
+      注意：妙算 的 ``6240`` 仅是「时间戳不可用」时的**兜底**（24 × 260 交易日），
       并非 H1 的固定值。
     """
     n = 6240

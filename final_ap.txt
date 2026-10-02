@@ -15,17 +15,17 @@
 ........................................................................ [ 99%]
 ....                                                                     [100%]
 ============================== warnings summary ===============================
-tests/parity/test_vm_parity.py::test_vm_array_cases
+tests/regression/test_vm_regression.py::test_vm_array_cases
   D:\backup\BaoBao\PythonProgram\miaosuan\src\miaosuan\core\ops.py:481: RuntimeWarning: invalid value encountered in add
     ("ADD", lambda x, y: x + y, 2),
 
-tests/parity/test_vm_parity.py::test_vm_array_cases
-tests/parity/test_vm_parity.py::test_execute_nan_inf_nan_to_num
+tests/regression/test_vm_regression.py::test_vm_array_cases
+tests/regression/test_vm_regression.py::test_execute_nan_inf_nan_to_num
   D:\backup\BaoBao\PythonProgram\miaosuan\src\miaosuan\core\ops.py:484: RuntimeWarning: invalid value encountered in divide
     ("DIV", lambda x, y: x / (y + _EPS), 2),
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
 =========================== short test summary info ===========================
-SKIPPED [1] tests\parity\test_feature_causality.py:120: OBV_SLOPE 璁板繂鏃犵晫锛堝甫鐘舵€?/ cumsum 骞崇Щ锛夛紝涓嶅弬涓庢柟鍚?2
-SKIPPED [1] tests\parity\test_feature_causality.py:120: AD_LINE_SLOPE 璁板繂鏃犵晫锛堝甫鐘舵€?/ cumsum 骞崇Щ锛夛紝涓嶅弬涓庢柟鍚?2
-SKIPPED [1] tests\parity\test_feature_causality.py:120: SUPERTREND_DIR 璁板繂鏃犵晫锛堝甫鐘舵€?/ cumsum 骞崇Щ锛夛紝涓嶅弬涓庢柟鍚?2
+SKIPPED [1] tests\regression\test_feature_causality.py:120: OBV_SLOPE 璁板繂鏃犵晫锛堝甫鐘舵€?/ cumsum 骞崇Щ锛夛紝涓嶅弬涓庢柟鍚?2
+SKIPPED [1] tests\regression\test_feature_causality.py:120: AD_LINE_SLOPE 璁板繂鏃犵晫锛堝甫鐘舵€?/ cumsum 骞崇Щ锛夛紝涓嶅弬涓庢柟鍚?2
+SKIPPED [1] tests\regression\test_feature_causality.py:120: SUPERTREND_DIR 璁板繂鏃犵晫锛堝甫鐘舵€?/ cumsum 骞崇Щ锛夛紝涓嶅弬涓庢柟鍚?2

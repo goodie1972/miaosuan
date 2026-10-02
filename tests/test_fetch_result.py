@@ -106,8 +106,14 @@ class ScriptedSource(DataSource):
 
 @pytest.fixture()
 def cache_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """把缓存目录隔离到 tmp_path（同一目录 = 同一缓存文件）。"""
+    """把缓存目录隔离到 tmp_path（同一目录 = 同一缓存文件）。
+
+    必须同时隔离 ``MIAOSUAN_DATA_CACHE_DIR`` 和 ``MIAOSUAN_KLINE_DIR``：
+    ``_cache_dirs_from_config()`` 在目录重构后始终包含 kline_data_dir()，
+    如果不隔离后者，测试会读到 D:\\K线数据 下的真实 parquet 文件。
+    """
     monkeypatch.setenv("MIAOSUAN_DATA_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("MIAOSUAN_KLINE_DIR", str(tmp_path))
     return tmp_path
 
 

@@ -3,32 +3,32 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""栈式虚拟机（numpy 化移植，M5）。
+"""栈式虚拟机（numpy实现，M5）。
 
-移植自冻结 AlphaMaster 的 ``model_core/vm.py``（原 torch 实现），逐行对齐语义：
+独立实现，语义对齐 ``model_core/vm.py``，逐行对齐语义：
 
 * :class:`StackVM` —— 前缀（RPN）公式求值：``execute(formula_tokens, feat_tensor) -> [N, T]``；
 * :func:`validate_formula_structure` —— 「感染模型」公式结构校验；
 * :data:`POSITIVE_ONLY_OPS` / :data:`INFECTED_PROPAGATING_OPS` / :data:`SIGN_RESTORE_OPS`。
 
-移植铁律（架构 §1.4、M5 任务书）：
+实现约束（架构 §1.4、M5 任务书）：
 
-* **``_normalize_output`` 原样移植**：滚动 500 期 z-score（``ddof=1``，与 ``torch.std`` 默认
+* **``_normalize_output`` 原样实现**：滚动 500 期 z-score（``ddof=1``，与 ``标准差`` 默认
   一致），``clip[-3, 3]``，warm-up 前 ``_ROLL_WINDOW-1``（=499）根输出 0；``T < 窗口`` 退化
   expanding；``N > 1`` 走截面 z-score；全局常数短路。``roll_window`` 改为**可注入参数**
-  （默认 500，与 AM 一致）。
-* **``except`` 不再静默**：AM 的 ``except Exception: return None`` 会吞掉真实错误。妙算仍
+  （默认 500，与 妙算 一致）。
+* **``except`` 不再静默**：妙算 的 ``except Exception: return None`` 会吞掉真实错误。妙算仍
   **返回 None**（保持「不可求值」判定不变，否则搜索空间改变），但把异常计数并记录
   ``last_error``（实例级状态，不引入全局可变状态），保证可复现。
-* **四类判定与 AM 逐点一致**：合法公式 → 数组；参数不足 → ``None``；栈深非法（残留
+* **四类判定与 妙算 逐点一致**：合法公式 → 数组；参数不足 → ``None``；栈深非法（残留
   ≠1）→ ``None``；NaN/Inf → ``nan_to_num(nan=0, posinf=1, neginf=-1)``。
 * ``feat_offset`` / ``op_map`` / ``arity_map`` **完全动态**从词表与 ``OPS_CONFIG`` 派生。
 
 torch → numpy 关键等价：
 
-  ``torch.unfold(1, W, 1)``              → ``np.lib.stride_tricks.sliding_window_view``
-  ``torch.std``（默认 ``unbiased=True``）→ ``np.std(..., ddof=1)``
-  ``torch.clamp(v, lo, hi)``             → ``np.clip(v, lo, hi)``
+  ``numpy.unfold(1, W, 1)``              → ``np.lib.stride_tricks.sliding_window_view``
+  ``标准差``（默认 ``unbiased=True``）→ ``np.std(..., ddof=1)``
+  ``numpy.clamp(v, lo, hi)``             → ``np.clip(v, lo, hi)``
   ``F.pad(x, (W-1, 0))``                 → ``np.concatenate([zeros(n, W-1), x], axis=1)``
 """
 
@@ -78,7 +78,7 @@ SIGN_RESTORE_OPS: set[str] = {
     "DELTA", "DELTA_5", "MOMENTUM_5", "MOMENTUM_10",
 }
 
-# 默认滚动归一化窗口（与 AM ``_ROLL_WINDOW = 500`` 一致）。
+# 默认滚动归一化窗口（与 妙算 ``_ROLL_WINDOW = 500`` 一致）。
 DEFAULT_ROLL_WINDOW: int = 500
 
 
@@ -154,7 +154,7 @@ def validate_formula_structure(
 
 
 class StackVM:
-    """前缀公式栈式虚拟机（AM ``StackVM`` 的 numpy 移植，行为等价）。"""
+    """前缀公式栈式虚拟机（妙算 ``StackVM`` 的 numpy实现，行为等价）。"""
 
     def __init__(self, roll_window: int = DEFAULT_ROLL_WINDOW) -> None:
         # feat_offset 动态从 FORMULA_VOCAB.operator_offset 读取（= feature_count = F）。
@@ -168,7 +168,7 @@ class StackVM:
             for i, cfg in enumerate(OPS_CONFIG)
             if cfg[0] in POSITIVE_ONLY_OPS
         }
-        # 归一化滚动窗口（可注入；默认 500 与 AM 一致）。
+        # 归一化滚动窗口（可注入；默认 500 与 妙算 一致）。
         self.roll_window = int(roll_window)
         # 实例级统计（不引入全局可变状态，保证可复现）：不可求值计数 + 末次异常。
         self.none_count = 0
@@ -179,7 +179,7 @@ class StackVM:
     def _normalize_output(
         x: np.ndarray, roll_window: int = DEFAULT_ROLL_WINDOW
     ) -> np.ndarray:
-        """对因子输出做因果标准化（AM ``_normalize_output`` 原样移植）。
+        """对因子输出做因果标准化（妙算 ``_normalize_output`` 原样实现）。
 
         策略（两级降级，全部因果）：
 
@@ -235,14 +235,14 @@ class StackVM:
     def execute(self, formula_tokens: list[int], feat_tensor: np.ndarray) -> np.ndarray | None:
         """执行前缀公式，返回 ``[N, T]`` 因子或 ``None``（不可求值）。
 
-        判定与 AM 逐点一致（四类）：
+        判定与 妙算 逐点一致（四类）：
 
         * 合法公式（栈恰好剩 1 个元素）→ 归一化后的因子数组；
         * 参数不足（栈元素 < 算子 arity）→ ``None``；
         * 栈深非法（结束时残留 ≠ 1）→ ``None``；
         * 特征 token 越界、算子在 op_map 外、或异常 → ``None``。
 
-        算子输出若含 NaN/Inf，按 AM 语义 ``nan_to_num(nan=0.0, posinf=1.0, neginf=-1.0)``。
+        算子输出若含 NaN/Inf，按 妙算 语义 ``nan_to_num(nan=0.0, posinf=1.0, neginf=-1.0)``。
         """
         stack: list[np.ndarray] = []
         try:
@@ -277,7 +277,7 @@ class StackVM:
             self.error_count += 1
             self.last_error = f"{type(exc).__name__}: {exc}"
             warnings.warn(
-                f"StackVM.execute 捕获异常，已返回 None（保持 AM 语义）：{self.last_error}",
+                f"StackVM.execute 捕获异常，已返回 None（保持 妙算 语义）：{self.last_error}",
                 RuntimeWarning,
                 stacklevel=2,
             )

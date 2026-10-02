@@ -6541,7 +6541,7 @@ help: Remove unnecessary coding comment
 I001 [*] Import block is un-sorted or un-formatted
   --> scripts\gen_feature_baseline.py:65:5
    |
-63 |       # 鍏变韩鐢ㄤ緥锛堢函 numpy锛?64 |       sys.path.insert(0, str(_ROOT / "tests" / "parity"))
+63 |       # 鍏变韩鐢ㄤ緥锛堢函 numpy锛?64 |       sys.path.insert(0, str(_ROOT / "tests" / "regression"))
 65 | /     import feature_cases  # noqa: PLC0415
 66 | |
 67 | |     import torch  # noqa: PLC0415
@@ -6588,7 +6588,7 @@ I001 [*] Import block is un-sorted or un-formatted
   --> scripts\gen_m5_baseline.py:73:5
    |
 71 |       am_root = args.am_root or _am_root()
-72 |       sys.path.insert(0, str(_ROOT / "tests" / "parity"))
+72 |       sys.path.insert(0, str(_ROOT / "tests" / "regression"))
 73 | /     import m5_cases  # noqa: PLC0415
 74 | |
 75 | |     import torch  # noqa: PLC0415
@@ -10270,7 +10270,7 @@ help: Add trailing newline
     |
 
 UP009 [*] UTF-8 encoding declaration is unnecessary
- --> tests\parity\conftest.py:1:1
+ --> tests\regression\conftest.py:1:1
   |
 1 | # -*- coding: utf-8 -*-
   | ^^^^^^^^^^^^^^^^^^^^^^^
@@ -10284,7 +10284,7 @@ help: Remove unnecessary coding comment
   |
 
 UP009 [*] UTF-8 encoding declaration is unnecessary
- --> tests\parity\feature_cases.py:1:1
+ --> tests\regression\feature_cases.py:1:1
   |
 1 | # -*- coding: utf-8 -*-
   | ^^^^^^^^^^^^^^^^^^^^^^^
@@ -10298,7 +10298,7 @@ help: Remove unnecessary coding comment
   |
 
 UP009 [*] UTF-8 encoding declaration is unnecessary
- --> tests\parity\m5_cases.py:1:1
+ --> tests\regression\m5_cases.py:1:1
   |
 1 | # -*- coding: utf-8 -*-
   | ^^^^^^^^^^^^^^^^^^^^^^^
@@ -10312,7 +10312,7 @@ help: Remove unnecessary coding comment
   |
 
 UP009 [*] UTF-8 encoding declaration is unnecessary
- --> tests\parity\ops_cases.py:1:1
+ --> tests\regression\ops_cases.py:1:1
   |
 1 | # -*- coding: utf-8 -*-
   | ^^^^^^^^^^^^^^^^^^^^^^^
@@ -10326,7 +10326,7 @@ help: Remove unnecessary coding comment
   |
 
 UP009 [*] UTF-8 encoding declaration is unnecessary
- --> tests\parity\test_backtest_parity.py:1:1
+ --> tests\regression\test_backtest_regression.py:1:1
   |
 1 | # -*- coding: utf-8 -*-
   | ^^^^^^^^^^^^^^^^^^^^^^^
@@ -10340,7 +10340,7 @@ help: Remove unnecessary coding comment
   |
 
 UP009 [*] UTF-8 encoding declaration is unnecessary
- --> tests\parity\test_e2e_xauusd.py:1:1
+ --> tests\regression\test_e2e_xauusd.py:1:1
   |
 1 | # -*- coding: utf-8 -*-
   | ^^^^^^^^^^^^^^^^^^^^^^^
@@ -10354,7 +10354,7 @@ help: Remove unnecessary coding comment
   |
 
 UP009 [*] UTF-8 encoding declaration is unnecessary
- --> tests\parity\test_evaluator_parity.py:1:1
+ --> tests\regression\test_evaluator_regression.py:1:1
   |
 1 | # -*- coding: utf-8 -*-
   | ^^^^^^^^^^^^^^^^^^^^^^^
@@ -10368,7 +10368,7 @@ help: Remove unnecessary coding comment
   |
 
 UP009 [*] UTF-8 encoding declaration is unnecessary
- --> tests\parity\test_feature_causality.py:1:1
+ --> tests\regression\test_feature_causality.py:1:1
   |
 1 | # -*- coding: utf-8 -*-
   | ^^^^^^^^^^^^^^^^^^^^^^^
@@ -10382,7 +10382,7 @@ help: Remove unnecessary coding comment
   |
 
 UP009 [*] UTF-8 encoding declaration is unnecessary
- --> tests\parity\test_feature_helpers.py:1:1
+ --> tests\regression\test_feature_helpers.py:1:1
   |
 1 | # -*- coding: utf-8 -*-
   | ^^^^^^^^^^^^^^^^^^^^^^^
@@ -10396,7 +10396,7 @@ help: Remove unnecessary coding comment
   |
 
 UP009 [*] UTF-8 encoding declaration is unnecessary
- --> tests\parity\test_feature_parity.py:1:1
+ --> tests\regression\test_feature_regression.py:1:1
   |
 1 | # -*- coding: utf-8 -*-
   | ^^^^^^^^^^^^^^^^^^^^^^^
@@ -10410,7 +10410,7 @@ help: Remove unnecessary coding comment
   |
 
 UP009 [*] UTF-8 encoding declaration is unnecessary
- --> tests\parity\test_frozen_token_order.py:1:1
+ --> tests\regression\test_frozen_token_order.py:1:1
   |
 1 | # -*- coding: utf-8 -*-
   | ^^^^^^^^^^^^^^^^^^^^^^^
@@ -10424,7 +10424,7 @@ help: Remove unnecessary coding comment
   |
 
 UP009 [*] UTF-8 encoding declaration is unnecessary
- --> tests\parity\test_ops_parity.py:1:1
+ --> tests\regression\test_ops_regression.py:1:1
   |
 1 | # -*- coding: utf-8 -*-
   | ^^^^^^^^^^^^^^^^^^^^^^^
@@ -10438,7 +10438,7 @@ help: Remove unnecessary coding comment
   |
 
 UP009 [*] UTF-8 encoding declaration is unnecessary
- --> tests\parity\test_signal_parity.py:1:1
+ --> tests\regression\test_signal_regression.py:1:1
   |
 1 | # -*- coding: utf-8 -*-
   | ^^^^^^^^^^^^^^^^^^^^^^^
@@ -10452,7 +10452,7 @@ help: Remove unnecessary coding comment
   |
 
 UP009 [*] UTF-8 encoding declaration is unnecessary
- --> tests\parity\test_vm_parity.py:1:1
+ --> tests\regression\test_vm_regression.py:1:1
   |
 1 | # -*- coding: utf-8 -*-
   | ^^^^^^^^^^^^^^^^^^^^^^^
@@ -10466,7 +10466,7 @@ help: Remove unnecessary coding comment
   |
 
 UP009 [*] UTF-8 encoding declaration is unnecessary
- --> tests\parity\test_vocab_identity.py:1:1
+ --> tests\regression\test_vocab_identity.py:1:1
   |
 1 | # -*- coding: utf-8 -*-
   | ^^^^^^^^^^^^^^^^^^^^^^^

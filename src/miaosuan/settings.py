@@ -79,9 +79,11 @@ DEFAULT_SETTINGS = {
     },
     # 数据目录
     "paths": {
-        "data_cache": "data/cache",  # OHLCV 数据缓存（parquet）
-        "artifacts": "artifacts",  # Spec/策略/回测/调优产物
-        "tmp": "tmp",  # 临时文件目录
+        "data_cache": "data/cache",  # OHLCV 数据缓存（唯一缓存目录）
+        "artifacts": "artifacts",  # Spec 专属目录（仅 StrategySpec JSON 及其 sidecar）
+        "strategies": "strategies",  # 策略专属目录（策略 .py + 中英说明文档 + 映射表）
+        "results": "data/results",  # spec 关联文档（回测 / 寻优结果）
+        "tmp": "tmp",  # 中间 / 临时文件（可安全清空）
         "kline": r"D:\K线数据",  # 本地 K 线数据根目录（TradingView 导出）
         "shenji_db": "",  # 妙算本地库路径（留空则自动探测）
     },
@@ -285,8 +287,10 @@ class MT4Settings(BaseModel):
 
 class PathsSettings(BaseModel):
     data_cache: str = Field(default="data/cache")
-    artifacts: str = Field(default="artifacts")
-    tmp: str = Field(default="tmp")
+    artifacts: str = Field(default="artifacts")  # spec 专属目录（仅 StrategySpec JSON 及其 sidecar）
+    strategies: str = Field(default="strategies")  # 策略专属目录（策略 .py + 中英说明文档 + 映射表）
+    results: str = Field(default="data/results")  # spec 关联文档（回测 / 寻优结果）
+    tmp: str = Field(default="tmp")  # 中间 / 临时文件（可安全清空）
     kline: str = Field(default=r"D:\K线数据")
     shenji_db: str = Field(default="")  # 空字符串表示自动探测
 

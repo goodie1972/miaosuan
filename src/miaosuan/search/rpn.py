@@ -303,8 +303,8 @@ class Individual:
     """种群个体（定长 RPN 公式 + 适配度）。
 
     :param tokens: ``[L]`` int64 token 序列（可求值）。
-    :param train_score: 开发集训练分（AM 口径 ``train_score``）。
-    :param val_score: 开发集验证分（AM 口径 ``val_score``；GA 目标）。
+    :param train_score: 开发集训练分（口径 ``train_score``）。
+    :param val_score: 开发集验证分（口径 ``val_score``；GA 目标）。
     :param fitness: GA 适配度（默认取 ``val_score``）。
     :param status: ``"ok"`` / ``"none"`` / ``"const"`` / ``"unevaluated"``。
     :param birth_gen: 出生代（用于精英年龄/诊断）。

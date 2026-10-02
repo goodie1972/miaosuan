@@ -1,6 +1,6 @@
 {
-  "_comment": "由 scripts/gen_feature_baseline.py 用冻结 AM 生成，请勿手工编辑。",
-  "source": "AlphaMaster-main/model_core/features.py",
+  "_comment": "由 scripts/gen_feature_baseline.py 用冻结基准 生成，请勿手工编辑。",
+  "source": "妙算/model_core/features.py",
   "seed": 20260910,
   "dtype": "float32",
   "fields": [

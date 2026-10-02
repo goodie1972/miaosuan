@@ -3,7 +3,7 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""M5 StackVM 数值对拍：妙算 numpy 实现 vs 冻结 AM 的 torch 基准。
+"""M5 StackVM 数值回归验证：妙算 numpy 实现 vs 冻结基准 的 torch 基准。
 
 覆盖（team-lead M5 难点 1）：
 
@@ -11,7 +11,7 @@
 * ``StackVM.execute`` —— 合法公式 / 参数不足 / 栈深非法（残留≠1 / 空）/ 特征越界 / 未知算子
   / 截断特征张量 / NaN-Inf（``nan_to_num``）。
 
-基准由 ``scripts/gen_m5_baseline.py`` 在真实 torch 环境用 AM 原始实现生成。
+基准由 ``scripts/gen_m5_baseline.py`` 在真实 torch 环境用 妙算 原始实现生成。
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ import m5_cases  # noqa: E402
 from miaosuan.core.vm import StackVM  # noqa: E402
 from miaosuan.core.vocab import FORMULA_VOCAB, VOCAB_VERSION  # noqa: E402
 
-pytestmark = pytest.mark.parity
+pytestmark = pytest.mark.regression
 
 # 容差：特征/算子层 float32 归约顺序噪声经 JUMP(expanding zscore)+归一化放大
 _VM_ATOL = 5e-3
@@ -57,11 +57,11 @@ def test_meta_covers_all_vm_keys(m5_meta: dict) -> None:
     )
 
 
-# ── _normalize_output 对拍 ─────────────────────────────────────────────────
+# ── _normalize_output 回归验证 ─────────────────────────────────────────────────
 
 
 @pytest.mark.parametrize("name", m5_cases.build_normalize_arrays().keys())
-def test_normalize_output_parity(name: str, m5_npz: dict) -> None:
+def test_normalize_output_regression(name: str, m5_npz: dict) -> None:
     x = m5_npz[f"norm_in__{name}"]
     got = StackVM._normalize_output(x, 500)
     exp = m5_npz[f"norm_out__{name}"]
@@ -99,7 +99,7 @@ def test_normalize_clip_bound() -> None:
         assert float(got.max()) <= 3.0 + 1e-6
 
 
-# ── StackVM.execute 对拍 ───────────────────────────────────────────────────
+# ── StackVM.execute 回归验证 ───────────────────────────────────────────────────
 
 
 def _execute(panel: np.ndarray, formula_name: str) -> np.ndarray | None:
@@ -118,7 +118,7 @@ def test_vm_none_cases(m5_npz: dict, m5_meta: dict) -> None:
 
 
 def test_vm_array_cases(m5_npz: dict, m5_meta: dict) -> None:
-    """非 None 组合逐点对拍 max|Δ|。"""
+    """非 None 组合逐点回归验证 max|Δ|。"""
     none_keys = set(m5_meta["vm_none_keys"])
     worst = 0.0
     worst_key = ""
@@ -137,7 +137,7 @@ def test_vm_array_cases(m5_npz: dict, m5_meta: dict) -> None:
             worst_key = key
         checked += 1
     assert checked > 0
-    assert worst <= _VM_ATOL + _VM_RTOL, f"VM 对拍最坏 {worst:.3e} @ {worst_key}"
+    assert worst <= _VM_ATOL + _VM_RTOL, f"VM 回归验证最坏 {worst:.3e} @ {worst_key}"
 
 
 # ── 四类判定显式校验（语义 sentinel）────────────────────────────────────────
@@ -165,7 +165,7 @@ def test_execute_semantics_explicit() -> None:
 
 
 def test_execute_nan_inf_nan_to_num() -> None:
-    """NaN/Inf 经算子后按 AM 语义替换：nan→0, +inf→1, -inf→-1。"""
+    """NaN/Inf 经算子后按 妙算 语义替换：nan→0, +inf→1, -inf→-1。"""
     feat = np.zeros((1, 65, 300), dtype=np.float32)
     feat[:, 0, :] = np.inf
     feat[:, 1, :] = -np.inf

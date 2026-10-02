@@ -3,23 +3,23 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""信号映射（numpy 化移植，M5）—— 连续仓位 + long_only 开关。
+"""信号映射（numpy实现，M5）—— 连续仓位 + long_only 开关。
 
-移植自冻结 AlphaMaster 的 ``strategy_manager/signal.py``（原 torch 实现），逐行对齐其
+独立实现，语义对齐 ``strategy_manager/signal.py``，逐行对齐其
 数值语义（收益优先的连续仓位模式）：
 
     position = tanh(factor)  →  中性带（|pos| < band ⇒ 0）  →  long_only 开关
 
 关键等价与参数化：
 
-* AM 由根目录 ``config.Config.MIN_TRADE_EXPOSURE``（=0.05）隐式读取阈值；妙算改为
-  **参数注入** ``min_trade_exposure``（默认 0.05，与 AM 一致），``core/`` 不读环境、不做 IO。
-* AM 的 ``torch.tanh`` → ``np.tanh``；``torch.where(cond,a,b)`` → ``np.where(cond,a,b)``；
-  ``torch.zeros_like`` → ``np.zeros_like``。dtype 保持（float32 in → float32 out）。
+* 妙算 由根目录 ``config.Config.MIN_TRADE_EXPOSURE``（=0.05）隐式读取阈值；妙算改为
+  **参数注入** ``min_trade_exposure``（默认 0.05，与 妙算 一致），``core/`` 不读环境、不做 IO。
+* 妙算 的 ``numpy.tanh`` → ``np.tanh``；``numpy.where(cond,a,b)`` → ``np.where(cond,a,b)``；
+  ``numpy.zeros_like`` → ``np.zeros_like``。dtype 保持（float32 in → float32 out）。
 * ``long_only`` 为妙算新增的**预留开关**（架构 §T02 验收 4：long_only=True 时无负仓位），
-  默认 False 以保持与 AM 的逐点一致；置 True 时先把负仓位归零，再套中性带。
+  默认 False 以保持与 妙算 的逐点一致；置 True 时先把负仓位归零，再套中性带。
 
-保留 AM 的实盘阈值常量与动作常量，供下游（adapters / 实盘 runner）读取。
+保留 妙算 的实盘阈值常量与动作常量，供下游（adapters / 实盘 runner）读取。
 """
 
 from __future__ import annotations
@@ -70,13 +70,13 @@ def compute_target_positions(
 ) -> np.ndarray:
     """把因子张量转换为连续仓位 [-1, +1]（收益优先模式）。
 
-    等价 AM ``compute_target_positions``：``pos = tanh(factors)``，再对
+    等价 妙算 ``compute_target_positions``：``pos = tanh(factors)``，再对
     ``|pos| < min_trade_exposure`` 的位置置 0。
 
     Args:
         factors: ``[N, T]`` 或 ``[N]`` 的因子张量。
-        prev_positions: 保留参数，连续模式下忽略（AM 兼容）。
-        min_trade_exposure: 中性带下界（参数注入；默认 0.05，与 AM Config 一致）。
+        prev_positions: 保留参数，连续模式下忽略（妙算 兼容）。
+        min_trade_exposure: 中性带下界（参数注入；默认 0.05，与 妙算 Config 一致）。
         long_only: True 时负仓位归零（预留开关），默认 False。
 
     Returns:
@@ -139,9 +139,9 @@ class SignalMapper:
     """信号映射器（架构类图 `SignalMapper`）。
 
     把「因子 → 连续仓位」这一步封装为可配置对象，便于 search / backtest 复用同一映射，
-    并预留 ``long_only`` / ``neutral_band`` 两个产品轴开关（默认与 AM 一致）。
+    并预留 ``long_only`` / ``neutral_band`` 两个产品轴开关（默认与 妙算 一致）。
 
-    :param position_fn: 仓位函数名，当前仅支持 ``"tanh"``（AM 语义）。
+    :param position_fn: 仓位函数名，当前仅支持 ``"tanh"``（妙算 语义）。
     :param neutral_band: 中性带下界（映射到 ``min_trade_exposure``）。
     :param long_only: 是否只做多（负仓位归零）。
     """

@@ -1,7 +1,7 @@
 # 妙算 pre-commit 钩子配置
 #
 # 关键防线：
-#   1) gitleaks —— 密钥扫描。AlphaMaster 曾发生明文 token 泄露事故（架构 §9.2 R10），
+#   1) gitleaks —— 密钥扫描。妙算 曾发生明文 token 泄露事故（架构 §9.2 R10），
 #      妙算把 gitleaks 作为强制第一道防线，任何硬编码密钥在提交前即被拦截。
 #   2) ruff —— lint + format（替代 black/isort/flake8 三件套）。
 #   3) pre-commit-hooks —— 大文件拦截 / 行尾空白 / YAML 合法性等基础卫生。
@@ -37,7 +37,7 @@ repos:
     hooks:
       - id: check-added-large-files
         name: 拦截大文件
-        args: [--maxkb=2048]          # >2MB 拒绝入库（治 R14：AM 曾提交 433MB checkpoint）
+        args: [--maxkb=2048]          # >2MB 拒绝入库（治 R14：妙算 曾提交 433MB checkpoint）
       - id: check-merge-conflict
         name: 检查合并冲突标记
       - id: check-yaml

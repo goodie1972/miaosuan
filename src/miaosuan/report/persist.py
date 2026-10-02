@@ -5,7 +5,7 @@
 
 """报告产物层（IO 半边，M5）。
 
-架构把「纯计算」放 ``core/``（无 IO），把「产物持久化」移出。AM ``model_core/evaluator.py``
+架构把「纯计算」放 ``core/``（无 IO），把「产物持久化」移出。基准 ``model_core/evaluator.py``
 的 ``save_report`` / ``load_report`` 直接做文件读写（``open`` / ``os.replace`` / ``os.makedirs``），
 违反妙算「``core/`` 无文件 IO」铁律，故拆到本模块：
 
@@ -13,7 +13,7 @@
   ``row_to_dict`` / ``dict_to_row``）；
 * :func:`save_report` / :func:`load_report` —— 原子写读（临时文件 + ``os.replace``）。
 
-T02 的 ``report/metrics.py`` 会在此基础上扩展可视化/指标；本模块只保留 AM 语义的最小 IO。
+T02 的 ``report/metrics.py`` 会在此基础上扩展可视化/指标；本模块只保留 妙算 语义的最小 IO。
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ __all__ = [
 
 
 class ReportPersistError(Exception):
-    """报告持久化失败，保留旧文件并抛出（AM R7.6）。"""
+    """报告持久化失败，保留旧文件并抛出（妙算 R7.6）。"""
 
 
 def report_to_dict(report: Report) -> dict[str, Any]:

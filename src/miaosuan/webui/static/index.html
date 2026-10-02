@@ -817,7 +817,11 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
         <h2 id="cfgSectionPaths">路径设置</h2>
         <div class="row">
           <div style="flex:2"><label id="cfgLabelDataCache">数据缓存目录</label><div style="display:flex;gap:6px"><input id="cfgPathsDataCache" type="text" placeholder="data/cache" style="flex:1"><button class="btn ghost" type="button" onclick="pickDir('cfgPathsDataCache')" style="flex:0;min-width:72px">浏览</button></div></div>
-          <div style="flex:2"><label id="cfgLabelArtifacts">产物目录</label><div style="display:flex;gap:6px"><input id="cfgPathsArtifacts" type="text" placeholder="artifacts" style="flex:1"><button class="btn ghost" type="button" onclick="pickDir('cfgPathsArtifacts')" style="flex:0;min-width:72px">浏览</button></div></div>
+          <div style="flex:2"><label id="cfgLabelArtifacts">Spec目录</label><div style="display:flex;gap:6px"><input id="cfgPathsArtifacts" type="text" placeholder="artifacts" style="flex:1"><button class="btn ghost" type="button" onclick="pickDir('cfgPathsArtifacts')" style="flex:0;min-width:72px">浏览</button></div></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <div style="flex:2"><label id="cfgLabelStrategies">策略目录</label><div style="display:flex;gap:6px"><input id="cfgPathsStrategies" type="text" placeholder="strategies" style="flex:1"><button class="btn ghost" type="button" onclick="pickDir('cfgPathsStrategies')" style="flex:0;min-width:72px">浏览</button></div></div>
+          <div style="flex:2"><label id="cfgLabelResults">回测结果目录</label><div style="display:flex;gap:6px"><input id="cfgPathsResults" type="text" placeholder="data/results" style="flex:1"><button class="btn ghost" type="button" onclick="pickDir('cfgPathsResults')" style="flex:0;min-width:72px">浏览</button></div></div>
         </div>
         <div class="row" style="margin-top:8px">
           <div style="flex:2"><label id="cfgLabelTmp">临时目录</label><div style="display:flex;gap:6px"><input id="cfgPathsTmp" type="text" placeholder="tmp" style="flex:1"><button class="btn ghost" type="button" onclick="pickDir('cfgPathsTmp')" style="flex:0;min-width:72px">浏览</button></div></div>
@@ -3166,6 +3170,8 @@ function loadConfig() {
     // Paths
     setVal("cfgPathsDataCache", cfg.paths?.data_cache || "data/cache");
     setVal("cfgPathsArtifacts", cfg.paths?.artifacts || "artifacts");
+    setVal("cfgPathsStrategies", cfg.paths?.strategies || "strategies");
+    setVal("cfgPathsResults", cfg.paths?.results || "data/results");
     setVal("cfgPathsTmp", cfg.paths?.tmp || "tmp");
     setVal("cfgPathsKline", cfg.paths?.kline || "");
     setVal("cfgPathsShenjiDB", cfg.paths?.shenji_db || "");
@@ -3243,6 +3249,8 @@ function saveConfig() {
     paths: {
       data_cache: getVal("cfgPathsDataCache"),
       artifacts: getVal("cfgPathsArtifacts"),
+      strategies: getVal("cfgPathsStrategies"),
+      results: getVal("cfgPathsResults"),
       tmp: getVal("cfgPathsTmp"),
       kline: getVal("cfgPathsKline"),
       shenji_db: getVal("cfgPathsShenjiDB")

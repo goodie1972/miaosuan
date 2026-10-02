@@ -14,9 +14,11 @@ mt4:
   poll_wait: 1000
   drain_wait: 100
 paths:
-  data_cache: data/cache
-  artifacts: artifacts
-  tmp: tmp
+  data_cache: data/cache    # 唯一缓存目录（所有 OHLCV parquet/csv 缓存）
+  artifacts: artifacts      # spec 专属：仅 StrategySpec JSON 及其 sidecar
+  strategies: strategies    # 策略专属：策略 .py + 中英说明文档 + 映射表
+  results: data/results     # spec 关联文档：回测 / 寻优结果
+  tmp: tmp                  # 中间 / 临时文件（可安全清空）
   kline: D:\K线数据
   shenji_db: ''
 data:

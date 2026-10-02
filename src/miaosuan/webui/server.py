@@ -43,7 +43,13 @@ from ..adapters.shenji.realtime import (
     env_config,
     safe_call,
 )
-from ..config import is_bundled, kline_data_dir
+from ..config import (
+    artifacts_dir,
+    is_bundled,
+    kline_data_dir,
+    results_dir,
+    strategies_dir,
+)
 from ..core.vocab import FORMULA_VOCAB, VOCAB_VERSION
 from ..data.loader import load
 from ..ir.provenance import MIAOSUAN_VERSION
@@ -55,8 +61,12 @@ __all__ = ["create_app"]
 
 #: 仓库根（``src/miaosuan/webui/server.py`` 往上 3 层）。
 _REPO_ROOT: Path = Path(__file__).resolve().parents[3]
-#: 产物目录。
-_ARTIFACTS: Path = _REPO_ROOT / "artifacts"
+#: spec 专属目录（仅 StrategySpec JSON 及其 sidecar；settings → paths.artifacts）。
+_ARTIFACTS: Path = Path(artifacts_dir())
+#: 策略专属目录（策略 .py + 双语说明 + 映射表；settings → paths.strategies）。
+_STRATEGIES: Path = Path(strategies_dir())
+#: spec 关联文档目录（回测 / 寻优结果；settings → paths.results）。
+_RESULTS: Path = Path(results_dir())
 #: 静态页面。
 _INDEX_HTML: Path = Path(__file__).resolve().parent / "static" / "index.html"
 #: 默认行情数据目录（用户在本机放置 TradingView 拉取的 parquet/csv）。
@@ -777,13 +787,14 @@ def create_app() -> FastAPI:
     @app.post("/api/export")
     def export(req: ExportRequest) -> dict[str, Any]:
         spec_path = _safe_name(req.spec, suffixes={".json"})
-        args = ["export", "--spec", str(spec_path), "--out-dir", str(_ARTIFACTS)]
+        _STRATEGIES.mkdir(parents=True, exist_ok=True)
+        args = ["export", "--spec", str(spec_path), "--out-dir", str(_STRATEGIES)]
         if req.name:
             args += ["--name", req.name]
         if req.gate_deadband:
             args += ["--gate-deadband", str(req.gate_deadband)]
         code, output = _run_sync(args)
-        return {"returncode": code, "output": output}
+        return {"returncode": code, "output": output, "out_dir": str(_STRATEGIES)}
 
     @app.post("/api/backtest")
     def run_backtest(req: BacktestRequest) -> dict[str, Any]:
@@ -799,9 +810,9 @@ def create_app() -> FastAPI:
             回测结果 dict（``meta`` / ``summary`` / ``series`` / ``trades``）。
         """
         spec_path = _safe_name(req.spec, suffixes={".json"})
-        _ARTIFACTS.mkdir(parents=True, exist_ok=True)
+        _RESULTS.mkdir(parents=True, exist_ok=True)
         stamp = time.strftime("%Y%m%d_%H%M%S")
-        out_path = _ARTIFACTS / f"backtest_{stamp}.json"
+        out_path = _RESULTS / f"backtest_{stamp}.json"
         args = [
             "backtest",
             "--spec",
@@ -1104,11 +1115,20 @@ def create_app() -> FastAPI:
     def tune_list() -> list[dict[str, Any]]:
         """列出历史寻优结果。"""
         out: list[dict[str, Any]] = []
-        if not _ARTIFACTS.is_dir():
-            return out
-        for path in sorted(
-            _ARTIFACTS.glob("tune_*.json"), key=lambda p: p.stat().st_mtime, reverse=True
-        ):
+        seen_t: set[str] = set()
+        tune_paths: list[Path] = []
+        for _cache_dir in (_RESULTS, _ARTIFACTS, _ARTIFACTS / "tune"):
+            if not _cache_dir.is_dir():
+                continue
+            for p in sorted(
+                _cache_dir.glob("tune_*.json"),
+                key=lambda x: x.stat().st_mtime,
+                reverse=True,
+            ):
+                if p.name not in seen_t:
+                    seen_t.add(p.name)
+                    tune_paths.append(p)
+        for path in tune_paths:
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
                 out.append(
@@ -1221,7 +1241,7 @@ def create_app() -> FastAPI:
     def _scan_all_strategies() -> list[dict[str, Any]]:
         """扫描 artifacts/ + shenji-strategies/ 下所有 .py 策略文件。"""
         result: list[dict[str, Any]] = []
-        search_dirs = [_ARTIFACTS, _REPO_ROOT / "shenji-strategies"]
+        search_dirs = [_STRATEGIES, _ARTIFACTS, _REPO_ROOT / "shenji-strategies"]
         seen: set[Path] = set()
         for directory in search_dirs:
             if not directory.is_dir():
@@ -1259,51 +1279,81 @@ def create_app() -> FastAPI:
                     "lint_warnings": sum(1 for i in issues if i.severity.value == "WARNING"),
                     "size_kb": round(path.stat().st_size / 1024, 1),
                     "mtime": time.strftime("%Y-%m-%d %H:%M", time.localtime(path.stat().st_mtime)),
-                    "dir": "shenji-strategies" if "shenji-strategies" in str(path) else "artifacts",
+                    "dir": (
+                        "strategies"
+                        if _STRATEGIES in path.parents
+                        else ("shenji-strategies" if "shenji-strategies" in str(path) else "artifacts")
+                    ),
                 })
         return result
 
     def _scan_all_backtests() -> list[dict[str, Any]]:
         """扫描 artifacts/ 下所有回测结果。"""
         result: list[dict[str, Any]] = []
-        if not _ARTIFACTS.is_dir():
-            return result
-        for path in sorted(
-            _ARTIFACTS.glob("backtest_*.json"), key=lambda p: p.stat().st_mtime, reverse=True
-        ):
-            try:
-                payload = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
+        seen_bt: set[str] = set()
+        for _cache_dir in (_RESULTS, _ARTIFACTS):
+            if not _cache_dir.is_dir():
                 continue
-            meta = payload.get("meta", {}) if isinstance(payload.get("meta"), dict) else {}
-            summary = payload.get("summary", {}) if isinstance(payload.get("summary"), dict) else {}
-            # 尝试从 meta.spec_file 反查 spec_id
-            spec_file = str(meta.get("spec_file") or meta.get("spec") or "")
-            result.append({
-                "file": path.name,
-                "spec_file": spec_file,
-                "symbol": str(meta.get("symbol", "")),
-                "timeframe": str(meta.get("timeframe", "")),
-                "n_bars": int(meta.get("n_bars", 0) or 0),
-                "sharpe": float(summary.get("sharpe", 0.0) or 0.0),
-                "total_return": float(summary.get("total_return", 0.0) or 0.0),
-                "max_drawdown": float(summary.get("max_drawdown", 0.0) or 0.0),
-                "sortino": float(summary.get("sortino", 0.0) or 0.0),
-                "n_trades": int(summary.get("n_trades", 0) or 0),
-                "win_rate": float(summary.get("win_rate", 0.0) or 0.0),
-                "mtime": time.strftime("%Y-%m-%d %H:%M", time.localtime(path.stat().st_mtime)),
-            })
+            for path in sorted(
+                _cache_dir.glob("backtest_*.json"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            ):
+                if path.name in seen_bt:
+                    continue
+                seen_bt.add(path.name)
+
+                try:
+                    payload = json.loads(path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    continue
+                meta = payload.get("meta", {}) if isinstance(payload.get("meta"), dict) else {}
+                summary = payload.get("summary", {}) if isinstance(payload.get("summary"), dict) else {}
+                # 尝试从 meta.spec_file 反查 spec_id
+                spec_file = str(meta.get("spec_file") or meta.get("spec") or "")
+                result.append({
+                    "file": path.name,
+                    "spec_file": spec_file,
+                    "symbol": str(meta.get("symbol", "")),
+                    "timeframe": str(meta.get("timeframe", "")),
+                    "n_bars": int(meta.get("n_bars", 0) or 0),
+                    "sharpe": float(summary.get("sharpe", 0.0) or 0.0),
+                    "total_return": float(summary.get("total_return", 0.0) or 0.0),
+                    "max_drawdown": float(summary.get("max_drawdown", 0.0) or 0.0),
+                    "sortino": float(summary.get("sortino", 0.0) or 0.0),
+                    "n_trades": int(summary.get("n_trades", 0) or 0),
+                    "win_rate": float(summary.get("win_rate", 0.0) or 0.0),
+                    "mtime": time.strftime("%Y-%m-%d %H:%M", time.localtime(path.stat().st_mtime)),
+                })
+
         return result
 
     def _scan_all_tunes() -> list[dict[str, Any]]:
-        """扫描 artifacts/tune/ 下所有寻优结果。"""
+        """扫描 data/results/ + artifacts/tune/（兼容旧位置）下的寻优结果。"""
         result: list[dict[str, Any]] = []
-        tune_dir = _ARTIFACTS / "tune"
-        if not tune_dir.is_dir():
+        tune_dirs = [_RESULTS, _ARTIFACTS / "tune", _ARTIFACTS]
+        result.extend(_tune_rows_from(tune_dirs))
+        return result
+
+    def _tune_rows_from(tune_dirs: list[Path]) -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = []
+        seen_x: set[str] = set()
+        tune_dir = None
+        for _td in tune_dirs:
+            tune_dir = _td
+            break
+        if not any(d.is_dir() for d in tune_dirs):
             return result
-        for path in sorted(
-            tune_dir.glob("tune_*.json"), key=lambda p: p.stat().st_mtime, reverse=True
-        ):
+        paths: list[Path] = []
+        for _d in tune_dirs:
+            if not _d.is_dir():
+                continue
+            for p in _d.glob("tune_*.json"):
+                if p.name not in seen_x:
+                    seen_x.add(p.name)
+                    paths.append(p)
+        paths.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        for path in paths:
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):

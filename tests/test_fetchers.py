@@ -261,15 +261,14 @@ def test_scan_cache_dirs_returns_stable_fields(tmp_path: Any) -> None:
 
 
 def test_default_cache_dirs_points_to_repo_data() -> None:
-    """``_DEFAULT_CACHE_DIRS`` 必须指向仓库根的 ``data/`` 目录。
+    """``_DEFAULT_CACHE_DIRS`` 必须指向仓库根的 ``data/cache`` 目录。
 
-    回归防线：曾写成 ``parents[2]`` → 指向 ``src/data``（不存在），与
-    ``server._DATA_DIRS`` 错位，导致 ``/api/acquisition/cached`` 扫不到
-    ``/api/data`` 列出的同一批文件。这里钉死正确的层级。
+    目录重构（2026-10-01）后缓存统一到 ``data/cache``——仓库根 ``data/``
+    不再直接存放 parquet，``_DEFAULT_CACHE_DIRS`` 对应改为 ``data/cache``。
     """
     from miaosuan.data.acquisition import _DEFAULT_CACHE_DIRS
 
     repo_root = Path(__file__).resolve().parents[1]
-    expected = (repo_root / "data").resolve()
+    expected = (repo_root / "data" / "cache").resolve()
     assert any(d.resolve() == expected for d in _DEFAULT_CACHE_DIRS), \
         f"_DEFAULT_CACHE_DIRS 应包含 {expected}，实际为 {_DEFAULT_CACHE_DIRS}"

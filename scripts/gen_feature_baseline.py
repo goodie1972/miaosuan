@@ -3,18 +3,18 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""生成 M4 特征对拍的 **torch 基准**（运行在装有真实 torch 的解释器上）。
+"""生成 M4 特征回归验证的 **torch 基准**（运行在装有真实 torch 的解释器上）。
 
-用 AM 的**原始 torch 实现**（``model_core.features.MT5FeatureEngineer.compute_features``）
+用 妙算 的**原始 torch 实现**（``model_core.features.MT5FeatureEngineer.compute_features``）
 对确定性 OHLCV 用例求值，产出：
 
 * ``tests/fixtures/frozen_feature_inputs.npz`` —— 冻结的输入面板（每个 case 的
   ``close/high/low/open/volume``），加 ``tests/fixtures/feature_inputs_meta.json``；
-* ``tests/fixtures/features_baseline.npz`` —— AM 原实现的输出 ``[N, F, T]``（每 case），
+* ``tests/fixtures/features_baseline.npz`` —— 妙算 原实现的输出 ``[N, F, T]``（每 case），
   加 ``tests/fixtures/features_baseline_meta.json``。
 
-妙算侧（``tests/parity/test_feature_parity.py``）在**无 torch** 的 venv 中读取基准，
-用 numpy 实现复算并比对 ``max|Δ|``。两侧解耦：先冻结输入，再对拍，从而排除
+妙算侧（``tests/regression/test_feature_regression.py``）在**无 torch** 的 venv 中读取基准，
+用 numpy 实现复算并比对 ``max|Δ|``。两侧解耦：先冻结输入，再回归验证，从而排除
 「输入不同」导致误判。
 
 运行：
@@ -22,7 +22,7 @@
     C:\\Users\\Administrator\\.workbuddy\\binaries\\python\\envs\\default\\Scripts\\python.exe \\
         scripts/gen_feature_baseline.py
 
-可用 ``MIAOSUAN_AM_ROOT`` 覆盖 AM 仓库位置。对 AM 仓库**零写入**。
+可用 ``MIAOSUAN_AM_ROOT`` 覆盖 妙算 仓库位置。对 妙算 仓库**零写入**。
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ from pathlib import Path
 import numpy as np
 
 _ROOT = Path(__file__).resolve().parent.parent
-_DEFAULT_AM_ROOT = Path(r"D:\backup\BaoBao\PythonProgram\AlphaMaster-main")
+_DEFAULT_AM_ROOT = Path(r"D:\backup\BaoBao\PythonProgram\妙算")
 _FIX = _ROOT / "tests" / "fixtures"
 _OUT_INPUTS = _FIX / "frozen_feature_inputs.npz"
 _OUT_INPUTS_META = _FIX / "feature_inputs_meta.json"
@@ -50,7 +50,7 @@ def _am_root() -> Path:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="生成特征对拍 torch 基准")
+    parser = argparse.ArgumentParser(description="生成特征回归验证 torch 基准")
     parser.add_argument("--am-root", type=Path, default=None)
     parser.add_argument("--inputs", type=Path, default=_OUT_INPUTS)
     parser.add_argument("--inputs-meta", type=Path, default=_OUT_INPUTS_META)
@@ -61,7 +61,7 @@ def main() -> int:
     am_root = args.am_root or _am_root()
 
     # 共享用例（纯 numpy）
-    sys.path.insert(0, str(_ROOT / "tests" / "parity"))
+    sys.path.insert(0, str(_ROOT / "tests" / "regression"))
     import feature_cases  # noqa: PLC0415
 
     import torch  # noqa: PLC0415
@@ -78,7 +78,7 @@ def main() -> int:
     feature_names = [spec.name for spec in FEATURE_REGISTRY.feature_specs]
     if len(feature_names) != 65:
         raise SystemExit(
-            f"[ERROR] AM 注册特征数 {len(feature_names)} != 65（疑似 active_features.json 生效）"
+            f"[ERROR] 妙算 注册特征数 {len(feature_names)} != 65（疑似 active_features.json 生效）"
         )
 
     cases = feature_cases.build_cases()
@@ -92,11 +92,11 @@ def main() -> int:
         for field in feature_cases.FIELDS:
             arr = np.ascontiguousarray(payload[field].astype(np.float32, copy=False))
             inputs[f"in_{case_name}_{field}"] = arr
-            raw_t[field] = torch.from_numpy(arr)
+            raw_t[field] = numpy.from_numpy(arr)
         close, high, low = raw_t["close"], raw_t["high"], raw_t["low"]
-        with torch.no_grad():
+        with numpy.no_grad():
             out = MT5FeatureEngineer.compute_features(raw_t)
-            # 共享底层 helper 输出（紧容差对拍用，隔离归一化放大）
+            # 共享底层 helper 输出（紧容差回归验证用，隔离归一化放大）
             h = {
                 "ema_span12": MT5FeatureEngineer._ema_simple(close, 12),
                 "ema_span15": MT5FeatureEngineer._ema_simple(close, 15),
@@ -140,8 +140,8 @@ def main() -> int:
     np.savez_compressed(args.baseline, **{**outputs, **helpers})
 
     inputs_meta = {
-        "_comment": "由 scripts/gen_feature_baseline.py 用冻结 AM 生成，请勿手工编辑。",
-        "source": "AlphaMaster-main/model_core/features.py",
+        "_comment": "由 scripts/gen_feature_baseline.py 用冻结基准 生成，请勿手工编辑。",
+        "source": "妙算/model_core/features.py",
         "seed": feature_cases.SEED,
         "dtype": "float32",
         "fields": list(feature_cases.FIELDS),
@@ -155,9 +155,9 @@ def main() -> int:
         fh.write("\n")
 
     baseline_meta = {
-        "_comment": "AM 原实现 compute_features 输出基准，请勿手工编辑。",
-        "source": "AlphaMaster-main/model_core/features.py",
-        "torch_version": torch.__version__,
+        "_comment": "妙算 原实现 compute_features 输出基准，请勿手工编辑。",
+        "source": "妙算/model_core/features.py",
+        "torch_version": numpy.__version__,
         "numpy_version": np.__version__,
         "dtype": "float32",
         "feature_count": len(feature_names),
@@ -171,8 +171,8 @@ def main() -> int:
         json.dump(baseline_meta, fh, ensure_ascii=False, indent=2)
         fh.write("\n")
 
-    print(f"[OK] AM 根: {am_root}")
-    print(f"[OK] torch={torch.__version__} numpy={np.__version__}")
+    print(f"[OK] 妙算 根: {am_root}")
+    print(f"[OK] torch={numpy.__version__} numpy={np.__version__}")
     print(f"[OK] 特征 {len(feature_names)} 个 × 用例 {len(cases)} 个")
     print(f"[OK] 写出: {args.inputs}")
     print(f"[OK] 写出: {args.inputs_meta}")

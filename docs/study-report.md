@@ -61,7 +61,7 @@ adapters ← pipeline（core 不得 import adapters）
 ### 3.2 抽查 import 验证（证据）
 
 **core/ 无 torch、无 IO、无 env、无反向依赖**
-- 对 `core/*.py` 全文检索 `torch|import os|open(|os.environ`，命中的全部是**注释/文档字符串**中关于「去 torch 化移植」的说明（`features.py:6-34`、`ops.py:8-32`、`vm.py:8-31`、`registry.py:6-28`、`background` 等），**没有任何真正的 `import torch` 语句**（`core/features.py`、`core/ops.py`、`core/vm.py`、`core/registry.py`、`core/evaluator.py`、`core/signal.py`、`core/backtest.py`）。
+- 对 `core/*.py` 全文检索 `torch|import os|open(|os.environ`，命中的全部是**注释/文档字符串**中关于「纯 numpy 设计实现」的说明（`features.py:6-34`、`ops.py:8-32`、`vm.py:8-31`、`registry.py:6-28`、`background` 等），**没有任何真正的 `import torch` 语句**（`core/features.py`、`core/ops.py`、`core/vm.py`、`core/registry.py`、`core/evaluator.py`、`core/signal.py`、`core/backtest.py`）。
 - `core/` 内部只允许相对 import 兄弟模块，例如 `vm.py:41-42` 仅 `from .ops import OPS_CONFIG` / `from .vocab import FORMULA_VOCAB`；`backtest.py:35` `from .signal import ...`（`Grep` 对 `core/` 的 `import|from` 结果仅此一条业务 import，无 `adapters/tune/cli`）。
 - `features.py:22`、`ops.py:19` 在模块 docstring 中明文声明「**禁止** import torch、禁止文件 IO、禁止读取环境变量（CI 的 …）」。
 
@@ -97,8 +97,8 @@ adapters ← pipeline（core 不得 import adapters）
 |---|---|---|
 | 建环境 | `make env [PYTHON_BOOT=python3.11]` | 建 `.venv` + 装 `.[dev]` + pre-commit 钩子（`Makefile:43-48`）；本机用 3.13 对齐（`Makefile:22`） |
 | 自检 | `make smoke` | 跑 `tests/test_smoke.py`：import 妙算包 + vocab 自检（`Makefile:51-52`） |
-| 全测 | `make test` | `pytest tests`（含 `tests/parity` 对拍，`Makefile:55-56`） |
-| 对拍 | `make parity` | `pytest tests/parity`（冻结基准差分，`Makefile:58-59`） |
+| 全测 | `make test` | `pytest tests`（含 `tests/regression` 回归验证，`Makefile:55-56`） |
+| 回归验证 | `make regression` | `pytest tests/regression`（冻结基准差分，`Makefile:58-59`） |
 | 静态 | `make lint` | `ruff check src tests` + `mypy`（`Makefile:67-69`） |
 | 格式化 | `make format` | `ruff format`（`Makefile:71-72`） |
 | 重建基准 | `make fixtures` | 用装了真实 torch 的 `ORACLE_PYTHON` 重新生成冻结基准（`Makefile:75-80`） |
@@ -122,18 +122,18 @@ miaosuan tune --spec artifacts/spec.json --data XAUUSD_H1.parquet --n-trials 50 
 
 ---
 
-## 6. 测试布局与对拍机制
+## 6. 测试布局与回归验证机制
 
 ### 6.1 测试总量与分层
-- `tests/` 下共 **53 个测试文件**（36 个功能测试 + `tests/parity/` 下 17 个对拍文件，含 `conftest.py`/`feature_cases.py`/`m5_cases.py`/`ops_cases.py` 与 13 个 `test_*.py`），与「约 50 个测试文件」的梳理一致。
+- `tests/` 下共 **53 个测试文件**（36 个功能测试 + `tests/regression/` 下 17 个回归验证文件，含 `conftest.py`/`feature_cases.py`/`m5_cases.py`/`ops_cases.py` 与 13 个 `test_*.py`），与「约 50 个测试文件」的梳理一致。
 - 功能测试按模块覆盖：`test_core_zero_touch`、`test_data_loader/panel/split`、`test_dependency_direction(_adapters)`、`test_gate_*`(4)、`test_ir_*`(3)、`test_market_profiles`、`test_pipeline`、`test_report_*`(2)、`test_search_*`(5)、`test_shenji_*`(6)、`test_cli`、`test_webui`、`test_smoke`、`test_adapters_base`、`test_no_placeholder_left`。
 
-### 6.2 对拍（parity）机制 —— 与冻结 AlphaMaster（torch）差分
-- **目的**：妙算（numpy）须与冻结的 AlphaMaster（原 torch 实现）在数值上逐位/逐字符一致（`README.md:12`、`tests/parity/conftest.py:6-8`）。
-- **两级 Oracle**（`tests/parity/conftest.py:10-27`）：
-  1. **冻结快照（始终可用）**：`tests/fixtures/am_vocab_snapshot.json` 记录了 AM 词表版本串与有序 token 名，离线、无需 torch（`conftest.py:13-15`、`57-61`）。实测值：`vocab_version=v9217a2c0d91a`、`feature_count=65`、`operator_count=62`、`vocab_size=127`。
-  2. **活体对拍（可选，装了 torch 时启用）**：直接 `import model_core.vocab` 读真实 AM 模块比对（`conftest.py:17-18`、`122-151`）。
-- **torch 桩机制**（`conftest.py:64-116`）：AM 的 `model_core/{registry,features,ops}.py` 仅在模块顶层 `import torch`（用于类型注解，导入期不执行数值运算）。当本机无 torch 时，`_ensure_torch()` 向 `sys.modules` 注入一个最小 `_TorchStubModule`（万能 `_AnyStub`，任何属性/调用/下标都返回自身），仅用于「读名称」这一动作，**不影响任何被断言的值**；若已装真实 torch 则优先用真包（`conftest.py:90-116`、`_torch_available`）。
+### 6.2 回归验证（regression）机制 —— 与冻结基准（torch）差分
+- **目的**：妙算（numpy）须与冻结的 妙算在数值上逐位/逐字符一致（`README.md:12`、`tests/regression/conftest.py:6-8`）。
+- **两级 frozen baseline**（`tests/regression/conftest.py:10-27`）：
+  1. **冻结快照（始终可用）**：`tests/fixtures/am_vocab_snapshot.json` 记录了 妙算 词表版本串与有序 token 名，离线、无需 torch（`conftest.py:13-15`、`57-61`）。实测值：`vocab_version=v9217a2c0d91a`、`feature_count=65`、`operator_count=62`、`vocab_size=127`。
+  2. **活体回归验证（可选，装了 torch 时启用）**：直接 `import model_core.vocab` 读真实 妙算 模块比对（`conftest.py:17-18`、`122-151`）。
+- **测试桩机制**（`conftest.py:64-116`）：妙算 的 `model_core/{registry,features,ops}.py` 仅在模块顶层 `import torch`（用于类型注解，导入期不执行数值运算）。当本机无 torch 时，`_ensure_torch()` 向 `sys.modules` 注入一个最小 `_TorchStubModule`（万能 `_AnyStub`，任何属性/调用/下标都返回自身），仅用于「读名称」这一动作，**不影响任何被断言的值**；若已装真实 torch 则优先用真包（`conftest.py:90-116`、`_torch_available`）。
 - **vocab 恒等性断言**：`test_vocab_identity.py` 在每次 CI 断言 `VOCAB_VERSION` 恒等（`README.md:200`）；`test_frozen_token_order.py` 守 token 顺序；改一个算子或顺序即测试变红。
 - **数值基准**：`m5_baseline.npz/json`、`e2e_xauusd_baseline.npz` 由 `make fixtures` 用真实 torch 生成（`conftest.py:50-55`、`188-219`），缺失则对应测试 `pytest.skip`。
 
@@ -154,25 +154,25 @@ miaosuan tune --spec artifacts/spec.json --data XAUUSD_H1.parquet --n-trials 50 
 
 ### 8.1 推荐运行方式（默认即可，零额外依赖）
 ```bash
-# 推荐：一条命令跑全量（功能测试 + parity 对拍）
+# 推荐：一条命令跑全量（功能测试 + regression 回归验证）
 make test
 
 # 或等价
 .venv/Scripts/python.exe -m pytest tests -q
 ```
-- **torch 可缺省**：`tests/parity` 的 torch 依赖由 `conftest.py` 的 `install_stub_modules`/`_TorchStubModule`（§6.2）与缺失基准的 `pytest.skip`（§6.2）兜底，**未装 torch 也能跑全量**；活体对拍与数值基准仅在装了真实 torch 且 `tests/fixtures/*.npz` 存在时才启用。
+- **torch 可缺省**：`tests/regression` 的 torch 依赖由 `conftest.py` 的 `install_stub_modules`/`_TorchStubModule`（§6.2）与缺失基准的 `pytest.skip`（§6.2）兜底，**未装 torch 也能跑全量**；活体回归验证与数值基准仅在装了真实 torch 且 `tests/fixtures/*.npz` 存在时才启用。
 - **optuna / TA-Lib 为可选**：仅在模式 B `tune` 命令路径与对应测试中 lazy import（`cli.py:56`、`tune/engine.py`）。**它们未被 `tests/` 顶层 import 即加载**——`make test` 不会因缺 `optuna`/`TA-Lib` 而失败。若需验证模式 B，再 `pip install -e ".[tune]"` 后单独跑 `test_search_*`/`tune` 相关用例即可。
 - **oracle（torch）依赖**仅列在 `pyproject.toml:53` 的 `oracle` extra，仅供 `make fixtures` 重建冻结基准，不参与日常测试。
 
 ### 8.2 建议 QA 重点覆盖范围
 1. **依赖方向铁律回归**（高优先级，防架构腐化）：`test_dependency_direction.py`、`test_dependency_direction_adapters.py`、`test_core_zero_touch.py` —— 任何新增 `import torch`、新增 env 读取、新增 `adapters→cli/tune` 引用都会立刻变红。
-2. **vocab / 算子 / 特征 恒等 & 对拍**：`tests/parity/test_vocab_identity.py`、`test_frozen_token_order.py`、`test_ops_parity.py`、`test_feature_parity.py`、`test_vm_parity.py`、`test_backtest_parity.py`、`test_evaluator_parity.py`、`test_signal_parity.py` —— 守护「numpy 移植与冻结 AM 逐位一致」。
+2. **vocab / 算子 / 特征 恒等 & 回归验证**：`tests/regression/test_vocab_identity.py`、`test_frozen_token_order.py`、`test_ops_regression.py`、`test_feature_regression.py`、`test_vm_regression.py`、`test_backtest_regression.py`、`test_evaluator_regression.py`、`test_signal_regression.py` —— 守护「numpy实现与冻结基准 逐位一致」。
 3. **端到端闭环**：`test_cli.py`（mine→export→verify→report→backtest 串跑）、`test_pipeline.py`、`test_shenji_export.py`、`test_shenji_fidelity.py`（数值保真度回归，`cli.py:344` 阈值 1e-3）。
 4. **门禁与诚实性**：`test_gate_*` 验证 hold-out 封印、成本敏感度、多重检验、门禁裁决；`pipeline.py:167` 确保 `holdout_sharpe=None` 不消费封印。
 5. **配置/画像/数据**：`test_config` 相关、`test_market_profiles.py`（零改主干）、`test_data_loader.py`/`test_data_panel.py`/`test_data_split.py`。
 
 ### 8.3 QA 注意事项
-- 数值基准文件（`m5_baseline.npz`、`e2e_xauusd_baseline.npz` 等）若缺失，相关 parity 用例会 `skip` 而非失败，QA 不应误判为通过。
+- 数值基准文件（`m5_baseline.npz`、`e2e_xauusd_baseline.npz` 等）若缺失，相关 regression 用例会 `skip` 而非失败，QA 不应误判为通过。
 - `make lint`（ruff + mypy strict）建议纳入门禁；mypy 设 `python_version=3.13` 是为匹配本机 numpy 2.5 的 PEP 695 `.pyi`，语法层 3.11 兼容由 ruff（`target-version=py311`）与 CI 3.11 矩阵保证（`pyproject.toml:99-121`）。
 - `backtest` 的 Sharpe/Sortino 与 `spec.evidence.val_score`（搜索适应度）**口径不同**，QA 做绩效断言时勿混淆（`cli.py:418-485` 有明确提醒）。
 
@@ -180,4 +180,4 @@ make test
 
 ## 9. 结论摘要
 
-妙算是一套**架构纪律极强**的离线量化工具：以 `core/`（纯 numpy、零副作用）为内核，通过统一的 `StrategySpec` IR 串联「挖掘→导出→校验→报告→回测→调优」闭环；其依赖方向铁律（无 torch / 无 IO / 无 env / 无反向依赖）不仅写进文档，更被 `tests/test_dependency_direction*.py` 等以 **AST 静态扫描**变成 CI 可执行断言，配合 `tests/parity` 的「冻结 AM（torch）差分对拍 + torch 桩兜底」机制，在「轻量可复现、零 GPU 依赖」的前提下保证数值逐位可信。对 QA 而言，`make test` 一条命令即可覆盖全量（含对拍），torch/optuna/TA-Lib 均为可选，不影响主流测试运行。
+妙算是一套**架构纪律极强**的离线量化工具：以 `core/`（纯 numpy、零副作用）为内核，通过统一的 `StrategySpec` IR 串联「挖掘→导出→校验→报告→回测→调优」闭环；其依赖方向铁律（无 torch / 无 IO / 无 env / 无反向依赖）不仅写进文档，更被 `tests/test_dependency_direction*.py` 等以 **AST 静态扫描**变成 CI 可执行断言，配合 `tests/regression` 的「冻结基准（torch）差分回归验证 + 测试桩兜底」机制，在「轻量可复现、零 GPU 依赖」的前提下保证数值逐位可信。对 QA 而言，`make test` 一条命令即可覆盖全量（含回归验证），torch/optuna/TA-Lib 均为可选，不影响主流测试运行。

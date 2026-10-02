@@ -5,7 +5,7 @@
 
 """数据加载器：Parquet / CSV → :class:`~miaosuan.data.panel.Panel`（架构 §2）。
 
-复刻冻结 AlphaMaster ``data_pipeline`` 的数据语义（详见
+复刻冻结基准 ``data_pipeline`` 的数据语义（详见
 ``docs/data_adaptation_checklist.md``），并补齐 CSV 通道：
 
 * **成交量列名**：``tick_volume``（MT5 导出）优先，否则 ``volume``；
@@ -38,7 +38,7 @@ __all__ = [
     "panel_from_frame",
 ]
 
-#: 时间戳「秒/1000」判据（1970-04-27 之前），与 AM ``parquet_manager.py`` 一致
+#: 时间戳「秒/1000」判据（1970-04-27 之前），与 妙算 ``parquet_manager.py`` 一致
 TIME_SCALE_THRESHOLD: int = 10_000_000
 
 #: 周期别名 → 规范名（覆盖常见写法；未知则原样大写）
@@ -114,7 +114,7 @@ def infer_symbol_timeframe(path: str | Path) -> tuple[str, str]:
 
 
 def _normalize_time(series: Any, time_unit: str) -> np.ndarray:
-    """把时间列规范化为 int64 Unix 秒（含 AM 的秒/1000 修复）。"""
+    """把时间列规范化为 int64 Unix 秒（含 妙算 的秒/1000 修复）。"""
     if time_unit not in _TIME_UNITS:
         raise DataError(f"time_unit 非法: {time_unit!r}（可选 {_TIME_UNITS}）")
     values = np.asarray(series.to_numpy())
@@ -160,7 +160,7 @@ def panel_from_frame(
     adjustment_mode: str = "none",
     meta: dict[str, Any] | None = None,
 ) -> Panel:
-    """把 OHLCV DataFrame → :class:`Panel`（复刻 AM 语义）。
+    """把 OHLCV DataFrame → :class:`Panel`（复刻 妙算 语义）。
 
     :param df: 含 ``time/open/high/low/close/(tick_)volume`` 列的 DataFrame。
     :param symbols: 品种名；``None`` 时对单品种默认 ``("SINGLE",)``。

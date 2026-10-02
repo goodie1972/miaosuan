@@ -7,15 +7,15 @@
 
 本模块把「表示/算子」（:mod:`miaosuan.search.rpn`）、「预算/早停」
 （:mod:`miaosuan.search.budget`）、「岛屿模型」（:mod:`miaosuan.search.islands`）与
-「AM 口径适应度评估器」（:class:`AMFitnessEvaluator`）组装为可复现的进化引擎
+「口径适应度评估器」（:class:`AMFitnessEvaluator`）组装为可复现的进化引擎
 :class:`RpnGA`。
 
 设计要点（与团队任务书 M10/M11 对齐）：
 
 * **表示**：定长 token 数组 ``L=8``，生成/交叉/变异全部经栈深可行性修复 → **不存在不可求值个体**；
   ``min_hamming`` 为与「精英库 + 本代已接受个体」的汉明距离**硬下界**（三档一致 = 2，治 R2 熵坍塌）。
-* **适应度 = AM 口径**：逐折 ``MT5Backtest.evaluate_fold`` → IC 门控（``IC>0.01×1.15`` / ``IC<−0.01×0.75``）
-  → ``val_score`` 取各折验证分均值，再减重复惩罚；``train_score`` 同法。**与冻结 AlphaMaster 的
+* **适应度 = 口径**：逐折 ``MT5Backtest.evaluate_fold`` → IC 门控（``IC>0.01×1.15`` / ``IC<−0.01×0.75``）
+  → ``val_score`` 取各折验证分均值，再减重复惩罚；``train_score`` 同法。**与冻结基准 的
   ``engine._eval_formula_task`` 逐点对齐**（``REWARD_ALPHA=1.0``、``WF_GAP=20``、``n_folds=5``）。
 * **预算 = 三档**：种群 / 精英 / 锦标赛 / patience / 移民 / 岛屿参数**全部来自** :class:`Budget`
   （即 §6.2 分档表），算子概率来自 :class:`~miaosuan.config.GASearchConfig`。**墙钟为硬约束**。
@@ -62,7 +62,7 @@ __all__ = [
     "build_walk_forward_folds",
 ]
 
-# ── AM 口径常数（与冻结 AlphaMaster ``model_core/config.py`` 对齐；硬约束，不得擅改）──
+# ── 口径常数（与冻结基准 ``model_core/config.py`` 对齐；硬约束，不得擅改）──
 IC_GATE_THRESH: float = 0.01
 IC_GATE_MULT: float = 1.15
 IC_NEG_MULT: float = 0.75
@@ -70,11 +70,11 @@ REWARD_ALPHA: float = 1.0
 WF_GAP: int = 20
 DEFAULT_N_FOLDS: int = 5
 
-#: 不可求值 / 退化常数公式的惩罚分（与 AM ``_eval_formula_task`` 一致）。
+#: 不可求值 / 退化常数公式的惩罚分（与 妙算 ``_eval_formula_task`` 一致）。
 NONE_SCORE: float = -5.0
 CONST_SCORE: float = -2.0
 
-#: 因子有效性下限（``std < 1e-4`` 视为常数，AM 一致）。
+#: 因子有效性下限（``std < 1e-4`` 视为常数，妙算 一致）。
 _CONST_STD: float = 1e-4
 
 
@@ -83,7 +83,7 @@ _CONST_STD: float = 1e-4
 
 @dataclass(frozen=True)
 class EvalResult:
-    """单条公式的评估结果（AM 口径）。
+    """单条公式的评估结果（口径）。
 
     :param train_score: 开发集训练分（各折 ``train_score`` 的 IC 门控均值 − 重复惩罚）。
     :param val_score: 开发集验证分（各折 ``val_score`` 的 IC 门控均值 − 重复惩罚）。
@@ -106,11 +106,11 @@ class FormulaEvaluator(Protocol):
         ...
 
 
-# ── AM 口径辅助函数（逐点对齐冻结 AlphaMaster）──────────────────────────────
+# ── 口径辅助函数（逐点对齐冻结基准）──────────────────────────────
 
 
 def build_walk_forward_folds(T: int, n_folds: int = DEFAULT_N_FOLDS, gap: int = WF_GAP) -> list[dict[str, int]]:
-    """构建 Walk-Forward 折叠（AM ``_build_walk_forward_folds`` 逐行等价）。
+    """构建 Walk-Forward 折叠（妙算 ``_build_walk_forward_folds`` 逐行等价）。
 
     rolling window：第 ``k`` 折训练 ``[(k−1)·fold_size, k·fold_size)``，验证
     ``[k·fold_size + gap, k·fold_size + gap + fold_size)``（末端以 ``min(·, T)`` 收敛）。
@@ -148,7 +148,7 @@ def build_walk_forward_folds(T: int, n_folds: int = DEFAULT_N_FOLDS, gap: int = 
 def _compute_ic(factor: np.ndarray, target_ret: np.ndarray) -> tuple[float, float]:
     """时序 IC（每样本内部 ``factor[t]`` vs ``ret[t+1]``）的均值与稳定性。
 
-    与 AM ``AlphaEngine._compute_ic`` 等价：``std`` 用总体口径（``ddof=0``）。
+    与 妙算 ``AlphaEngine._compute_ic`` 等价：``std`` 用总体口径（``ddof=0``）。
     """
     if factor.ndim != 2:
         raise ValueError("_compute_ic: factor 必须为 [N, T]")
@@ -175,7 +175,7 @@ def _compute_ic(factor: np.ndarray, target_ret: np.ndarray) -> tuple[float, floa
 
 
 def _apply_ic_gate(reward: float, ic_mean: float) -> float:
-    """IC 门控（AM ``_apply_ic_gate`` 等价，方向敏感、量纲无关）。"""
+    """IC 门控（妙算 ``_apply_ic_gate`` 等价，方向敏感、量纲无关）。"""
     if ic_mean > IC_GATE_THRESH:
         return reward * IC_GATE_MULT
     if ic_mean < -IC_GATE_THRESH:
@@ -184,7 +184,7 @@ def _apply_ic_gate(reward: float, ic_mean: float) -> float:
 
 
 def _repetition_penalty(tokens: np.ndarray) -> float:
-    """重复惩罚（AM ``_repetition_penalty`` 等价）：相邻相同 token 累计每满 2 次罚 0.3。"""
+    """重复惩罚（妙算 ``_repetition_penalty`` 等价）：相邻相同 token 累计每满 2 次罚 0.3。"""
     penalty = 0.0
     count = 1
     toks = [int(t) for t in tokens]
@@ -199,16 +199,16 @@ def _repetition_penalty(tokens: np.ndarray) -> float:
 
 
 class AMFitnessEvaluator:
-    """AM 口径适应度评估器（5 折滚动 Walk-Forward + IC 门控 + 重复惩罚）。
+    """口径适应度评估器（5 折滚动 Walk-Forward + IC 门控 + 重复惩罚）。
 
     :param features: ``[N, F, T]`` 特征张量（由 :func:`miaosuan.core.features.compute_features` 产出）。
     :param target_ret: ``[N, T]`` 前瞻收益（``target_ret[t] = log(open[t+2]/open[t+1])``）。
     :param cost_rate: 单边成本率（来自 :class:`~miaosuan.market.profiles.FrozenMarketProfile`.cost_model）。
     :param periods_per_year: 年化因子（来自 profile ``bars_per_year``；**不硬编码**）。
-    :param n_folds: 滚动折数（默认 5，与 AM 一致）。
-    :param gap: 折间间隔（默认 20，与 AM ``WF_GAP`` 一致）。
-    :param reward_mode: 回测奖励模式（默认 ``"ftmo"``，与 AM 一致）。
-    :param reward_alpha: 训练分缩放（默认 1.0，与 AM 一致）。
+    :param n_folds: 滚动折数（默认 5，与 妙算 一致）。
+    :param gap: 折间间隔（默认 20，与 妙算 ``WF_GAP`` 一致）。
+    :param reward_mode: 回测奖励模式（默认 ``"ftmo"``，与 妙算 一致）。
+    :param reward_alpha: 训练分缩放（默认 1.0，与 妙算 一致）。
     :param folds: 可选显式折（否则按 ``T/n_folds`` 自动构建）。
     """
 
@@ -300,7 +300,7 @@ class AMFitnessEvaluator:
     # ── 协议实现 ───────────────────────────────────────────────────────────
 
     def evaluate(self, tokens: np.ndarray) -> EvalResult:
-        """评估一条公式，返回 AM 口径的 :class:`EvalResult`。"""
+        """评估一条公式，返回 口径的 :class:`EvalResult`。"""
         self.n_evaluated += 1
         res = self.vm.execute([int(t) for t in tokens], self.features)
         if res is None:
@@ -314,7 +314,7 @@ class AMFitnessEvaluator:
         train_score = float(np.mean(train_scores))
         val_score = float(np.mean(val_scores))
 
-        # 重复惩罚（AM 一致：train/val 同时扣）。
+        # 重复惩罚（妙算 一致：train/val 同时扣）。
         penalty = _repetition_penalty(tokens)
         train_score -= penalty
         val_score -= penalty

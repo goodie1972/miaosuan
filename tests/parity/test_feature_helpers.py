@@ -3,14 +3,14 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""M4 底层 helper 对拍（**紧容差** 1e-5）：隔离「归一化放大」，证明移植正确。
+"""M4 底层 helper 回归验证（**紧容差** 1e-5）：隔离「归一化放大」，证明实现正确。
 
 65 特征的输出统一经过 ``_norm``（median/MAD 稳健归一化），会把 1e-7 量级的 float32
 归约顺序差异放大 ``1/MAD`` 倍。为把「算法正确性」与「归一化放大」解耦，本文件用
 **同一份输入**（各 case 的 close/high/low）分别调用：
 
 * 妙算 numpy helper（``miaosuan.core.features`` 的模块级 helper）；
-* AM torch helper（基准 ``features_baseline.npz`` 的 ``helper_{key}_{case}``）；
+* numpy reference helper（基准 ``features_baseline.npz`` 的 ``helper_{key}_{case}``）；
 
 以 ``atol=rtol=1e-5`` 的**紧容差**比对（实测最坏约 3e-2，含 300+ 倍余量）。这样：
 helper 逐一对齐 → 特征由 helper 组合而成 → 输出层差异纯属归一化放大，非缺陷。
@@ -30,7 +30,7 @@ import feature_cases  # noqa: E402
 
 from miaosuan.core import features as F  # noqa: E402
 
-pytestmark = pytest.mark.parity
+pytestmark = pytest.mark.regression
 
 _BASELINE = Path(__file__).resolve().parent.parent / "fixtures" / "features_baseline.npz"
 

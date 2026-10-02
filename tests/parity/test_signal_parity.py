@@ -3,10 +3,10 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""M5 signal 数值对拍：妙算 numpy vs 冻结 AM 的 ``strategy_manager/signal.py``。
+"""M5 signal 数值回归验证：妙算 numpy vs 冻结基准 的 ``strategy_manager/signal.py``。
 
 连续仓位 = ``tanh(factor)`` 后套中性带（``|pos| < min_trade_exposure`` → 0）；并校验妙算新增
-的 ``long_only`` 预留开关（默认 False 与 AM 一致）。
+的 ``long_only`` 预留开关（默认 False 与 妙算 一致）。
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from miaosuan.core.signal import (
     target_to_direction,
 )
 
-pytestmark = pytest.mark.parity
+pytestmark = pytest.mark.regression
 
 _ATOL = 1e-6
 
@@ -32,7 +32,7 @@ _ATOL = 1e-6
     "name",
     ("n1_t600", "n4_t320", "edge"),
 )
-def test_signal_parity(name: str, m5_npz: dict) -> None:
+def test_signal_regression(name: str, m5_npz: dict) -> None:
     factors = m5_npz[f"sig_in__{name}"]
     got = compute_target_positions(factors)
     exp = m5_npz[f"sig_out__{name}"]
@@ -63,7 +63,7 @@ def test_long_only_reserved_switch() -> None:
     factors = np.linspace(-3, 3, 200).astype(np.float32)
     pos = compute_target_positions(factors, long_only=True)
     assert float(pos.min()) >= 0.0
-    # 与 AM 默认（long_only=False）在有负值处不同
+    # 与 妙算 默认（long_only=False）在有负值处不同
     pos_default = compute_target_positions(factors, long_only=False)
     assert float(pos_default.min()) < 0.0
 

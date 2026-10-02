@@ -2,14 +2,14 @@
 #
 # 设计目标（架构 §1.2）：
 #   * 统一测试配置，消除缺失 pytest.ini 的问题；
-#   * 单一配置源，杜绝 AM 的「双 config 架构倒置」（engine.py 反向 import 根目录 config）；
+#   * 单一配置源，杜绝 妙算 的「双 config 架构倒置」（engine.py 反向 import 根目录 config）；
 #   * Python 目标版本 3.11（架构 §8）。本机无 3.11，实际在 3.13 上验证，
 #     详见 README「已知差异」小节。
 #
 # 常用命令：
 #   pip install -e ".[dev,web,datasource]"  开发安装（含 Web UI 与可选数据源）
 #   pip install -e ".[tune]"                 模式 B 参数寻优（Optuna）
-#   pytest                      运行全部测试（含 tests/parity 对拍）
+#   pytest                      运行全部测试（含 tests/regression 回归验证）
 #   ruff check . && mypy        静态检查
 
 [build-system]
@@ -54,7 +54,7 @@ dependencies = [
 # 注：原声明含 ``TA-Lib>=0.4.0``，但全项目 Grep 无任何 import（仅注释提及），
 # 且 TA-Lib 无 cp313 wheel、会让 ``pip install -e ".[tune]"`` 直接失败，故移除。
 tune = ["optuna>=3.4"]
-# 仅 tests/parity 使用：加载冻结的基准作对拍 Oracle，不进生产依赖
+# 仅 tests/regression 使用：加载冻结的基准作回归验证 frozen baseline，不进生产依赖
 oracle = ["torch>=2.0"]
 # Web UI：``webui/server.py`` 在**模块级** import fastapi，``cli.py`` 惰性 import
 # uvicorn；README 把 ``miaosuan ui`` 列为标准工作流，故必须有独立 extra。
@@ -95,7 +95,7 @@ testpaths = ["tests"]
 pythonpath = ["src"]              # 免安装即可 import miaosuan
 addopts = "-ra -q"
 markers = [
-    "parity: 与冻结基准的差分对拍（tests/parity）",
+    "regression: 与冻结基准的差分回归验证（tests/regression）",
     "slow: 慢测试",
 ]
 filterwarnings = [

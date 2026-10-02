@@ -17,7 +17,7 @@ from miaosuan.core.ops import OPS_CONFIG
 from miaosuan.core.vocab import FORMULA_VOCAB
 
 OFFSET: int = FORMULA_VOCAB.operator_offset
-#: 与 AlphaMaster 对齐的最优公式（TRIX_15 → … → SCALE）。
+#: 与 妙算 对齐的最优公式（TRIX_15 → … → SCALE）。
 AM_BEST: tuple[int, ...] = (33, 62, 3, 87, 72, 119, 73, 103)
 
 

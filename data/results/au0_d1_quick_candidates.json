@@ -1,0 +1,237 @@
+{
+  "version": 1,
+  "spec": "artifacts/mine_au0_d1_quick2.json",
+  "spec_id": "378cb442dae6e5e1",
+  "budget": "quick",
+  "symbol": "AU0",
+  "timeframe": "D1",
+  "market": "FOREX_XAUUSD",
+  "git_sha": "9b1ed72f676afb07d3458948e344983ac71003b2",
+  "vocab_version": "v9217a2c0d91a",
+  "data_fingerprint": "sha256:44236c9783c6018f49d1f089c7a93775ae70b741faf0c6c2c39e99541956f404",
+  "semantics": {
+    "timeframe": "D1",
+    "position_fn": "tanh",
+    "neutral_band": 0.05,
+    "long_short": true
+  },
+  "n_trials": 1792,
+  "n_candidates": 5,
+  "candidates": [
+    {
+      "rank": 0,
+      "tokens": [
+        8,
+        18,
+        121,
+        42,
+        23,
+        126,
+        67,
+        82
+      ],
+      "decoded": "VOL_REGIME → REL_RET20 → TS_ZSCORE_20 → KYLE_LAMBDA → MACD_HIST → IF_GT → MUL → TS_STD_20",
+      "train_score": 3.182630158501118,
+      "val_score": 4.613706680197339,
+      "status": "ok",
+      "cost_sensitivity": {
+        "0.5": 4.418177523985359,
+        "1": 4.324177000084044,
+        "2": 4.136109391738212,
+        "3": 3.9479659544858188
+      },
+      "sharpe_2x": 4.136109391738212,
+      "wf_win_rate": 1.0,
+      "dsr": 0.3204912338935261,
+      "verdict": "BLOCKED",
+      "verdict_snapshot": {
+        "decay_ratio": 1.449652,
+        "dsr": 0.320491,
+        "hard_failures": [
+          "dsr<0.5"
+        ],
+        "n_obs": 3672,
+        "n_trials": 1792,
+        "sharpe_1x": 4.324177,
+        "sharpe_2x": 4.136109,
+        "soft_failures": [],
+        "status": "BLOCKED",
+        "train_score": 3.18263,
+        "val_score": 4.613707,
+        "wf_win_rate": 1.0
+      }
+    },
+    {
+      "rank": 1,
+      "tokens": [
+        35,
+        113,
+        30,
+        85,
+        67,
+        4,
+        65,
+        70
+      ],
+      "decoded": "ULT_OSC → TS_SUM_10 → EMA_RATIO_12_26 → TS_RANK_20 → MUL → SLOPE20 → ADD → ABS",
+      "train_score": 3.4894379070477184,
+      "val_score": 4.526795057351438,
+      "status": "ok",
+      "cost_sensitivity": {
+        "0.5": 4.3708965683252625,
+        "1": 4.132711995326969,
+        "2": 3.65635557620778,
+        "3": 3.1800679295916914
+      },
+      "sharpe_2x": 3.65635557620778,
+      "wf_win_rate": 0.75,
+      "dsr": 0.2777995010398502,
+      "verdict": "BLOCKED",
+      "verdict_snapshot": {
+        "decay_ratio": 1.297285,
+        "dsr": 0.2778,
+        "hard_failures": [
+          "dsr<0.5"
+        ],
+        "n_obs": 3672,
+        "n_trials": 1792,
+        "sharpe_1x": 4.132712,
+        "sharpe_2x": 3.656356,
+        "soft_failures": [],
+        "status": "BLOCKED",
+        "train_score": 3.489438,
+        "val_score": 4.526795,
+        "wf_win_rate": 0.75
+      }
+    },
+    {
+      "rank": 2,
+      "tokens": [
+        24,
+        106,
+        25,
+        78,
+        104,
+        4,
+        65,
+        70
+      ],
+      "decoded": "OBV_SLOPE → SIGNED_POWER_2 → MFI14 → TS_MEAN_10 → COVARIANCE_10 → SLOPE20 → ADD → ABS",
+      "train_score": 3.193800334160386,
+      "val_score": 4.150004590624954,
+      "status": "ok",
+      "cost_sensitivity": {
+        "0.5": 3.851030682518981,
+        "1": 3.6130718715743066,
+        "2": 3.1372764305442833,
+        "3": 2.6616958112708313
+      },
+      "sharpe_2x": 3.1372764305442833,
+      "wf_win_rate": 0.75,
+      "dsr": 0.17123373366045452,
+      "verdict": "BLOCKED",
+      "verdict_snapshot": {
+        "decay_ratio": 1.299394,
+        "dsr": 0.171234,
+        "hard_failures": [
+          "dsr<0.5"
+        ],
+        "n_obs": 3672,
+        "n_trials": 1792,
+        "sharpe_1x": 3.613072,
+        "sharpe_2x": 3.137276,
+        "soft_failures": [],
+        "status": "BLOCKED",
+        "train_score": 3.1938,
+        "val_score": 4.150005,
+        "wf_win_rate": 0.75
+      }
+    },
+    {
+      "rank": 3,
+      "tokens": [
+        54,
+        18,
+        121,
+        32,
+        36,
+        72,
+        67,
+        82
+      ],
+      "decoded": "ICHIMOKU_TENKAN_DEV → REL_RET20 → TS_ZSCORE_20 → PRICE_POS_50 → RET_ACCEL → GATE → MUL → TS_STD_20",
+      "train_score": 2.8758658507626453,
+      "val_score": 3.9556612422389503,
+      "status": "ok",
+      "cost_sensitivity": {
+        "0.5": 3.214197745640882,
+        "1": 3.1330838014103097,
+        "2": 2.970784801523842,
+        "3": 2.8084019101158826
+      },
+      "sharpe_2x": 2.970784801523842,
+      "wf_win_rate": 1.0,
+      "dsr": 0.10081392980225645,
+      "verdict": "BLOCKED",
+      "verdict_snapshot": {
+        "decay_ratio": 1.375468,
+        "dsr": 0.100814,
+        "hard_failures": [
+          "dsr<0.5"
+        ],
+        "n_obs": 3672,
+        "n_trials": 1792,
+        "sharpe_1x": 3.133084,
+        "sharpe_2x": 2.970785,
+        "soft_failures": [],
+        "status": "BLOCKED",
+        "train_score": 2.875866,
+        "val_score": 3.955661,
+        "wf_win_rate": 1.0
+      }
+    },
+    {
+      "rank": 4,
+      "tokens": [
+        42,
+        96,
+        39,
+        100,
+        116,
+        4,
+        65,
+        70
+      ],
+      "decoded": "KYLE_LAMBDA → TS_SKEW_10 → YANG_ZHANG_VOL → TS_ARG_MAX_5 → MAX → SLOPE20 → ADD → ABS",
+      "train_score": 3.195380682349888,
+      "val_score": 3.94980191529605,
+      "status": "ok",
+      "cost_sensitivity": {
+        "0.5": 4.000026422486375,
+        "1": 3.6526278696296637,
+        "2": 2.9578960695794208,
+        "3": 2.2634071387016816
+      },
+      "sharpe_2x": 2.9578960695794208,
+      "wf_win_rate": 0.75,
+      "dsr": 0.17696405676062443,
+      "verdict": "BLOCKED",
+      "verdict_snapshot": {
+        "decay_ratio": 1.236097,
+        "dsr": 0.176964,
+        "hard_failures": [
+          "dsr<0.5"
+        ],
+        "n_obs": 3672,
+        "n_trials": 1792,
+        "sharpe_1x": 3.652628,
+        "sharpe_2x": 2.957896,
+        "soft_failures": [],
+        "status": "BLOCKED",
+        "train_score": 3.195381,
+        "val_score": 3.949802,
+        "wf_win_rate": 0.75
+      }
+    }
+  ]
+}
