@@ -29,7 +29,7 @@ from miaosuan.search.rpn import (
     structure_violations,
 )
 
-#: AM 冻结最优公式（必须是可求值的 —— AM 约束采样器保证）。
+#: 妙算 冻结最优公式（必须是可求值的 —— 妙算 约束采样器保证）。
 AM_BEST = [33, 62, 3, 87, 72, 119, 73, 103]
 
 

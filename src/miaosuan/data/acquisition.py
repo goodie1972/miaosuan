@@ -54,12 +54,11 @@ __all__ = [
     "fetch",
 ]
 
-#: 默认本地缓存目录列表（与 ``server.py`` 的 ``_DATA_DIRS`` 对齐）。
-#: 首项从统一设置系统获取（settings.yaml → paths.kline）。
-#: ``parents[3]`` = 仓库根目录（src/miaosuan/data/ → src/ → miaosuan/ → 仓库根），
-#: 仓库根下的 ``data/`` 是 fetch() 写缓存的实际位置（settings.yaml → data.cache_dir）。
+#: 兜底缓存目录：仓库内 ``data/cache``（与 settings.yaml → paths.data_cache 一致）。
+#: 目录重构（2026-10-01）后缓存**只认 data/cache**——仓库根 data/ 不再存放
+#: parquet；kline_data_dir()（settings → paths.kline）是只读行情目录，不属于缓存。
 _DEFAULT_CACHE_DIRS: tuple[Path, ...] = (
-    Path(__file__).resolve().parents[3] / "data",
+    Path(__file__).resolve().parents[3] / "data" / "cache",
 )
 
 #: 支持的 OHLCV 列名（与 ``loader.panel_from_frame`` 对齐）。
@@ -765,14 +764,11 @@ def _cache_dirs_from_config() -> tuple[Path, ...]:
     逐个做 TCP 探测，本环境 ``freeserv.dukascopy.com`` / ``api.binance.com``
     不可达，各卡满 3s 超时 → 首次调用 6s。列缓存文件只扫目录，本不需要这些。
 
-    」我们以 scan 质检，以保共تماد。
     """
     from ..config import kline_data_dir
 
-    # kline_data_dir() 始终参与扫描——它是用户在设置页 paths.kline 里配的主行情目录，
-    # 存放着 TradingView/Dukascopy 拉取的标准 parquet。cache_dir 是额外缓存目录
-    # （settings.yaml → data.cache_dir 或 paths.data_cache），用于 fetch() 写入。
-    # 两者不是二选一，而是都要扫——否则用户放在 D:\K线数据 的文件在缓存列表里看不到。
+    # kline_data_dir() 在 config.py 中已检查 os.environ（兼容 monkeypatch 测试），
+    # 此处不需额外传 env。cache_dir 通过 data_acquisition_config() 也走 env 优先。
     dirs: list[Path] = [Path(kline_data_dir()).resolve()]
 
     custom = data_acquisition_config().cache_dir

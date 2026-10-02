@@ -3,12 +3,12 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""M3 算子对拍的**确定性输入用例**（纯 numpy，无 torch / 无妙算依赖）。
+"""M3 算子回归验证的**确定性输入用例**（纯 numpy，无 torch / 无妙算依赖）。
 
 同一份用例被两侧共享：
 
-* ``scripts/gen_ops_baseline.py``（torch 环境）→ 生成 AM 原实现的基准输出；
-* ``tests/parity/test_ops_parity.py``（妙算 venv）→ 用妙算 numpy 实现复算并比对。
+* ``scripts/gen_ops_baseline.py``（torch 环境）→ 生成 妙算 原实现的基准输出；
+* ``tests/regression/test_ops_regression.py``（妙算 venv）→ 用妙算 numpy 实现复算并比对。
 
 由于两侧 numpy 版本一致（2.5.3）且 seed 固定，``build_cases()`` 在两侧**逐位相同**；
 生成器仍会把输入一并写入基准文件，测试侧再做一次输入一致性校验，防止 RNG 漂移。
@@ -36,7 +36,7 @@ import numpy as np
 # 全局随机种子（与 AppConfig 默认 seed 一致）
 SEED = 20260910
 
-# dtype：与 AM 生产张量一致（float32）
+# dtype：与 妙算 生产张量一致（float32）
 DTYPE = np.float32
 
 

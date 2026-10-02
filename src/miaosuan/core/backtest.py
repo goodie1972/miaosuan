@@ -3,9 +3,9 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""向量化组合回测评估器（numpy 化移植，M5）。
+"""向量化组合回测评估器（numpy实现，M5）。
 
-移植自冻结 AlphaMaster 的 ``model_core/backtest.py``（原 torch 实现），逐行对齐：
+独立实现，语义对齐 ``model_core/backtest.py``，逐行对齐：
 
 * :func:`estimate_periods_per_year` —— 由时间戳估计「每年 bar 数」（自动年化）；
 * :class:`MT5Backtest` —— 组合级多目标 Reward（Sortino / Calmar / 时序 IC / 品种一致性 /
@@ -13,13 +13,13 @@
 
 关键等价与参数化：
 
-* ``torch.roll(x, 1, dims=1)`` → ``np.roll(x, 1, axis=1)``；``torch.cummax`` →
+* ``numpy.roll(x, 1, dims=1)`` → ``np.roll(x, 1, axis=1)``；``numpy.cummax`` →
   ``np.maximum.accumulate``；``.std(unbiased=False)`` → ``np.std(..., ddof=0)``。
-* AM 由 ``strategy_manager.signal`` 取仓位 → 妙算改用同包 :mod:`.signal`。
-* AM 由根目录 ``config.Config.COST_RATE``（=0.0003）/ ``ModelConfig.REWARD_MODE``
+* 妙算 由 ``strategy_manager.signal`` 取仓位 → 妙算改用同包 :mod:`.signal`。
+* 妙算 由根目录 ``config.Config.COST_RATE``（=0.0003）/ ``ModelConfig.REWARD_MODE``
   （当前 ``"ftmo"``）隐式决定行为；妙算改为**参数注入** ``cost_rate``（默认 0.0003）与
-  ``reward_mode``（默认 ``"ftmo"``），默认值与 AM 一致以保证对拍，``core/`` 不读环境/不做 IO。
-* 数据驱动年化因子 ``estimate_periods_per_year`` 保留；AM 的 tqdm/print 兜底告警改为
+  ``reward_mode``（默认 ``"ftmo"``），默认值与 妙算 一致以保证回归验证，``core/`` 不读环境/不做 IO。
+* 数据驱动年化因子 ``estimate_periods_per_year`` 保留；妙算 的 tqdm/print 兜底告警改为
   ``warnings.warn``（无 IO 副作用）。
 
 依赖方向：``core/backtest.py`` 仅依赖 :mod:`.signal`，不 import 任何上层包。
@@ -41,9 +41,9 @@ _SORTINO_CLIP = 20.0
 
 _SECONDS_PER_YEAR = 365.25 * 86400.0
 
-# AM 兜底成本率（与生产 run_backtest.py 一致：手续费 0.02% + 滑点 0.01%）。
+# 妙算 兜底成本率（与生产 run_backtest.py 一致：手续费 0.02% + 滑点 0.01%）。
 _DEFAULT_COST_RATE = 0.0003
-# AM ``ModelConfig.REWARD_MODE`` 当前取值（对拍基准）。
+# 妙算 ``ModelConfig.REWARD_MODE`` 当前取值（回归验证基准）。
 _DEFAULT_REWARD_MODE = "ftmo"
 
 
@@ -111,7 +111,7 @@ def estimate_periods_per_year(times: np.ndarray) -> int:
 
 
 class MT5Backtest:
-    """MT5 组合级回测评估器（AM ``MT5Backtest`` 的 numpy 移植，行为等价）。"""
+    """MT5 组合级回测评估器（妙算 ``MT5Backtest`` 的 numpy实现，行为等价）。"""
 
     def __init__(
         self,
@@ -119,7 +119,7 @@ class MT5Backtest:
         periods_per_year: int = _H1_PERIODS_PER_YEAR,
         reward_mode: str = _DEFAULT_REWARD_MODE,
     ) -> None:
-        # 成本率与奖励模式改为参数注入（默认值与 AM 一致：0.0003 / "ftmo"）。
+        # 成本率与奖励模式改为参数注入（默认值与 妙算 一致：0.0003 / "ftmo"）。
         self.cost_rate = _DEFAULT_COST_RATE if cost_rate is None else float(cost_rate)
         self.periods_per_year = int(periods_per_year)
         self.reward_mode = str(reward_mode)
@@ -184,7 +184,7 @@ class MT5Backtest:
         per_symbol_trade_count: list[int] | None = None,
         eval_bars: int = 0,
     ) -> float:
-        """品种一致性惩罚/奖励（规则见 AM 文档）。"""
+        """品种一致性惩罚/奖励（规则见 妙算 文档）。"""
         n = len(per_symbol_sortino)
         if n == 0:
             return 0.0
@@ -415,7 +415,7 @@ class MT5Backtest:
         position: np.ndarray,
         eval_bars: int = 0,
     ) -> float:
-        """收益优先的多目标评分（AM ``_multi_objective`` 逐分支等价移植）。"""
+        """收益优先的多目标评分（妙算 ``_multi_objective`` 逐分支等价实现）。"""
         n = pnl.shape[0]
 
         # ── 绝对收益（年化 log return）──────────────────────────────────

@@ -3,12 +3,12 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""M4 特征对拍的**确定性输入用例**（纯 numpy，无 torch / 无妙算依赖）。
+"""M4 特征回归验证的**确定性输入用例**（纯 numpy，无 torch / 无妙算依赖）。
 
 同一份用例被两侧共享：
 
-* ``scripts/gen_feature_baseline.py``（torch 环境）→ 生成 AM 原实现的输入/输出基准；
-* ``tests/parity/test_feature_parity.py``（妙算 venv）→ 用妙算 numpy 实现复算并比对。
+* ``scripts/gen_feature_baseline.py``（torch 环境）→ 生成 妙算 原实现的输入/输出基准；
+* ``tests/regression/test_feature_regression.py``（妙算 venv）→ 用妙算 numpy 实现复算并比对。
 
 由于两侧 numpy 版本一致（2.5.3）且 seed 固定，``build_cases()`` 在两侧**逐位相同**；
 生成器仍会把输入一并写入基准文件，测试侧再做一次输入一致性校验，防止 RNG 漂移。
@@ -32,10 +32,10 @@
 特征输出统一经过 ``_norm``（median/MAD 稳健归一化）。当某特征的**原始**信号在
 窗口内离散度很小（如近似单调趋势下的动量类），其 MAD 接近下界，1e-7 量级的
 float32 归约顺序噪声会被放大 ``1/MAD`` 倍（可达 1e2~1e3）。这是 float32 归约
-顺序差异（torch 与 numpy）经非线性归一化放大的**固有数值现象**，非移植缺陷：
-裸 EMA 实测与 torch 相对误差 ≤ 3e-7（见 ``tests/parity/test_feature_helpers.py``）。
+顺序差异（torch 与 numpy）经非线性归一化放大的**固有数值现象**，非实现缺陷：
+裸 EMA 实测与 torch 相对误差 ≤ 3e-7（见 ``tests/regression/test_feature_helpers.py``）。
 故输出层容差按「归一化放大」设定，并在 ``test_feature_helpers.py`` 以 1e-5 的**紧
-容差**单独对拍共享底层 helper，两层共同保证移植正确性。
+容差**单独回归验证共享底层 helper，两层共同保证实现正确性。
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ import numpy as np
 # 全局随机种子（与 AppConfig 默认 seed 一致）
 SEED = 20260910
 
-# dtype：与 AM 生产张量一致（float32）
+# dtype：与 妙算 生产张量一致（float32）
 DTYPE = np.float32
 
 #: raw_dict 字段（顺序稳定）
@@ -130,8 +130,8 @@ def build_cases() -> dict[str, dict[str, Any]]:
     return cases
 
 
-#: 共享底层 helper 的对拍输入规格：``(helper_key, args)``，args 取自 case 的 OHLCV。
-#: 这些 helper 是全部特征的计算基石，单独以紧容差（1e-5）对拍，隔离「归一化放大」。
+#: 共享底层 helper 的回归验证输入规格：``(helper_key, args)``，args 取自 case 的 OHLCV。
+#: 这些 helper 是全部特征的计算基石，单独以紧容差（1e-5）回归验证，隔离「归一化放大」。
 HELPER_CASES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("ema_span12", ("close", 12)),
     ("ema_span15", ("close", 15)),

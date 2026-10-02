@@ -3,22 +3,22 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""特征工程（numpy 化移植，M4）—— 65 个特征，纯 numpy，无 torch。
+"""特征工程（numpy实现，M4）—— 65 个特征，纯 numpy，无 torch。
 
-本模块把冻结 ``AlphaMaster`` 的 ``model_core/features.py``（原 torch 实现，
-``MT5FeatureEngineer``，65 个特征）**逐特征**移植为纯 numpy 实现，注册进模块级
+本模块把冻结基准 的 ``model_core/features.py``（原实现，
+``MT5FeatureEngineer``，65 个特征）**逐特征**采用纯 numpy 实现，注册进模块级
 :data:`FEATURE_REGISTRY`。``compute_features`` 按注册顺序堆叠输出 ``[N, F, T]``
-（``F == 65``，维序与 AM **逐元素一致**）。
+（``F == 65``，维序与 妙算 **逐元素一致**）。
 
-移植铁律（架构 §1.3、M4 任务书）：
+实现约束（架构 §1.3、M4 任务书）：
 
 * **名称与顺序一字不改**（65 个特征），否则 ``VOCAB_VERSION`` 会漂移、旧产物被
-  ``verify()`` 拒绝；由 ``tests/fixtures/frozen_token_order.json`` 与 ``tests/parity``
+  ``verify()`` 拒绝；由 ``tests/fixtures/frozen_token_order.json`` 与 ``tests/regression``
   回归锁定（实测保持 ``v9217a2c0d91a``）。
 * **数值细节逐一对齐**，不做「顺手优化」：dtype 保持、``clamp`` 边界、``nan``/``inf``
   处理、除零保护 ``_EPS``、``nan_to_num`` 的默认 ``posinf``/``neginf`` 语义、
-  ``torch.std`` 的**无偏**（``ddof=1``）默认、``torch.median`` 偶数窗口取**下中位数**
-  的语义，均与 AM 一致。
+  ``标准差`` 的**无偏**（``ddof=1``）默认、``numpy.median`` 偶数窗口取**下中位数**
+  的语义，均与 妙算 一致。
 * **禁止** import torch、禁止文件 IO、禁止读取环境变量（CI 的
   ``tests/test_dependency_direction.py`` 强制校验）。active_features 白名单改为
   **参数注入**（``compute_features(..., active_features=...)`` / ``build_feature_registry``），
@@ -26,12 +26,12 @@
 
 torch → numpy 关键等价：
 
-  ``torch.cat([pad, x], 1).unfold(1, w, 1)`` → ``sliding_window_view(concat([pad, x]), w, axis=1)``
-  ``torch.clamp(v, lo, hi)``                → ``np.clip(v, lo, hi)``（NaN 均传播）
-  ``torch.nan_to_num(x, nan=a, posinf=b, neginf=c)`` → ``_clean`` / ``_nan0``（见下）
-  ``torch.median(wnd, dim=-1).values``      → ``_lower_median``（偶数窗口取下中位数）
-  ``torch.std(dim=0)``                      → ``ndarray.std(axis=0, ddof=1)``（无偏）
-  ``torch.sign(NaN) == 0.0``                → ``_tsign`` = ``(x>0)-(x<0)``
+  ``numpy.cat([pad, x], 1).unfold(1, w, 1)`` → ``sliding_window_view(concat([pad, x]), w, axis=1)``
+  ``numpy.clamp(v, lo, hi)``                → ``np.clip(v, lo, hi)``（NaN 均传播）
+  ``numpy.nan_to_num(x, nan=a, posinf=b, neginf=c)`` → ``_clean`` / ``_nan0``（见下）
+  ``numpy.median(wnd, dim=-1).values``      → ``_lower_median``（偶数窗口取下中位数）
+  ``标准差(dim=0)``                      → ``ndarray.std(axis=0, ddof=1)``（无偏）
+  ``numpy.sign(NaN) == 0.0``                → ``_tsign`` = ``(x>0)-(x<0)``
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ __all__ = [
     "is_registered",
 ]
 
-# ── 与 AM 逐项一致的常数（架构 §R1.10；hard constraint：不得改动）──────────
+# ── 与 妙算 逐项一致的常数（架构 §R1.10；hard constraint：不得改动）──────────
 _CLIP_BOUND = 5.0
 _EPS = 1e-9
 _MA_WINDOW = 20
@@ -66,18 +66,18 @@ _NORM_WINDOW = 200
 
 
 def _f32(x: np.ndarray) -> np.ndarray:
-    """等价 ``torch.Tensor.float()``：转 float32（保持 [N, T] 形状）。"""
+    """等价 ``numpy.ndarray.float()``：转 float32（保持 [N, T] 形状）。"""
     return np.asarray(x, dtype=np.float32)
 
 
 def _clean(x: np.ndarray) -> np.ndarray:
-    """等价 ``torch.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)``。"""
+    """等价 ``numpy.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)``。"""
     out: np.ndarray = np.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
     return out
 
 
 def _nan0(x: np.ndarray) -> np.ndarray:
-    """等价 ``torch.nan_to_num(x, nan=0.0)``（posinf/neginf 默认取 dtype 极值）。"""
+    """等价 ``numpy.nan_to_num(x, nan=0.0)``（posinf/neginf 默认取 dtype 极值）。"""
     out: np.ndarray = np.nan_to_num(x, nan=0.0)
     return out
 
@@ -85,7 +85,7 @@ def _nan0(x: np.ndarray) -> np.ndarray:
 def _win(x: np.ndarray, pad_len: int, width: int) -> np.ndarray:
     """因果左零填充 + 滑窗，返回 ``[N, T, width]``。
 
-    等价 ``torch.cat([zeros(N, pad_len), x], 1).unfold(1, width, 1)``；当
+    等价 ``numpy.cat([zeros(N, pad_len), x], 1).unfold(1, width, 1)``；当
     ``pad_len == width - 1`` 时窗口数恰为 T。
     """
     n = x.shape[0]
@@ -95,7 +95,7 @@ def _win(x: np.ndarray, pad_len: int, width: int) -> np.ndarray:
 
 
 def _lower_median(a: np.ndarray) -> np.ndarray:
-    """沿最后一维取**下中位数**（等价 ``torch.median(dim=-1).values``）。
+    """沿最后一维取**下中位数**（等价 ``numpy.median(dim=-1).values``）。
 
     偶数长度窗口 torch 返回两中位中**较小**者（sorted 索引 ``n/2-1``）；numpy 的
     ``np.median`` 取均值，语义不同，故此处用 ``partition`` 精确对齐。
@@ -108,12 +108,12 @@ def _lower_median(a: np.ndarray) -> np.ndarray:
 
 
 def _tsign(x: np.ndarray) -> np.ndarray:
-    """符号函数，等价 torch.sign 的特殊值语义（``sign(NaN)=0``）。"""
+    """符号函数，等价 numpy.sign 的特殊值语义（``sign(NaN)=0``）。"""
     out: np.ndarray = (x > 0).astype(x.dtype) - (x < 0).astype(x.dtype)
     return out
 
 
-# ── 滚动统计 helper（逐行对齐 AM）─────────────────────────────────────────
+# ── 滚动统计 helper（逐行对齐 妙算）─────────────────────────────────────────
 
 
 def _rolling_mean(x: np.ndarray, w: int) -> np.ndarray:
@@ -220,7 +220,7 @@ def _ts_corr(x: np.ndarray, y: np.ndarray, w: int) -> np.ndarray:
 def _robust_norm(x: np.ndarray, w: int = _NORM_WINDOW) -> np.ndarray:
     """因果滚动 robust 归一化（median/MAD），warm-up 期（t<w-1）输出 0。
 
-    对齐 AM ``_robust_norm``：median/MAD 用**下中位数**（torch 语义），并统一转
+    对齐 妙算 ``_robust_norm``：median/MAD 用**下中位数**（torch 语义），并统一转
     float32 计算后再转回原 dtype（torch 对半精度 median 有精度问题）。
     """
     orig_dtype = x.dtype
@@ -243,12 +243,12 @@ def _norm(x: np.ndarray) -> np.ndarray:
 
 
 def _ema_simple(x: np.ndarray, span: int, exact: bool = False) -> np.ndarray:
-    """指数加权移动平均（因果），span 期；双路径与 AM **逐分支一致**。
+    """指数加权移动平均（因果），span 期；双路径与 妙算 **逐分支一致**。
 
     * ``exact=True``：严格递推 ``out[t]=alpha*x[t]+(1-alpha)*out[t-1]``。
     * 默认路径：``alpha>=1`` 直接返回；``T < 2*w_full`` 走递推；``T >= 2*w_full``
-      走向量化首值填充卷积近似。两条路径的切换阈值与 AM 完全相同，保证
-      train-serve 数值一致（AM P1-10 修复）。
+      走向量化首值填充卷积近似。两条路径的切换阈值与 妙算 完全相同，保证
+      train-serve 数值一致（妙算 P1-10 修复）。
     """
     alpha = 2.0 / (span + 1.0)
     n, t = x.shape
@@ -1050,7 +1050,7 @@ def _c_cs_zscore_ret20(raw: dict[str, Any]) -> np.ndarray:
     if n == 1:
         return _clean(_norm(ret20))
     cs_mean = ret20.mean(axis=0, keepdims=True)
-    # torch.std 默认无偏（ddof=1）
+    # 标准差默认无偏（ddof=1）
     cs_std = ret20.std(axis=0, keepdims=True, ddof=1) + _EPS
     zscore = (ret20 - cs_mean) / cs_std
     return _norm(_clean(zscore))
@@ -1153,7 +1153,7 @@ def build_feature_registry(active_features: Iterable[str] | None = None) -> Regi
 
     :param active_features: 若为 ``None``（默认），注册**全部 65 个**特征；否则仅注册
         白名单内的特征（按 ``_FEATURE_DEFS`` 原始顺序过滤，保持维序稳定）。这是
-        AM ``active_features.json`` 剪枝机制的**参数注入**替代：core 不做 import 期 IO。
+        妙算 ``active_features.json`` 剪枝机制的**参数注入**替代：core 不做 import 期 IO。
     :returns: 新的 :class:`Registry`（Feature 条目按顺序注册）。
     """
     registry = Registry()
@@ -1171,7 +1171,7 @@ FEATURE_REGISTRY: Registry = build_feature_registry()
 #: 由注册表导出有序特征名视图（保持下游 import 兼容）。
 FEATURE_NAMES: tuple[str, ...] = FEATURE_REGISTRY.feature_names
 
-#: 特征总数（= 65，与 AM 一致）。
+#: 特征总数（= 65，与 妙算 一致）。
 FEATURE_COUNT: int = len(FEATURE_REGISTRY.feature_names)
 
 
@@ -1185,7 +1185,7 @@ def compute_features(
 ) -> np.ndarray:
     """按注册顺序计算全部（或白名单）特征，堆叠为 ``[N, F, T]``。
 
-    逐特征 compute 的数值与顺序与 AM 逐元素一致；出口统一 ``nan_to_num``（nan/inf→0）。
+    逐特征 compute 的数值与顺序与 妙算 逐元素一致；出口统一 ``nan_to_num``（nan/inf→0）。
 
     :param raw_dict: 含 ``close/high/low/open/volume``（各 ``[N, T]``）的原始行情。
     :param active_features: 可选特征白名单（参数注入）；``None`` 时使用全部 65 个。
@@ -1199,7 +1199,7 @@ def compute_features(
 
 
 class MT5FeatureEngineer:
-    """特征引擎命名空间（AM API 兼容）。
+    """特征引擎命名空间（妙算 API 兼容）。
 
     提供默认特征维度 :attr:`INPUT_DIM` 与 :meth:`compute_features` 静态入口；
     全部数值计算由模块级 :func:`compute_features` 与 ``_c_*`` 实现。
@@ -1211,5 +1211,5 @@ class MT5FeatureEngineer:
     def compute_features(
         raw_dict: dict[str, Any], active_features: Iterable[str] | None = None
     ) -> np.ndarray:
-        """等价于模块级 :func:`compute_features`（AM 静态方法入口兼容）。"""
+        """等价于模块级 :func:`compute_features`（妙算 静态方法入口兼容）。"""
         return compute_features(raw_dict, active_features=active_features)

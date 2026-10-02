@@ -1,0 +1,430 @@
+{
+  "version": 1,
+  "spec": "artifacts/mine_xauusd_quick.json",
+  "budget": "quick",
+  "stop_reason": "MAX_GENERATIONS",
+  "generations": 59,
+  "n_evaluations": 5026,
+  "points": [
+    {
+      "generation": 0,
+      "best": 1.9974947370333007,
+      "mean": 0.022554266830270286,
+      "diversity": 7.873684210526315,
+      "n_evaluations": 96
+    },
+    {
+      "generation": 1,
+      "best": 1.9974947370333007,
+      "mean": 0.3027270057004406,
+      "diversity": 7.801315789473684,
+      "n_evaluations": 180
+    },
+    {
+      "generation": 2,
+      "best": 1.9974947370333007,
+      "mean": 0.47669157578923044,
+      "diversity": 7.737938596491228,
+      "n_evaluations": 264
+    },
+    {
+      "generation": 3,
+      "best": 2.2737595673145683,
+      "mean": 0.4307185595040335,
+      "diversity": 7.7140350877192985,
+      "n_evaluations": 347
+    },
+    {
+      "generation": 4,
+      "best": 2.2737595673145683,
+      "mean": 0.3658759265270692,
+      "diversity": 7.670833333333333,
+      "n_evaluations": 430
+    },
+    {
+      "generation": 5,
+      "best": 2.2737595673145683,
+      "mean": 0.3972919626091949,
+      "diversity": 7.73859649122807,
+      "n_evaluations": 513
+    },
+    {
+      "generation": 6,
+      "best": 2.2737595673145683,
+      "mean": 0.5608102182218818,
+      "diversity": 7.704166666666667,
+      "n_evaluations": 597
+    },
+    {
+      "generation": 7,
+      "best": 2.6336361142375013,
+      "mean": 0.5168146298249922,
+      "diversity": 7.673464912280702,
+      "n_evaluations": 679
+    },
+    {
+      "generation": 8,
+      "best": 2.6336361142375013,
+      "mean": 0.4220291244959398,
+      "diversity": 7.629166666666666,
+      "n_evaluations": 762
+    },
+    {
+      "generation": 9,
+      "best": 2.6336361142375013,
+      "mean": 0.4874981139370085,
+      "diversity": 7.655921052631579,
+      "n_evaluations": 846
+    },
+    {
+      "generation": 10,
+      "best": 2.6336361142375013,
+      "mean": 0.5705379310891171,
+      "diversity": 7.560964912280702,
+      "n_evaluations": 930
+    },
+    {
+      "generation": 11,
+      "best": 2.6336361142375013,
+      "mean": 0.5035770118409528,
+      "diversity": 7.6307017543859645,
+      "n_evaluations": 1013
+    },
+    {
+      "generation": 12,
+      "best": 2.6336361142375013,
+      "mean": 0.5940210168745604,
+      "diversity": 7.630043859649123,
+      "n_evaluations": 1097
+    },
+    {
+      "generation": 13,
+      "best": 2.6336361142375013,
+      "mean": 0.6698288493996915,
+      "diversity": 7.601754385964912,
+      "n_evaluations": 1181
+    },
+    {
+      "generation": 14,
+      "best": 2.6336361142375013,
+      "mean": 0.6139856951716847,
+      "diversity": 7.642543859649122,
+      "n_evaluations": 1264
+    },
+    {
+      "generation": 15,
+      "best": 2.6866018533456173,
+      "mean": 0.5471777413114782,
+      "diversity": 7.703070175438596,
+      "n_evaluations": 1348
+    },
+    {
+      "generation": 16,
+      "best": 2.6866018533456173,
+      "mean": 0.615040867654027,
+      "diversity": 7.657894736842105,
+      "n_evaluations": 1431
+    },
+    {
+      "generation": 17,
+      "best": 2.6866018533456173,
+      "mean": 0.6170487439398675,
+      "diversity": 7.660745614035088,
+      "n_evaluations": 1515
+    },
+    {
+      "generation": 18,
+      "best": 2.6866018533456173,
+      "mean": 0.7217443541686848,
+      "diversity": 7.543201754385965,
+      "n_evaluations": 1598
+    },
+    {
+      "generation": 19,
+      "best": 2.6866018533456173,
+      "mean": 0.8365150303854293,
+      "diversity": 7.466447368421052,
+      "n_evaluations": 1682
+    },
+    {
+      "generation": 20,
+      "best": 2.6866018533456173,
+      "mean": 0.9335411714352544,
+      "diversity": 7.344078947368421,
+      "n_evaluations": 1766
+    },
+    {
+      "generation": 21,
+      "best": 2.6866018533456173,
+      "mean": 0.9224779337069919,
+      "diversity": 7.202412280701754,
+      "n_evaluations": 1850
+    },
+    {
+      "generation": 22,
+      "best": 2.6866018533456173,
+      "mean": 0.685063472257298,
+      "diversity": 7.346271929824561,
+      "n_evaluations": 1934
+    },
+    {
+      "generation": 23,
+      "best": 2.6866018533456173,
+      "mean": 0.7742897469974571,
+      "diversity": 7.384868421052632,
+      "n_evaluations": 2018
+    },
+    {
+      "generation": 24,
+      "best": 2.6866018533456173,
+      "mean": 0.7531942772117454,
+      "diversity": 7.3866228070175435,
+      "n_evaluations": 2101
+    },
+    {
+      "generation": 25,
+      "best": 2.6866018533456173,
+      "mean": 0.7795874966332753,
+      "diversity": 7.43969298245614,
+      "n_evaluations": 2185
+    },
+    {
+      "generation": 26,
+      "best": 2.6866018533456173,
+      "mean": 0.6716158844095915,
+      "diversity": 7.428070175438597,
+      "n_evaluations": 2269
+    },
+    {
+      "generation": 27,
+      "best": 2.6866018533456173,
+      "mean": 0.9146808741133138,
+      "diversity": 7.354824561403508,
+      "n_evaluations": 2352
+    },
+    {
+      "generation": 28,
+      "best": 2.6994617490006902,
+      "mean": 0.7123942291161628,
+      "diversity": 7.352850877192982,
+      "n_evaluations": 2435
+    },
+    {
+      "generation": 29,
+      "best": 2.6994617490006902,
+      "mean": 0.823101268985714,
+      "diversity": 7.35219298245614,
+      "n_evaluations": 2519
+    },
+    {
+      "generation": 30,
+      "best": 2.6994617490006902,
+      "mean": 0.7163477747735945,
+      "diversity": 7.357017543859649,
+      "n_evaluations": 2602
+    },
+    {
+      "generation": 31,
+      "best": 2.6994617490006902,
+      "mean": 0.7230515795980065,
+      "diversity": 7.365570175438597,
+      "n_evaluations": 2686
+    },
+    {
+      "generation": 32,
+      "best": 2.6994617490006902,
+      "mean": 0.8080512631509679,
+      "diversity": 7.327412280701754,
+      "n_evaluations": 2770
+    },
+    {
+      "generation": 33,
+      "best": 2.6994617490006902,
+      "mean": 0.6926073768781557,
+      "diversity": 7.029824561403509,
+      "n_evaluations": 2854
+    },
+    {
+      "generation": 34,
+      "best": 2.711490939171473,
+      "mean": 0.7810353532955577,
+      "diversity": 6.944517543859649,
+      "n_evaluations": 2937
+    },
+    {
+      "generation": 35,
+      "best": 2.711490939171473,
+      "mean": 0.5844872926139283,
+      "diversity": 7.042982456140351,
+      "n_evaluations": 3020
+    },
+    {
+      "generation": 36,
+      "best": 2.711490939171473,
+      "mean": 0.8084586285680672,
+      "diversity": 7.268640350877193,
+      "n_evaluations": 3104
+    },
+    {
+      "generation": 37,
+      "best": 2.711490939171473,
+      "mean": 0.7396958329444194,
+      "diversity": 7.223245614035088,
+      "n_evaluations": 3188
+    },
+    {
+      "generation": 38,
+      "best": 2.711490939171473,
+      "mean": 0.8037809553639107,
+      "diversity": 7.1802631578947365,
+      "n_evaluations": 3272
+    },
+    {
+      "generation": 39,
+      "best": 2.712629637947444,
+      "mean": 0.814842978314943,
+      "diversity": 6.642543859649122,
+      "n_evaluations": 3356
+    },
+    {
+      "generation": 40,
+      "best": 2.712629637947444,
+      "mean": 0.9222677747500824,
+      "diversity": 6.645833333333333,
+      "n_evaluations": 3440
+    },
+    {
+      "generation": 41,
+      "best": 2.712629637947444,
+      "mean": 0.6975951772847657,
+      "diversity": 6.723026315789474,
+      "n_evaluations": 3524
+    },
+    {
+      "generation": 42,
+      "best": 2.712629637947444,
+      "mean": 0.7904853577450556,
+      "diversity": 6.917105263157895,
+      "n_evaluations": 3608
+    },
+    {
+      "generation": 43,
+      "best": 2.7636643792250615,
+      "mean": 0.9359151572401752,
+      "diversity": 6.827192982456141,
+      "n_evaluations": 3691
+    },
+    {
+      "generation": 44,
+      "best": 2.7636643792250615,
+      "mean": 0.8554797988575565,
+      "diversity": 6.869517543859649,
+      "n_evaluations": 3775
+    },
+    {
+      "generation": 45,
+      "best": 2.7636643792250615,
+      "mean": 0.7530488159127643,
+      "diversity": 6.878289473684211,
+      "n_evaluations": 3859
+    },
+    {
+      "generation": 46,
+      "best": 2.7636643792250615,
+      "mean": 0.7467172884482677,
+      "diversity": 7.137280701754386,
+      "n_evaluations": 3942
+    },
+    {
+      "generation": 47,
+      "best": 2.7636643792250615,
+      "mean": 0.9408317056766774,
+      "diversity": 6.899780701754386,
+      "n_evaluations": 4026
+    },
+    {
+      "generation": 48,
+      "best": 2.81907821417563,
+      "mean": 0.8671487044709106,
+      "diversity": 6.54078947368421,
+      "n_evaluations": 4110
+    },
+    {
+      "generation": 49,
+      "best": 2.81907821417563,
+      "mean": 0.8853687430260634,
+      "diversity": 6.906798245614035,
+      "n_evaluations": 4193
+    },
+    {
+      "generation": 50,
+      "best": 2.81907821417563,
+      "mean": 0.74224845923859,
+      "diversity": 7.056578947368421,
+      "n_evaluations": 4277
+    },
+    {
+      "generation": 51,
+      "best": 2.81907821417563,
+      "mean": 0.7773519502667524,
+      "diversity": 7.078728070175439,
+      "n_evaluations": 4360
+    },
+    {
+      "generation": 52,
+      "best": 2.81907821417563,
+      "mean": 0.7168558738493586,
+      "diversity": 7.343859649122807,
+      "n_evaluations": 4444
+    },
+    {
+      "generation": 53,
+      "best": 2.81907821417563,
+      "mean": 0.8671677359119112,
+      "diversity": 7.202850877192983,
+      "n_evaluations": 4527
+    },
+    {
+      "generation": 54,
+      "best": 2.81907821417563,
+      "mean": 0.8665615591600515,
+      "diversity": 7.1932017543859645,
+      "n_evaluations": 4610
+    },
+    {
+      "generation": 55,
+      "best": 2.81907821417563,
+      "mean": 0.8889756171336695,
+      "diversity": 7.157894736842105,
+      "n_evaluations": 4692
+    },
+    {
+      "generation": 56,
+      "best": 2.81907821417563,
+      "mean": 0.7728062684299438,
+      "diversity": 7.19671052631579,
+      "n_evaluations": 4776
+    },
+    {
+      "generation": 57,
+      "best": 2.8201907760211045,
+      "mean": 0.8197494673516563,
+      "diversity": 7.216228070175439,
+      "n_evaluations": 4859
+    },
+    {
+      "generation": 58,
+      "best": 2.821008768919352,
+      "mean": 0.9772214260574676,
+      "diversity": 6.968201754385965,
+      "n_evaluations": 4942
+    },
+    {
+      "generation": 59,
+      "best": 2.821008768919352,
+      "mean": 0.9518133371615108,
+      "diversity": 6.917324561403508,
+      "n_evaluations": 5026
+    }
+  ]
+}

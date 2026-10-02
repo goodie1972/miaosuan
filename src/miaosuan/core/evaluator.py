@@ -3,9 +3,9 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""因子有效性评估器（numpy 化移植，M5）—— 打分 / 剪枝 / 消融 / 报告 / Active_Subset。
+"""因子有效性评估器（numpy实现，M5）—— 打分 / 剪枝 / 消融 / 报告 / Active_Subset。
 
-移植自冻结 AlphaMaster 的 ``model_core/evaluator.py``（原 torch 实现），逐行对齐语义
+独立实现，语义对齐 ``model_core/evaluator.py``，逐行对齐语义
 （R4–R7）：
 
 * :func:`_align_causal` —— 防 look-ahead 的时间对齐（**原样保留**，末端裁掉 ``horizon`` 步）；
@@ -16,10 +16,10 @@
 关键等价与边界拆分：
 
 * ``torch`` 张量 → numpy 数组（``cand`` / ``tgt`` 直接为 ``np.ndarray``）；IC/RankIC 仍用
-  ``scipy.stats.pearsonr`` / ``spearmanr``（与 AM 同一实现，数值逐点一致）；MI 用等频分箱。
+  ``scipy.stats.pearsonr`` / ``spearmanr``（与 妙算 同一实现，数值逐点一致）；MI 用等频分箱。
 * **可复现**：本模块无全局可变状态；``build_report`` 的 ``generated_at`` 改为**可注入**
-  （默认仍取 UTC now，便于对拍时冻结时间戳）。
-* **无 IO**：``save_report`` / ``load_report``（AM 中做文件读写）已拆到
+  （默认仍取 UTC now，便于回归验证时冻结时间戳）。
+* **无 IO**：``save_report`` / ``load_report``（妙算 中做文件读写）已拆到
   :mod:`miaosuan.report.persist`，``core/`` 保持纯 numpy、无文件 IO。
 * ``ConfigError`` 统一取自 :mod:`miaosuan.errors`（错误码 ``E-CONFIG``）。
 """
@@ -109,7 +109,7 @@ class Report:
 
 
 def _as_array(x: np.ndarray) -> np.ndarray:
-    """保证为 numpy 数组（AM ``_to_numpy`` 的去 torch 版）。"""
+    """保证为 numpy 数组（妙算 ``_to_numpy`` 的去 torch 版）。"""
     return np.asarray(x)
 
 
@@ -161,7 +161,7 @@ def _compute_ic_rankic(cand: np.ndarray, tgt: np.ndarray) -> tuple[float, float,
         try:
             ic_val, _ = pearsonr(cv, tv)
             ric_val, _ = spearmanr(cv, tv)
-        except Exception:  # noqa: BLE001 - 与 AM 一致：单品种失败跳过
+        except Exception:  # noqa: BLE001 - 与 妙算 一致：单品种失败跳过
             continue
         if math.isfinite(ic_val):
             ic_list.append(float(ic_val))
@@ -208,7 +208,7 @@ def _compute_mi(cand: np.ndarray, tgt: np.ndarray) -> float:
         t_q = np.unique(t_q)
         c_bins = np.searchsorted(c_q[1:-1], cv, side="right")
         t_bins = np.searchsorted(t_q[1:-1], tv, side="right")
-    except Exception:  # noqa: BLE001 - 与 AM 一致：分箱失败返回 0
+    except Exception:  # noqa: BLE001 - 与 妙算 一致：分箱失败返回 0
         return 0.0
 
     n_c = len(c_q)
@@ -258,7 +258,7 @@ def _pearson_corr(a: np.ndarray, b: np.ndarray) -> float:
     try:
         r, _ = pearsonr(av, bv)
         return abs(float(r)) if math.isfinite(r) else 0.0
-    except Exception:  # noqa: BLE001 - 与 AM 一致
+    except Exception:  # noqa: BLE001 - 与 妙算 一致
         return 0.0
 
 
@@ -542,7 +542,7 @@ def ablate(
 
         try:
             m_with = _compute_metric(with_dict, tgt_w, horizon, w_rankic, w_mi)
-        except Exception as e:  # noqa: BLE001 - 与 AM 一致：失败即返回 error
+        except Exception as e:  # noqa: BLE001 - 与 妙算 一致：失败即返回 error
             return AblationResult(
                 name=name,
                 marginal_contribution=None,
@@ -590,7 +590,7 @@ def build_report(
 ) -> Report:
     """构建排序报告（R7.1）。按 ``importance_score`` 降序 + 确定性 tie-break（名称字母序）。
 
-    ``generated_at`` 可注入（默认 UTC now），便于对拍时冻结时间戳。
+    ``generated_at`` 可注入（默认 UTC now），便于回归验证时冻结时间戳。
     """
 
     def sort_key(row: ReportRow) -> tuple[float, str]:

@@ -43,6 +43,8 @@ from .adapters.base import install_stub_modules, uninstall_stub_modules
 from .adapters.shenji import ShenjiPort
 from .adapters.shenji.lint import lint_source
 from .config import AppConfig
+from .config import strategies_dir as _default_strategies_dir
+from .strategy_docs import write_strategy_docs
 from .core.features import compute_features
 from .core.signal import MIN_TRADE_EXPOSURE
 from .core.vm import StackVM
@@ -609,7 +611,12 @@ def combine(
 @app.command()
 def export(
     spec_path: str = typer.Option(..., "--spec", help="StrategySpec JSON 路径"),
-    out_dir: str = typer.Option("artifacts", "--out-dir", help="输出目录"),
+    out_dir: str = typer.Option(
+        "", "--out-dir", help="输出目录（缺省用 settings.paths.strategies 策略专属目录）"
+    ),
+    docs: bool = typer.Option(
+        True, "--docs/--no-docs", help="是否同步生成中英双语说明文档 + 更新映射表"
+    ),
     name: str = typer.Option("", "--name", help="覆盖策略名（影响文件名与 STRATEGY_NAME）"),
     gate_deadband: float = typer.Option(
         0.0, "--gate-deadband", help="GATE 死区（R1 保护；0 = 关闭，与回测逐位一致）"
@@ -639,10 +646,27 @@ def export(
     )
     result = port.compile(spec)
 
-    target_dir = Path(out_dir)
+    target_dir = Path(out_dir) if out_dir else Path(_default_strategies_dir())
     target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / result.filename
     target.write_text(result.source, encoding="utf-8")
+
+    if docs:
+        from .adapters.shenji.generator import readable_formula
+
+        try:
+            written = write_strategy_docs(
+                spec,
+                strategy_path=target,
+                magic=result.magic,
+                formula=readable_formula(tuple(int(t) for t in spec.payload.tokens)),
+                param_space=[p.to_dict() for p in result.param_space],
+                spec_file=Path(spec_path).name,
+            )
+            for p in written:
+                _echo(f"已产出：{p}")
+        except Exception as exc:  # noqa: BLE001 - 文档失败不阻断策略导出
+            _echo(f"⚠ 说明文档生成失败（策略文件已写出）：{exc}")
 
     _echo(f"已导出：{target}")
     _echo(f"magic={result.magic}  name={spec.name}  platform={result.platform}")

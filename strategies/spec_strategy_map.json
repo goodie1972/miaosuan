@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "updated_at": "2026-10-01T10:31:56+00:00",
+  "strategies": [
+    {
+      "strategy_file": "20260926_m30_bb_deepreturn_optimized_v1.py",
+      "spec_file": "m30_bb_deepreturn_optimized_v1_spec.json",
+      "spec_id": "1e01feae75453529",
+      "name": "m30_bb_deepreturn_optimized",
+      "magic": 661102,
+      "vocab_version": "v9217a2c0d91a",
+      "market": "FOREX_XAUUSD",
+      "generated_at": "2026-09-26T06:29:43.094052+00:00",
+      "gate_verdict": "RESEARCH_ONLY",
+      "deployable": false,
+      "docs": {
+        "zh": "20260926_m30_bb_deepreturn_optimized_v1_README_zh.md",
+        "en": "20260926_m30_bb_deepreturn_optimized_v1_README_en.md"
+      }
+    }
+  ]
+}

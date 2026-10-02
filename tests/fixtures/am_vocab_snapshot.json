@@ -1,6 +1,6 @@
 {
-  "_comment": "冻结的 AlphaMaster 词表快照（Oracle）。由 model_core/vocab.py 用 compute_vocab_version 派生，逐字符冻结。用于 tests/parity 在不安装 torch 时的稳定对拍。AM 侧来源：AlphaMaster-main/strategies/best_XAUUSD.json 的 vocab_version 一致。",
-  "source": "AlphaMaster-main/model_core/{features,ops,vocab}.py",
+  "_comment": "冻结的 妙算 词表快照（frozen baseline）。由 model_core/vocab.py 用 compute_vocab_version 派生，逐字符冻结。用于 tests/regression 在不安装 torch 时的稳定回归验证。妙算 侧来源：妙算/strategies/best_XAUUSD.json 的 vocab_version 一致。",
+  "source": "妙算/model_core/{features,ops,vocab}.py",
   "vocab_version": "v9217a2c0d91a",
   "vocab_schema_tag": "4.0-registry",
   "feature_count": 65,

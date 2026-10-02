@@ -106,18 +106,18 @@ ft_EPS = 1e-9
 ft_NORM_WINDOW = 200
 
 def ft_f32(x: np.ndarray) -> np.ndarray:
-    """等价 ``torch.Tensor.float()``：转 float32（保持 [N, T] 形状）。"""
+    """等价 ``numpy.ndarray.float()``：转 float32（保持 [N, T] 形状）。"""
     return np.asarray(x, dtype=np.float32)
 
 def ft_clean(x: np.ndarray) -> np.ndarray:
-    """等价 ``torch.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)``。"""
+    """等价 ``numpy.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)``。"""
     out: np.ndarray = np.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
     return out
 
 def ft_win(x: np.ndarray, pad_len: int, width: int) -> np.ndarray:
     """因果左零填充 + 滑窗，返回 ``[N, T, width]``。
 
-    等价 ``torch.cat([zeros(N, pad_len), x], 1).unfold(1, width, 1)``；当
+    等价 ``numpy.cat([zeros(N, pad_len), x], 1).unfold(1, width, 1)``；当
     ``pad_len == width - 1`` 时窗口数恰为 T。
     """
     n = x.shape[0]
@@ -126,7 +126,7 @@ def ft_win(x: np.ndarray, pad_len: int, width: int) -> np.ndarray:
     return np.lib.stride_tricks.sliding_window_view(padded, width, axis=1)
 
 def ft_lower_median(a: np.ndarray) -> np.ndarray:
-    """沿最后一维取**下中位数**（等价 ``torch.median(dim=-1).values``）。
+    """沿最后一维取**下中位数**（等价 ``numpy.median(dim=-1).values``）。
 
     偶数长度窗口 torch 返回两中位中**较小**者（sorted 索引 ``n/2-1``）；numpy 的
     ``np.median`` 取均值，语义不同，故此处用 ``partition`` 精确对齐。
@@ -156,7 +156,7 @@ def ft_ac1(close: np.ndarray, w: int = 20) -> np.ndarray:
 def ft_robust_norm(x: np.ndarray, w: int = ft_NORM_WINDOW) -> np.ndarray:
     """因果滚动 robust 归一化（median/MAD），warm-up 期（t<w-1）输出 0。
 
-    对齐 AM ``ft_robust_norm``：median/MAD 用**下中位数**（torch 语义），并统一转
+    对齐 妙算 ``ft_robust_norm``：median/MAD 用**下中位数**（torch 语义），并统一转
     float32 计算后再转回原 dtype（torch 对半精度 median 有精度问题）。
     """
     orig_dtype = x.dtype
@@ -222,7 +222,7 @@ def op_n2n(
 ) -> np.ndarray:
     """``np.nan_to_num`` 的强类型包装。
 
-    语义与 AM 的 ``torch.nan_to_num`` 一致：``nan`` 默认 0；``posinf``/``neginf``
+    语义与 妙算 的 ``numpy.nan_to_num`` 一致：``nan`` 默认 0；``posinf``/``neginf``
     为 ``None`` 时替换为 dtype 的最大/最小有限值（numpy 与 torch 默认行为相同）。
     此处仅加类型注记（numpy 存根对 ``nan_to_num`` 的返回类型为 ``Any``）。
     """

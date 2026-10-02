@@ -3,12 +3,12 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""M5 对拍的**确定性输入用例**（纯 numpy，无 torch / 无妙算依赖）。
+"""M5 回归验证的**确定性输入用例**（纯 numpy，无 torch / 无妙算依赖）。
 
 同一份用例被两侧共享：
 
-* ``scripts/gen_m5_baseline.py``（torch Oracle）→ 生成 AM 原实现的输入/输出基准；
-* ``tests/parity/test_{vm,signal,backtest,evaluator}_parity.py``（妙算 venv）→ 用妙算 numpy
+* ``scripts/gen_m5_baseline.py``（torch frozen baseline）→ 生成 妙算 原实现的输入/输出基准；
+* ``tests/regression/test_{vm,signal,backtest,evaluator}_regression.py``（妙算 venv）→ 用妙算 numpy
   实现复算并比对。
 
 由于两侧 numpy 版本一致（2.5.3）且 seed 固定，``build_*`` 在两侧**逐位相同**；生成器会把
@@ -75,7 +75,7 @@ def build_feat_panels() -> dict[str, np.ndarray]:
 
 
 def build_normalize_arrays() -> dict[str, np.ndarray]:
-    """构造 ``_normalize_output`` 对拍数组（覆盖滚动 / expanding / 截面 / 常数）。"""
+    """构造 ``_normalize_output`` 回归验证数组（覆盖滚动 / expanding / 截面 / 常数）。"""
     arrs: dict[str, np.ndarray] = {}
     arrs["n1_t120"] = np.random.default_rng(SEED + 10).normal(0, 1, (1, 120)).astype(DTYPE)
     arrs["n1_t499"] = np.random.default_rng(SEED + 11).normal(0, 1, (1, 499)).astype(DTYPE)

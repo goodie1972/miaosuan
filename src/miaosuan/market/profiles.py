@@ -187,7 +187,7 @@ class FrozenMarketProfile:
 
 # ── 五个实例（FOREX_XAUUSD + 3 个占位 + 国内商品期货）─────────────────────
 
-#: 外汇/贵金属现货（MVP 目标市场）。H1，24×5 交易，年化 bar 数对齐 AM ``6240``。
+#: 外汇/贵金属现货（MVP 目标市场）。H1，24×5 交易，年化 bar 数对齐 妙算 ``6240``。
 FOREX_XAUUSD = FrozenMarketProfile(
     name="FOREX_XAUUSD",
     quote_currency="USD",

@@ -11,7 +11,7 @@
 * ``_pending_feature`` / ``_pending_operator``（脚手架占位函数命名）；
 * ``TODO`` / ``FIXME`` / ``XXX``（未完成标记）。
 
-该哨兵在 M2（vocab 脚手架）时会失败——这正是它的用途：等 ops/features 全部 numpy 化
+该哨兵在 M2（vocab 脚手架）时会失败——这正是它的用途：等 ops/features 全部 numpy实现
 落地后转绿，防止后续再把占位实现混入核心域。
 """
 

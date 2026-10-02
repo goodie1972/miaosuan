@@ -3,13 +3,13 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""M5 **端到端对拍**：XAUUSD_H1 真实数据 × best_XAUUSD 真实公式（妙算 numpy vs AM torch）。
+"""M5 **端到端回归验证**：XAUUSD_H1 真实数据 × best_XAUUSD 真实公式（妙算 numpy vs numpy reference）。
 
 链路（team-lead 验收新增项）：
 
     parquet → raw_dict → compute_features → StackVM.execute(formula) → factor
 
-基准 = 冻结 AM 的**原生管线**（``ParquetDataManager → MT5FeatureEngineer.compute_features
+基准 = 冻结基准 的**原生管线**（``ParquetDataManager → MT5FeatureEngineer.compute_features
 → StackVM.execute``），由 ``scripts/gen_e2e_xauusd_baseline.py`` 生成。
 
 判定与披露（team-lead 要求「逐点 max|Δ| 在容差内，并报告 mean/std/min/max/|tanh|≥0.05 占比」）：
@@ -28,7 +28,7 @@
 ``StackVM`` 的 ``GATE`` 属「双线性」算子：其分支由条件特征（本公式为 ``feat33 = TRIX_15``）
 的**符号**决定。当该条件在某一根 bar 上恰好穿越 0 时，torch 与 numpy 因 **float32 归约顺序**
 差异可能得到 1-ULP 相反的符号（如 ``0.0`` vs ``+9.4e-4``），从而选中不同分支，使该点因子出现
-O(1) 跳变。这是「双线性算子在零点的不连续」的固有性质，**不是移植 bug**：全序列仅该处附近
+O(1) 跳变。这是「双线性算子在零点的不连续」的固有性质，**不是实现 bug**：全序列仅该处附近
 个别点不吻合（p99.9 = 4.3e-3），聚合统计量逐位吻合。本测试如实披露并对其做有界、可定位的判定，
 而非放宽容差掩盖。基线由 ``gen_e2e_xauusd_baseline.py`` 随数据源行数再生成（当前 8203 根），
 bar 数一律从 ``e2e_meta`` 动态断言，不硬编码。
@@ -45,7 +45,7 @@ import pytest
 from miaosuan.core.features import FEATURE_NAMES, compute_features
 from miaosuan.core.vm import StackVM
 
-pytestmark = pytest.mark.parity
+pytestmark = pytest.mark.regression
 
 # ── 容差 ───────────────────────────────────────────────────────────────────
 _FEAT_MAX_ATOL = 5e-2  # 特征层逐点 max|Δ|（TRIX 族零点附近为主）
@@ -79,7 +79,7 @@ def _stats(factor: np.ndarray) -> dict[str, float]:
 
 
 def _build_raw_from_parquet(parquet: str) -> dict[str, np.ndarray]:
-    """妙算侧独立重建 ``raw_dict``（复刻 AM ``ParquetDataManager.load`` 语义）。
+    """妙算侧独立重建 ``raw_dict``（复刻 妙算 ``ParquetDataManager.load`` 语义）。
 
     与 ``data_pipeline/parquet_manager.py`` 一致：
     ``tick_volume`` 优先；``time`` 最大 < 1e7 视为被除过 1000 则乘回；按 ``time`` 排序并去重
@@ -122,7 +122,7 @@ def e2e_raw(e2e_meta: dict) -> dict[str, np.ndarray]:
     """重建的 XAUUSD 原始面板（parquet 不在本机则跳过）。"""
     parquet = Path(e2e_meta["parquet"])
     if not parquet.is_file():
-        pytest.skip(f"缺少 parquet：{parquet}（端到端对拍需要真实行情）")
+        pytest.skip(f"缺少 parquet：{parquet}（端到端回归验证需要真实行情）")
     return _build_raw_from_parquet(str(parquet))
 
 
@@ -150,7 +150,7 @@ def test_e2e_data_path(e2e_npz: dict, e2e_meta: dict, e2e_raw: dict) -> None:
 # ── 2) 特征层 ──────────────────────────────────────────────────────────────
 
 
-def test_e2e_feature_parity(e2e_npz: dict, e2e_run: tuple[np.ndarray, np.ndarray]) -> None:
+def test_e2e_feature_regression(e2e_npz: dict, e2e_run: tuple[np.ndarray, np.ndarray]) -> None:
     """65 维特征逐点 max|Δ| 记录并断言。"""
     feat, _factor = e2e_run
     exp = e2e_npz["feat"]
@@ -164,7 +164,7 @@ def test_e2e_feature_parity(e2e_npz: dict, e2e_run: tuple[np.ndarray, np.ndarray
     )
 
 
-def test_e2e_feature_bulk_parity(e2e_npz: dict, e2e_run: tuple[np.ndarray, np.ndarray]) -> None:
+def test_e2e_feature_bulk_regression(e2e_npz: dict, e2e_run: tuple[np.ndarray, np.ndarray]) -> None:
     """特征层整体分布：绝大多数点吻合（p99 / p99.9 级），仅极少数零点附近离群。
 
     TRIX 族（``TRIX_SIGNAL`` / ``TRIX_15``）含除法/符号结构，其输出在零点附近对 float32
@@ -201,7 +201,7 @@ def test_e2e_factor_stats(e2e_meta: dict, e2e_run: tuple[np.ndarray, np.ndarray]
         f"在市占比 {got['in_market_ratio']} vs {ref['in_market_ratio']}"
     )
 
-    # 冻结的验收参考值（AM 侧）
+    # 冻结的验收参考值（妙算 侧）
     assert abs(ref["mean"] - 0.2529290020465851) < 5e-3
     assert abs(ref["in_market_ratio"] - 0.9229096181730304) < 5e-3
     assert abs(ref["max"] - 3.0) < 1e-6

@@ -1,6 +1,6 @@
 name: CI
 
-# 妙算持续集成：静态检查 + 单元测试 + 差分对拍。
+# 妙算持续集成：静态检查 + 单元测试 + 差分回归验证。
 # 对应架构 §9.7「依赖方向 CI 强制」与 T01 验收第 1、3、4 条。
 
 on:
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   quality:
-    name: lint + test + parity
+    name: lint + test + regression
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -51,12 +51,12 @@ jobs:
         run: pytest -q tests/test_dependency_direction.py
 
       - name: 单元测试
-        run: pytest -q tests --ignore=tests/parity
+        run: pytest -q tests --ignore=tests/regression
 
-      - name: 差分对拍（vocab 版本恒等）
-        # 说明：CI 默认不装 torch；Oracle 使用 fixtures 中冻结的 AM 词表快照。
-        # 若需真·活体对拍，安装 oracle extra：pip install -e ".[oracle]"
-        run: pytest -q tests/parity
+      - name: 差分回归验证（vocab 版本恒等）
+        # 说明：CI 默认不装 torch；frozen baseline 使用 fixtures 中冻结的 妙算 词表快照。
+        # 若需真·活体回归验证，安装 oracle extra：pip install -e ".[oracle]"
+        run: pytest -q tests/regression
 
   secret-scan:
     name: gitleaks 密钥扫描

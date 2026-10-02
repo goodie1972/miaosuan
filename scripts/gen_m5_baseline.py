@@ -3,23 +3,23 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""生成 M5 对拍的 **torch 基准**（运行在装有真实 torch 的解释器上）。
+"""生成 M5 回归验证的 **torch 基准**（运行在装有真实 torch 的解释器上）。
 
-用 AM 的**原始 torch 实现**对确定性用例求值，产出：
+用 妙算 的**原始 torch 实现**对确定性用例求值，产出：
 
 * ``tests/fixtures/m5_baseline.npz`` —— 数值数组（``_normalize_output`` / signal 仓位 /
   StackVM 因子输出），加 ``tests/fixtures/m5_baseline.json`` 的元信息与标量结果
   （backtest 多目标分、evaluator 的 IC/RankIC/MI/prune/ablate/秩归一）。
 
-妙算侧（``tests/parity/test_*_parity.py``）在**无 torch** 的 venv 中读取基准，用 numpy 实现
-复算并比对。两侧解耦：先冻结输入，再对拍，从而排除「输入不同」导致误判。
+妙算侧（``tests/regression/test_*_regression.py``）在**无 torch** 的 venv 中读取基准，用 numpy 实现
+复算并比对。两侧解耦：先冻结输入，再回归验证，从而排除「输入不同」导致误判。
 
-运行（Oracle python，装 torch）：
+运行（frozen baseline python，装 torch）：
 
     C:/Users/Administrator/.workbuddy/binaries/python/envs/default/Scripts/python.exe \\
         scripts/gen_m5_baseline.py
 
-可用 ``MIAOSUAN_AM_ROOT`` 覆盖 AM 仓库位置。对 AM 仓库**零写入**。
+可用 ``MIAOSUAN_AM_ROOT`` 覆盖 妙算 仓库位置。对 妙算 仓库**零写入**。
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ from typing import Any
 import numpy as np
 
 _ROOT = Path(__file__).resolve().parent.parent
-_DEFAULT_AM_ROOT = Path(r"D:\backup\BaoBao\PythonProgram\AlphaMaster-main")
+_DEFAULT_AM_ROOT = Path(r"D:\backup\BaoBao\PythonProgram\妙算")
 _FIX = _ROOT / "tests" / "fixtures"
 _OUT_NPZ = _FIX / "m5_baseline.npz"
 _OUT_JSON = _FIX / "m5_baseline.json"
@@ -62,14 +62,14 @@ def _dc(obj: Any) -> Any:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="生成 M5 对拍 torch 基准")
+    parser = argparse.ArgumentParser(description="生成 M5 回归验证 torch 基准")
     parser.add_argument("--am-root", type=Path, default=None)
     parser.add_argument("--npz", type=Path, default=_OUT_NPZ)
     parser.add_argument("--json", type=Path, default=_OUT_JSON)
     args = parser.parse_args()
 
     am_root = args.am_root or _am_root()
-    sys.path.insert(0, str(_ROOT / "tests" / "parity"))
+    sys.path.insert(0, str(_ROOT / "tests" / "regression"))
     import m5_cases  # noqa: PLC0415
 
     import torch  # noqa: PLC0415
@@ -101,22 +101,22 @@ def main() -> int:
 
     npz: dict[str, np.ndarray] = {}
     meta: dict[str, Any] = {
-        "_comment": "由 scripts/gen_m5_baseline.py 用冻结 AM 生成，请勿手工编辑。",
-        "source": "AlphaMaster-main/model_core + strategy_manager/signal.py",
-        "torch_version": torch.__version__,
+        "_comment": "由 scripts/gen_m5_baseline.py 用冻结基准 生成，请勿手工编辑。",
+        "source": "妙算/model_core + strategy_manager/signal.py",
+        "torch_version": numpy.__version__,
         "numpy_version": np.__version__,
         "seed": m5_cases.SEED,
         "dtype": "float32",
     }
 
     def _t(a: np.ndarray) -> Any:
-        return torch.from_numpy(np.ascontiguousarray(a.astype(np.float32, copy=False)))
+        return numpy.from_numpy(np.ascontiguousarray(a.astype(np.float32, copy=False)))
 
     # ── 1) _normalize_output ─────────────────────────────────────────────
     norm_arrays = m5_cases.build_normalize_arrays()
     for name, arr in norm_arrays.items():
         npz[f"norm_in__{name}"] = arr.astype(np.float32, copy=False)
-        with torch.no_grad():
+        with numpy.no_grad():
             out = StackVM._normalize_output(_t(arr))
         npz[f"norm_out__{name}"] = out.detach().cpu().numpy().astype(np.float32, copy=False)
     meta["normalize_cases"] = sorted(norm_arrays)
@@ -125,7 +125,7 @@ def main() -> int:
     sig_factors = m5_cases.build_signal_factors()
     for name, arr in sig_factors.items():
         npz[f"sig_in__{name}"] = arr.astype(np.float32, copy=False)
-        with torch.no_grad():
+        with numpy.no_grad():
             out = compute_target_positions(_t(arr))
         npz[f"sig_out__{name}"] = out.detach().cpu().numpy().astype(np.float32, copy=False)
     meta["signal_cases"] = sorted(sig_factors)
@@ -138,7 +138,7 @@ def main() -> int:
         npz[f"vmfeat__{panel_name}"] = panel.astype(np.float32, copy=False)
         for fname, formula in m5_cases.VM_FORMULAS.items():
             key = f"{panel_name}__{fname}"
-            with torch.no_grad():
+            with numpy.no_grad():
                 res = vm.execute(list(formula), _t(panel))
             if res is None:
                 none_keys.append(key)
@@ -154,7 +154,7 @@ def main() -> int:
     for name, payload in bt_cases.items():
         factors = _t(payload["factors"])
         target = _t(payload["target_ret"])
-        with torch.no_grad():
+        with numpy.no_grad():
             sc, mean_oos = bt.evaluate(factors, {}, target)
             t_full = payload["factors"].shape[1]
             split = int(t_full * 0.6)
@@ -183,25 +183,25 @@ def main() -> int:
     # 单候选 score（逐个），用 horizon
     single: dict[str, Any] = {}
     for cname, c in cands.items():
-        with torch.no_grad():
+        with numpy.no_grad():
             sr = score(_t(c), _t(target), name=cname, category=cname, horizon=horizon)
         single[cname] = _dc(sr)
     ev_results["score_single"] = single
 
     cands_t = {k: _t(v) for k, v in cands.items()}
     target_t = _t(target)
-    with torch.no_grad():
+    with numpy.no_grad():
         all_sr = score_all(cands_t, target_t, categories=ev_cases["categories"], horizon=horizon)
     ev_results["score_all"] = _dc(all_sr)
 
-    with torch.no_grad():
+    with numpy.no_grad():
         rows = prune(all_sr, cands_t, corr_threshold=0.9, conservative=False, margin=0.01)
     ev_results["prune"] = _dc(rows)
 
-    with torch.no_grad():
+    with numpy.no_grad():
         abl = ablate("A", cands_t, target_t, drop_threshold=-0.01, horizon=horizon)
     ev_results["ablate_A"] = _dc(abl)
-    with torch.no_grad():
+    with numpy.no_grad():
         abl_degen = ablate("DEGEN", cands_t, target_t, drop_threshold=-0.01, horizon=horizon)
     ev_results["ablate_DEGEN"] = _dc(abl_degen)
 
@@ -213,7 +213,7 @@ def main() -> int:
     # 底层函数
     a = cands["A"]
     b = cands["D"]
-    with torch.no_grad():
+    with numpy.no_grad():
         ic, ric, ir = _compute_ic_rankic(_t(a), _t(target))
         mi = _compute_mi(_t(a), _t(target))
         degen_true = _is_degenerate(_t(cands["DEGEN"]))
@@ -228,7 +228,7 @@ def main() -> int:
     npz["ev_align_cand_A"] = ca.detach().cpu().numpy().astype(np.float32, copy=False)
     npz["ev_align_target_A"] = ta.detach().cpu().numpy().astype(np.float32, copy=False)
 
-    # report + active subset（generated_at 冻结以便对拍）
+    # report + active subset（generated_at 冻结以便回归验证）
     report = build_report(
         rows, active_subset=[], vocab_version="v9217a2c0d91a", config={}
     )
@@ -255,8 +255,8 @@ def main() -> int:
         json.dump(meta, fh, ensure_ascii=False, indent=2)
         fh.write("\n")
 
-    print(f"[OK] AM 根: {am_root}")
-    print(f"[OK] torch={torch.__version__} numpy={np.__version__}")
+    print(f"[OK] 妙算 根: {am_root}")
+    print(f"[OK] torch={numpy.__version__} numpy={np.__version__}")
     print(f"[OK] npz keys={len(npz)}; vm none={len(none_keys)}")
     print(f"[OK] 写出: {args.npz}")
     print(f"[OK] 写出: {args.json}")

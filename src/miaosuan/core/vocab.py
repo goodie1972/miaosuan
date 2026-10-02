@@ -3,7 +3,7 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""Formula_Vocabulary 集成与确定性版本（移植自 AM ``model_core/vocab.py``，近乎原样）。
+"""Formula_Vocabulary 集成与确定性版本（独立实现，参考 ``model_core/vocab.py``，完整对齐）。
 
 本模块把 Formula_Vocabulary 从「手工维护的特征名元组 + 手工版本字符串」迁移为
 由注册层（:mod:`miaosuan.core.registry.Registry`）驱动、版本确定性派生的实现：
@@ -26,9 +26,9 @@ import 方向说明：``features.py`` / ``ops.py`` 只依赖 ``.registry``，本
 注册表视图不构成循环依赖。下游 ``vm.py`` / ``config.py`` 等对 ``FEATURE_NAMES`` /
 ``FORMULA_VOCAB`` / ``VOCAB_VERSION`` 的 import 保持兼容。
 
-与 AM 的差异（唯一）：``VocabVersionMismatchError`` 改为从 :mod:`miaosuan.errors`
+与 妙算 的差异（唯一）：``VocabVersionMismatchError`` 改为从 :mod:`miaosuan.errors`
 导入（统一异常体系，架构 §9.5，错误码 ``E-VOCAB-MISMATCH``），而非在本模块就地定义；
-其余逻辑与注释与 AM 逐字一致。
+其余逻辑与注释与 妙算 逐字一致。
 """
 
 from __future__ import annotations

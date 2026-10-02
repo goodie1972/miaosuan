@@ -3,7 +3,7 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""RpnGA 引擎 + AM 口径适应度单测（M10/M11）。"""
+"""RpnGA 引擎 + 口径适应度单测（M10/M11）。"""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from miaosuan.search.ga import (
 )
 from miaosuan.search.rpn import Individual, is_feasible, random_feasible
 
-# ── AM 口径辅助函数 ──────────────────────────────────────────────────────────
+# ── 口径辅助函数 ──────────────────────────────────────────────────────────
 
 
 def test_build_walk_forward_folds_rolling() -> None:
@@ -34,8 +34,8 @@ def test_build_walk_forward_folds_rolling() -> None:
         ordered = f["train_start"] < f["train_end"] <= f["val_start"] < f["val_end"]
         assert ordered
         assert f["val_start"] == f["train_end"] + f["gap"]
-    # AM 等价：total_required > T 时把 gap 收敛到 ``(T - fold_size*n)//n``；
-    # 由于 ``fold_size = T // n``，典型 T 下该值为 0（冻结 AM 已如此，逐点保留）。
+    # 妙算 等价：total_required > T 时把 gap 收敛到 ``(T - fold_size*n)//n``；
+    # 由于 ``fold_size = T // n``，典型 T 下该值为 0（冻结基准 已如此，逐点保留）。
     assert folds[0]["gap"] == 0
     # 退化：数据过短
     degenerate = build_walk_forward_folds(3, n_folds=5, gap=20)

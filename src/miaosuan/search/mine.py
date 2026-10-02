@@ -54,7 +54,7 @@ DEFAULT_TOP_K: int = 5
 
 
 def compute_target_ret(open_arr: np.ndarray) -> np.ndarray:
-    """计算前瞻收益 ``target_ret[t] = log(open[t+2] / open[t+1])``（AM ``data_manager`` 等价）。
+    """计算前瞻收益 ``target_ret[t] = log(open[t+2] / open[t+1])``（妙算 ``data_manager`` 等价）。
 
     末 2 列无未来收益 → 置 0；``open`` 分母为 0 时以 1 兜底（防止 ``log(inf)``）。
     """
@@ -272,8 +272,8 @@ def mine(
     :param evaluator: 适应度评估器（缺省构造 :class:`AMFitnessEvaluator`；测试可注入合成评估器）。
     :param top_k: 汇总的候选数。
     :param budget_profile: 预算档位名（``quick`` / ``standard`` / ``deep``）。
-    :param n_folds: Walk-Forward 折数（默认 5，与 AM 一致）。
-    :param gap: 折间间隔（默认 20，与 AM ``WF_GAP`` 一致）。
+    :param n_folds: Walk-Forward 折数（默认 5，与 妙算 一致）。
+    :param gap: 折间间隔（默认 20，与 妙算 ``WF_GAP`` 一致）。
     """
     prof = _resolve_profile(panel, profile)
     seal_registry = registry if registry is not None else HoldoutSealRegistry(DEFAULT_SEAL_PATH)

@@ -25,10 +25,10 @@
 | pyyaml | 6.0.3 |
 | jinja2 | 3.1.6 |
 | typer | 0.27.2 |
-| torch | **未安装**（符合预期：parity 对拍使用冻结 `.npz` 基准 + 自动注入 torch 桩，AM Oracle 仓库已存在且可用） |
+| torch | **未安装**（符合预期：regression 回归验证使用冻结 `.npz` 基准 + 自动注入 测试桩，妙算 frozen baseline 仓库已存在且可用） |
 | optuna / TA-Lib | 未安装（可选依赖，默认测试套件不依赖，详见 §3） |
 
-> 说明：torch 缺失时，`tests/parity/conftest.py` 会自动向 `sys.modules` 注入最小 torch 桩，仅用于「读取 AM 词表 token 名称」这一导入期动作，不影响任何被断言的数值；M5 / E2E / features / ops 等数值对拍直接读取 `tests/fixtures/` 下的冻结 `.npz`，无需 torch。
+> 说明：torch 缺失时，`tests/regression/conftest.py` 会自动向 `sys.modules` 注入最小 测试桩，仅用于「读取 妙算 词表 token 名称」这一导入期动作，不影响任何被断言的数值；M5 / E2E / features / ops 等数值回归验证直接读取 `tests/fixtures/` 下的冻结 `.npz`，无需 torch。
 
 ---
 
@@ -73,7 +73,7 @@ C:\Users\Administrator\.workbuddy\binaries\python\versions\3.13.12\python.exe -m
 
 ## 3. 完整测试结果汇总
 
-**命令**：`.venv\Scripts\python.exe -m pytest tests -v`（项目根目录执行，等价于 `make test`，覆盖 `tests/` 与 `tests/parity`）
+**命令**：`.venv\Scripts\python.exe -m pytest tests -v`（项目根目录执行，等价于 `make test`，覆盖 `tests/` 与 `tests/regression`）
 
 | 指标 | 数值 |
 |------|------|
@@ -89,7 +89,7 @@ C:\Users\Administrator\.workbuddy\binaries\python\versions\3.13.12\python.exe -m
 
 ### 覆盖范围
 
-- `tests/parity/*`：与冻结 AlphaMaster 基准的差分对拍（vm / signal / backtest / evaluator / features / ops / vocab / e2e_xauusd / token 顺序 / feature 因果性）——全部通过（含 torch 桩代管与 `.npz` 基准）。
+- `tests/regression/*`：与冻结基准 基准的差分回归验证（vm / signal / backtest / evaluator / features / ops / vocab / e2e_xauusd / token 顺序 / feature 因果性）——全部通过（含 测试桩代管与 `.npz` 基准）。
 - 核心模块：vocab、ops、config、errors、logging、ir（codec/schema/provenance）、market_profiles、search（ga/islands/mine/rpn/budget）、shenji（export/fidelity/kernel/lint/magic/realtime）、gate（cost_curve/holdout/multiple_testing/verdict）、adapters、data_loader/panel/split、pipeline、report（equity/metrics）、cli、webui、core_zero_touch、no_placeholder_left 等。
 
 ---
@@ -157,13 +157,13 @@ data\acquisition.py:293 os.environ
 **应用能否正常运行：可以（功能层面完全正常，部分通过）。**
 
 - 完整测试套件 **919** 项中 **915 通过、3 设计性跳过、1 代码性架构合规失败、0 错误**；
-- 所有**功能性与对拍（parity）测试均通过**，torch 缺失由桩与冻结 `.npz` 基准正确代管，未影响结果；
+- 所有**功能性与回归验证（regression）测试均通过**，torch 缺失由桩与冻结 `.npz` 基准正确代管，未影响结果；
 - 冒烟测试 6/6 通过，`VOCAB_VERSION == v9217a2c0d91a`（feature 65 / operator 62 / vocab 127）已确认；
 - 唯一失败为 `test_os_environ_only_in_config_and_cli`：属**代码层架构违规**（`data/acquisition.py` 在 config.py/cli.py 之外直接读取环境变量），**非环境缺失、非运行时崩溃**，不影响应用实际运行，建议按 §4.1 方向修复。
 
 **判定**：
 - ✅ 运行环境：可用（Python 3.13.14 + 完整依赖 + 可编辑安装）。
-- ✅ 应用功能：正常，可通过完整测试与对拍验证。
+- ✅ 应用功能：正常，可通过完整测试与回归验证验证。
 - ⚠️ 待修复（代码质量，非阻塞）：1 处环境变量读取越权，需收敛至 `config.py` / `cli.py`。
 
 > 说明：本报告对应的原始日志为 `tests_full.log`（完整套件）与 `smoke.log`（冒烟），已生成于项目根目录备查。

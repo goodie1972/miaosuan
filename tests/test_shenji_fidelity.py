@@ -25,7 +25,7 @@ from miaosuan.ir.schema import Evidence, FactorPayload, StrategySpec
 
 OFFSET: int = FORMULA_VOCAB.operator_offset
 
-#: 覆盖：AM 最优公式 + 一元/二元/三元 + GATE + 纯时序算子链
+#: 覆盖：妙算 最优公式 + 一元/二元/三元 + GATE + 纯时序算子链
 FORMULAS: dict[str, tuple[int, ...]] = {
     "am_best": (33, 62, 3, 87, 72, 119, 73, 103),
     "add_binary": (0, 1, 65),
@@ -116,7 +116,7 @@ def test_numerical_fidelity_vs_native_vm(
 
 
 def test_fidelity_is_exact_for_am_best(tmp_path: Path, shenji_stubs: None) -> None:
-    """AM 最优公式要求逐位一致（内核源码同源，实测误差为 0）。"""
+    """妙算 最优公式要求逐位一致（内核源码同源，实测误差为 0）。"""
     tokens = FORMULAS["am_best"]
     module, _path = _export_module(tokens, tmp_path, "am_best_exact")
     raw = _synthetic_raw(n=1600, seed=11)

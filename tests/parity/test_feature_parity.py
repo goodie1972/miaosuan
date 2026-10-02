@@ -3,21 +3,21 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""M4 特征数值对拍：妙算 numpy 实现 vs 冻结 AM 的 torch 基准。
+"""M4 特征数值回归验证：妙算 numpy 实现 vs 冻结基准 的 torch 基准。
 
-基准文件由 ``scripts/gen_feature_baseline.py`` 在**真实 torch 环境**中用 AM 原始实现生成
+基准文件由 ``scripts/gen_feature_baseline.py`` 在**真实 torch 环境**中用 妙算 原始实现生成
 （torch 2.14.0+cpu / numpy 2.5.3 / float32）：
 
 * ``tests/fixtures/frozen_feature_inputs.npz`` —— 冻结输入面板；
-* ``tests/fixtures/features_baseline.npz`` —— AM ``compute_features`` 输出 ``out_{case}``
+* ``tests/fixtures/features_baseline.npz`` —— 妙算 ``compute_features`` 输出 ``out_{case}``
   以及共享底层 helper 输出 ``helper_{key}_{case}``。
 
 本测试在**无 torch** 的妙算 venv 中读取基准，用 numpy 实现复算，**逐特征**比对
 ``max|Δ|``。判定：``|Δ| <= atol + rtol*|expected|``（容差见 ``feature_cases``，按
 「归一化放大」设定并附说明）。
 
-注意：底层 helper 的**紧容差**对拍在 ``test_feature_helpers.py``；本文件聚焦 65 特征的
-输出层对拍与维序/形状契约。
+注意：底层 helper 的**紧容差**回归验证在 ``test_feature_helpers.py``；本文件聚焦 65 特征的
+输出层回归验证与维序/形状契约。
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-# 让 ``import feature_cases`` 可用（tests/parity 未做成包）
+# 让 ``import feature_cases`` 可用（tests/regression 未做成包）
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import feature_cases  # noqa: E402
@@ -41,7 +41,7 @@ from miaosuan.core.features import (  # noqa: E402
     compute_features,
 )
 
-pytestmark = pytest.mark.parity
+pytestmark = pytest.mark.regression
 
 _FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 _INPUTS = _FIXTURES / "frozen_feature_inputs.npz"
@@ -92,7 +92,7 @@ def cases() -> dict:
 
 @pytest.fixture(scope="session")
 def computed(cases: dict) -> dict:
-    """各 case 的妙算输出 ``[N, 65, T]``（每 case 只算一次，供逐特征对拍复用）。"""
+    """各 case 的妙算输出 ``[N, 65, T]``（每 case 只算一次，供逐特征回归验证复用）。"""
     return {
         case_name: compute_features({f: payload[f] for f in _FIELDS})
         for case_name, payload in cases.items()
@@ -145,7 +145,7 @@ def test_output_has_no_nan_inf(computed: dict) -> None:
         assert np.isfinite(actual).all(), f"{case_name} 输出含 NaN/Inf"
 
 
-# ── 逐特征对拍 ─────────────────────────────────────────────────────────────
+# ── 逐特征回归验证 ─────────────────────────────────────────────────────────────
 
 
 @pytest.mark.parametrize("feat_idx", range(65), ids=list(FEATURE_NAMES))
@@ -186,7 +186,7 @@ def test_feature_matches_torch_baseline(
     print(f"  [{name}] 最大 |Δ|={worst_abs:.3e}（用例 {worst_case}）")
 
 
-def test_feature_parity_global_worst(cases: dict, computed: dict, baseline: dict) -> None:
+def test_feature_regression_global_worst(cases: dict, computed: dict, baseline: dict) -> None:
     """全局汇总：65 特征 × 6 用例，断言每点 ``|Δ| <= atol + rtol*|expected|``。
 
     以「误差/容差」比值作为最坏指标并打印最坏特征名（供验收报告）。
@@ -218,7 +218,7 @@ def test_feature_parity_global_worst(cases: dict, computed: dict, baseline: dict
     )
 
 
-# ── 参数注入（active_features 白名单，取代 AM 的 import 期 IO）────────────
+# ── 参数注入（active_features 白名单，取代 妙算 的 import 期 IO）────────────
 
 
 def test_active_features_param_injection(cases: dict) -> None:
@@ -245,7 +245,7 @@ def test_active_features_order_follows_defs(cases: dict) -> None:
     assert np.array_equal(a[:, 0, :], compute_features(raw)[:, FEATURE_NAMES.index("RET"), :])
 
 
-# ── 比较工具（与 ops 对拍一致的语义）──────────────────────────────────────
+# ── 比较工具（与 ops 回归验证一致的语义）──────────────────────────────────────
 
 
 def _compare(

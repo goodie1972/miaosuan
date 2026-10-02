@@ -230,7 +230,7 @@ def make_h1_bars(
 ) -> list[tuple[int, float, float, float, float, float]]:
     """生成 ``n`` 根 H1 bar，**时间降序**（index 0 = 最新，对应 EA offset 0）。
 
-    OHLC 由 bar 序号派生，便于对拍：第 ``i`` 根（降序）的
+    OHLC 由 bar 序号派生，便于回归验证：第 ``i`` 根（降序）的
     ``open=1000+i, high=open+10, low=open-10, close=open+5, volume=open``。
 
     在降序第 ``gap_after`` 根之后插入一次 ``gap_seconds`` 休市断线，
@@ -353,7 +353,7 @@ def test_fetch_full_contract(ea: FakeMT4EA) -> None:
     # offset 0 = 最新，聚合后必须转为**时间升序**
     assert df["time"].is_monotonic_increasing
     assert not df["time"].duplicated().any()
-    # OHLC 对拍：升序第 j 行 = 降序第 (249-j) 根
+    # OHLC 回归验证：升序第 j 行 = 降序第 (249-j) 根
     for j in (0, 1, 124, 248, 249):
         src = 249 - j
         assert df["open"].iloc[j] == 1000.0 + src

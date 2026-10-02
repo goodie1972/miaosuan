@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "seals": {
+    "sha256:bcba7e60159a14d3ead533801c78918fa6268a06c32a10f27ba9f8ac6a9d388d": {
+      "seq": 1,
+      "meta": {
+        "panel_fingerprint": "sha256:44236c9783c6018f49d1f089c7a93775ae70b741faf0c6c2c39e99541956f404",
+        "split_fingerprint": "sha256:363620fa2893aab458eb0d3adb012095e4ce07f3444e505f08dabddeebe6a55f",
+        "n_bars": 4560,
+        "horizon": 2,
+        "seed": 9999
+      }
+    }
+  }
+}

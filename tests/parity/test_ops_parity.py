@@ -3,10 +3,10 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""M3 算子数值对拍：妙算 numpy 实现 vs 冻结 AM 的 torch 基准。
+"""M3 算子数值回归验证：妙算 numpy 实现 vs 冻结基准 的 torch 基准。
 
 基准文件 ``tests/fixtures/ops_baseline.npz`` 由 ``scripts/gen_ops_baseline.py`` 在
-**真实 torch 环境**中用 AM 原始实现生成（torch 2.14.0+cpu / numpy 2.5.3 / float32）。
+**真实 torch 环境**中用 妙算 原始实现生成（torch 2.14.0+cpu / numpy 2.5.3 / float32）。
 本测试在**无 torch** 的妙算 venv 中读取基准，用妙算 numpy 实现复算，逐算子逐用例比对。
 
 判定：``|Δ| <= atol + rtol * |expected|``（float32 输入，atol/rtol 见 ``ops_cases``）。
@@ -23,14 +23,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-# 让 ``import ops_cases`` 可用（tests/parity 未做成包）
+# 让 ``import ops_cases`` 可用（tests/regression 未做成包）
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import ops_cases  # noqa: E402
 
 from miaosuan.core.ops import OPS_CONFIG  # noqa: E402
 
-pytestmark = pytest.mark.parity
+pytestmark = pytest.mark.regression
 
 _FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 _BASELINE = _FIXTURES / "ops_baseline.npz"
@@ -82,7 +82,7 @@ def test_baseline_inputs_match_cases(cases: dict, baseline: dict) -> None:
             assert same, f"{case_name}/{key} 输入不一致（疑似 RNG 漂移）"
 
 
-# ── 逐算子对拍 ─────────────────────────────────────────────────────────────
+# ── 逐算子回归验证 ─────────────────────────────────────────────────────────────
 
 
 @pytest.mark.parametrize("op_name", sorted(_OPS))
@@ -126,11 +126,11 @@ def test_operator_matches_torch_baseline(op_name: str, cases: dict, baseline: di
     print(f"  [{op_name}] 最大 |Δ|={worst_abs:.3e}（用例 {worst_case}）")
 
 
-def test_ops_parity_global_worst(cases: dict, baseline: dict) -> None:
+def test_ops_regression_global_worst(cases: dict, baseline: dict) -> None:
     """全局汇总：所有算子 × 所有用例，断言每点 ``|Δ| <= atol + rtol*|expected|``。
 
     以「误差/容差」比值作为最坏指标（float32 在 ``extreme`` 用例上绝对误差可达
-    ~1e2 量级，但相对量级仍在容差内，属正常浮点精度，非移植缺陷）。
+    ~1e2 量级，但相对量级仍在容差内，属正常浮点精度，非实现缺陷）。
     """
     worst = ("", "", -1.0, -1.0)  # op, case, max_abs, max_ratio
     total = 0

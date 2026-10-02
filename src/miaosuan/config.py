@@ -22,6 +22,7 @@ import dataclasses
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .errors import ConfigError
@@ -78,7 +79,7 @@ class GASearchConfig:
     """RPN-GA 搜索器配置（架构 §1.3）。
 
     :param formula_len: 定长公式 token 数（Q6-A 保持 8）。
-    :param pop_size: 种群规模（对齐 AM ``BATCH_SIZE=192`` 量级）。
+    :param pop_size: 种群规模（对齐 妙算 ``BATCH_SIZE=192`` 量级）。
     :param elite_size: 精英池规模。
     :param tournament_k: 锦标赛选择规模。
     :param min_hamming: 多样性硬约束：新个体与精英库最小汉明距离下界（治 R2 熵坍塌）。
@@ -167,7 +168,7 @@ class SplitConfig:
     :param train_ratio: 训练段比例。
     :param val_ratio: 验证段比例。
     :param holdout_ratio: hold-out 段比例（永不参与训练/选择）。
-    :param purge_gap: 段间 purge 间隔（默认对齐 AM ``WF_GAP=20``）。
+    :param purge_gap: 段间 purge 间隔（默认对齐 妙算 ``WF_GAP=20``）。
     :param embargo: 防标签重叠的 embargo。
     :param n_wf_folds: walk-forward 折数。
     """
@@ -436,6 +437,9 @@ def kline_data_dir(env: Mapping[str, str] | None = None) -> str:
     优先从统一设置系统获取值（支持 YAML + 环境变量 + 热重载）；
     当传入 ``env`` 参数时（测试场景），回退到旧逻辑。
 
+    无 ``env`` 参数时也先检查 ``os.environ``（兼容 monkeypatch 测试），
+    与 :func:`data_acquisition_config` 的模式一致。
+
     Args:
         env: 覆盖用的环境映射（默认读 ``os.environ``，便于测试注入）。
 
@@ -445,7 +449,65 @@ def kline_data_dir(env: Mapping[str, str] | None = None) -> str:
     if env is not None:
         return (env.get(ENV_KLINE_DIR, "") or "").strip() or DEFAULT_KLINE_DIR
 
+    # 环境变量实时读取（兼容 monkeypatch 测试 + 不需要 reload 单例）
+    env_val = os.environ.get(ENV_KLINE_DIR, "")
+    if env_val:
+        return env_val.strip()
     return get_config().paths.kline
+
+
+# ── 产物 / 策略 / 结果 / 临时 目录访问器 ──────────────────────────────────
+# 与 kline_data_dir 同属「唯一 env 边界」：webui / cli 只调用这些函数，
+# 绝不自行拼路径或读 env。<name>_dir 返回**绝对路径**（相对基准目录解析）。
+
+#: 仓库根（``src/miaosuan/config.py`` 往上 3 层）。相对目录（如 ``artifacts``、
+#: ``data/cache``）一律以此为基准解析成绝对路径——避免进程 CWD 漂移导致产物
+#: 落到错误位置（launcher exe / 改目录启动两种场景实测踩过）。
+REPO_ROOT: Path = Path(__file__).resolve().parents[2]
+
+
+def _resolve_dir(raw: str) -> str:
+    """把设置里的目录值解析成绝对路径。
+
+    - 空串 → 原样返回（调用方自行决定回退）；
+    - 绝对路径 → 规范化返回；
+    - 相对路径 → 以 :data:`REPO_ROOT` 为基准解析。
+    """
+    raw = (raw or "").strip()
+    if not raw:
+        return ""
+    p = Path(raw)
+    if not p.is_absolute():
+        p = REPO_ROOT / p
+    return str(p)
+
+
+def artifacts_dir(env: Mapping[str, str] | None = None) -> str:
+    """spec **专属**目录：只放 StrategySpec JSON 及其逐代 sidecar。"""
+    if env is not None:
+        return _resolve_dir(env.get("MIAOSUAN_ARTIFACTS_DIR", "") or "artifacts")
+    return _resolve_dir(get_config().paths.artifacts)
+
+
+def strategies_dir(env: Mapping[str, str] | None = None) -> str:
+    """策略**专属**目录：策略 .py + 中英双语说明文档 + spec↔策略映射表。"""
+    if env is not None:
+        return _resolve_dir(env.get("MIAOSUAN_STRATEGIES_DIR", "") or "strategies")
+    return _resolve_dir(get_config().paths.strategies)
+
+
+def results_dir(env: Mapping[str, str] | None = None) -> str:
+    """spec **关联文档**目录：回测 / 寻优结果（reference-only）。"""
+    if env is not None:
+        return _resolve_dir(env.get("MIAOSUAN_RESULTS_DIR", "") or "data/results")
+    return _resolve_dir(get_config().paths.results)
+
+
+def tmp_dir(env: Mapping[str, str] | None = None) -> str:
+    """中间 / 临时文件目录（可安全清空）。"""
+    if env is not None:
+        return _resolve_dir(env.get("MIAOSUAN_TMP_DIR", "") or "tmp")
+    return _resolve_dir(get_config().paths.tmp)
 
 
 #: launcher（PyInstaller bundle）标记：置 "1" 时 ``sys.executable`` 即 launcher 本身。

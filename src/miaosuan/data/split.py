@@ -13,7 +13,7 @@
 
 * **purge / embargo**：段间留 ``purge_gap + embargo`` 根 bar，切断「标签重叠 / 前视泄漏」；
   hold-out 取到数据末端，保证「最近一段从未参与训练/选择」。
-* **一次性封印**：hold-out 指纹写入台账 ``artifacts/holdout_seals.json``，**同一指纹只能用一次**；
+* **一次性封印**：hold-out 指纹写入台账 ``data/state/holdout_seals.json``，**同一指纹只能用一次**；
   第二次用同一 hold-out → 抛 :class:`~miaosuan.errors.HoldoutSealedError`（杜绝反复 peek）。
 * **可复现**：切分完全由 ``(数据指纹, 比例, purge, embargo, seed)`` 决定，与调用时机无关。
 """
@@ -43,7 +43,7 @@ __all__ = [
 ]
 
 #: 默认封印台账路径（``.gitignore`` 已忽略 ``artifacts/*``）
-DEFAULT_SEAL_PATH = Path("artifacts") / "holdout_seals.json"
+DEFAULT_SEAL_PATH = Path("data") / "state" / "holdout_seals.json"
 
 #: 台账 schema 版本
 _LEDGER_VERSION = 1
@@ -167,7 +167,7 @@ class DataSplit:
 
 
 class HoldoutSealRegistry:
-    """hold-out 一次性封印台账（JSON 落盘，默认 ``artifacts/holdout_seals.json``）。
+    """hold-out 一次性封印台账（JSON 落盘，默认 ``data/state/holdout_seals.json``）。
 
     :param path: 台账文件路径；``None`` → :data:`DEFAULT_SEAL_PATH`。
         ``":memory:"`` → 纯内存台账（供测试隔离，不落盘）。

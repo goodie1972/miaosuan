@@ -1,0 +1,2117 @@
+{
+  "version": 1,
+  "spec": "artifacts/mine_xauusd_deep.json",
+  "budget": "deep",
+  "stop_reason": "EARLY_STOP",
+  "generations": 300,
+  "n_evaluations": 57928,
+  "points": [
+    {
+      "generation": 0,
+      "best": 2.021887411735864,
+      "mean": 0.0860503267131028,
+      "diversity": 7.864705722367276,
+      "n_evaluations": 384
+    },
+    {
+      "generation": 1,
+      "best": 2.653690583116136,
+      "mean": 0.33953069469723235,
+      "diversity": 7.853473128807659,
+      "n_evaluations": 576
+    },
+    {
+      "generation": 2,
+      "best": 2.679534159840088,
+      "mean": 0.5274769514499399,
+      "diversity": 7.838568864229765,
+      "n_evaluations": 768
+    },
+    {
+      "generation": 3,
+      "best": 2.679534159840088,
+      "mean": 0.6769706685637433,
+      "diversity": 7.8272954743255,
+      "n_evaluations": 960
+    },
+    {
+      "generation": 4,
+      "best": 2.679534159840088,
+      "mean": 0.7721109681787525,
+      "diversity": 7.817640339425587,
+      "n_evaluations": 1152
+    },
+    {
+      "generation": 5,
+      "best": 2.679534159840088,
+      "mean": 0.8504103941126093,
+      "diversity": 7.814267841601392,
+      "n_evaluations": 1344
+    },
+    {
+      "generation": 6,
+      "best": 2.679534159840088,
+      "mean": 0.9080048942920426,
+      "diversity": 7.795419930374239,
+      "n_evaluations": 1536
+    },
+    {
+      "generation": 7,
+      "best": 2.679534159840088,
+      "mean": 0.985266443678008,
+      "diversity": 7.789572454308094,
+      "n_evaluations": 1728
+    },
+    {
+      "generation": 8,
+      "best": 2.7692488451290966,
+      "mean": 1.0118833958418374,
+      "diversity": 7.785098455178416,
+      "n_evaluations": 1920
+    },
+    {
+      "generation": 9,
+      "best": 2.7692488451290966,
+      "mean": 1.1049814211060702,
+      "diversity": 7.765026653611836,
+      "n_evaluations": 2112
+    },
+    {
+      "generation": 10,
+      "best": 2.7692488451290966,
+      "mean": 1.054657063566968,
+      "diversity": 7.762320496083551,
+      "n_evaluations": 2304
+    },
+    {
+      "generation": 11,
+      "best": 2.7692488451290966,
+      "mean": 1.1587281084710546,
+      "diversity": 7.746967471714535,
+      "n_evaluations": 2496
+    },
+    {
+      "generation": 12,
+      "best": 2.7692488451290966,
+      "mean": 1.2119190188485487,
+      "diversity": 7.703682550043516,
+      "n_evaluations": 2688
+    },
+    {
+      "generation": 13,
+      "best": 2.7692488451290966,
+      "mean": 1.1852824067398107,
+      "diversity": 7.710876305483029,
+      "n_evaluations": 2880
+    },
+    {
+      "generation": 14,
+      "best": 2.7692488451290966,
+      "mean": 1.2674505828585583,
+      "diversity": 7.699698107049608,
+      "n_evaluations": 3072
+    },
+    {
+      "generation": 15,
+      "best": 2.7692488451290966,
+      "mean": 1.2159719611802564,
+      "diversity": 7.689335835509138,
+      "n_evaluations": 3264
+    },
+    {
+      "generation": 16,
+      "best": 2.7692488451290966,
+      "mean": 1.3018878151231317,
+      "diversity": 7.687554395126197,
+      "n_evaluations": 3456
+    },
+    {
+      "generation": 17,
+      "best": 2.7692488451290966,
+      "mean": 1.3169531001784909,
+      "diversity": 7.690994886858138,
+      "n_evaluations": 3648
+    },
+    {
+      "generation": 18,
+      "best": 2.7692488451290966,
+      "mean": 1.2958579227284561,
+      "diversity": 7.69786227154047,
+      "n_evaluations": 3840
+    },
+    {
+      "generation": 19,
+      "best": 2.7692488451290966,
+      "mean": 1.3963609391645508,
+      "diversity": 7.68026544821584,
+      "n_evaluations": 4032
+    },
+    {
+      "generation": 20,
+      "best": 2.7692488451290966,
+      "mean": 1.4227977999731118,
+      "diversity": 7.658983355091384,
+      "n_evaluations": 4224
+    },
+    {
+      "generation": 21,
+      "best": 2.7939359740455108,
+      "mean": 1.4152397234553844,
+      "diversity": 7.650280134899913,
+      "n_evaluations": 4416
+    },
+    {
+      "generation": 22,
+      "best": 2.7939359740455108,
+      "mean": 1.4520242806178352,
+      "diversity": 7.630398716275022,
+      "n_evaluations": 4608
+    },
+    {
+      "generation": 23,
+      "best": 2.7939359740455108,
+      "mean": 1.4687945116749095,
+      "diversity": 7.619642080069625,
+      "n_evaluations": 4800
+    },
+    {
+      "generation": 24,
+      "best": 2.7939359740455108,
+      "mean": 1.4709030614091885,
+      "diversity": 7.606492058311575,
+      "n_evaluations": 4992
+    },
+    {
+      "generation": 25,
+      "best": 2.799420288764869,
+      "mean": 1.4743114431559345,
+      "diversity": 7.601773281114013,
+      "n_evaluations": 5184
+    },
+    {
+      "generation": 26,
+      "best": 2.799420288764869,
+      "mean": 1.5070242604799322,
+      "diversity": 7.582966166231506,
+      "n_evaluations": 5376
+    },
+    {
+      "generation": 27,
+      "best": 2.799420288764869,
+      "mean": 1.5645775387074454,
+      "diversity": 7.575038076588338,
+      "n_evaluations": 5568
+    },
+    {
+      "generation": 28,
+      "best": 2.799420288764869,
+      "mean": 1.5233475023994085,
+      "diversity": 7.5679259138381205,
+      "n_evaluations": 5760
+    },
+    {
+      "generation": 29,
+      "best": 2.799420288764869,
+      "mean": 1.5408518090748535,
+      "diversity": 7.568932223672759,
+      "n_evaluations": 5952
+    },
+    {
+      "generation": 30,
+      "best": 2.799420288764869,
+      "mean": 1.553132830076274,
+      "diversity": 7.576275565709312,
+      "n_evaluations": 6144
+    },
+    {
+      "generation": 31,
+      "best": 2.799420288764869,
+      "mean": 1.5255858832754898,
+      "diversity": 7.563832680591819,
+      "n_evaluations": 6336
+    },
+    {
+      "generation": 32,
+      "best": 2.824280423119702,
+      "mean": 1.5748316466348262,
+      "diversity": 7.573922976501305,
+      "n_evaluations": 6528
+    },
+    {
+      "generation": 33,
+      "best": 2.824280423119702,
+      "mean": 1.5215137964831322,
+      "diversity": 7.55937228024369,
+      "n_evaluations": 6720
+    },
+    {
+      "generation": 34,
+      "best": 2.9570144323078527,
+      "mean": 1.5504198124629858,
+      "diversity": 7.543529699738904,
+      "n_evaluations": 6912
+    },
+    {
+      "generation": 35,
+      "best": 2.9570144323078527,
+      "mean": 1.526620274106154,
+      "diversity": 7.559644255874674,
+      "n_evaluations": 7104
+    },
+    {
+      "generation": 36,
+      "best": 2.9570144323078527,
+      "mean": 1.5940655260510892,
+      "diversity": 7.558597149695387,
+      "n_evaluations": 7296
+    },
+    {
+      "generation": 37,
+      "best": 2.9570144323078527,
+      "mean": 1.5992523424230203,
+      "diversity": 7.537056679721497,
+      "n_evaluations": 7488
+    },
+    {
+      "generation": 38,
+      "best": 3.0980619899997937,
+      "mean": 1.6095462852217606,
+      "diversity": 7.527088772845953,
+      "n_evaluations": 7679
+    },
+    {
+      "generation": 39,
+      "best": 3.0980619899997937,
+      "mean": 1.549179742541748,
+      "diversity": 7.547391753698869,
+      "n_evaluations": 7871
+    },
+    {
+      "generation": 40,
+      "best": 3.0980619899997937,
+      "mean": 1.609997086353319,
+      "diversity": 7.535710400348129,
+      "n_evaluations": 8062
+    },
+    {
+      "generation": 41,
+      "best": 3.0980619899997937,
+      "mean": 1.5488751583943097,
+      "diversity": 7.5259464751958225,
+      "n_evaluations": 8254
+    },
+    {
+      "generation": 42,
+      "best": 3.2232869279791485,
+      "mean": 1.521601714985539,
+      "diversity": 7.553429612706702,
+      "n_evaluations": 8446
+    },
+    {
+      "generation": 43,
+      "best": 3.2232869279791485,
+      "mean": 1.596879911554623,
+      "diversity": 7.531059617058312,
+      "n_evaluations": 8638
+    },
+    {
+      "generation": 44,
+      "best": 3.2305379696252507,
+      "mean": 1.6687854524536043,
+      "diversity": 7.505453111401218,
+      "n_evaluations": 8830
+    },
+    {
+      "generation": 45,
+      "best": 3.2305379696252507,
+      "mean": 1.5963201149318949,
+      "diversity": 7.5307740426457785,
+      "n_evaluations": 9022
+    },
+    {
+      "generation": 46,
+      "best": 3.241792870419354,
+      "mean": 1.6099523545188716,
+      "diversity": 7.5325554830287205,
+      "n_evaluations": 9214
+    },
+    {
+      "generation": 47,
+      "best": 3.241792870419354,
+      "mean": 1.5909715988371314,
+      "diversity": 7.541517080069625,
+      "n_evaluations": 9406
+    },
+    {
+      "generation": 48,
+      "best": 3.2422105721662176,
+      "mean": 1.6438653819185707,
+      "diversity": 7.523770670147955,
+      "n_evaluations": 9598
+    },
+    {
+      "generation": 49,
+      "best": 3.2422105721662176,
+      "mean": 1.5977111593803848,
+      "diversity": 7.54886042210618,
+      "n_evaluations": 9790
+    },
+    {
+      "generation": 50,
+      "best": 3.2422105721662176,
+      "mean": 1.6572496195007258,
+      "diversity": 7.542224216710183,
+      "n_evaluations": 9982
+    },
+    {
+      "generation": 51,
+      "best": 3.2422105721662176,
+      "mean": 1.7116677064350636,
+      "diversity": 7.50197182332463,
+      "n_evaluations": 10174
+    },
+    {
+      "generation": 52,
+      "best": 3.5415742715774226,
+      "mean": 1.630715077579966,
+      "diversity": 7.551457789382072,
+      "n_evaluations": 10366
+    },
+    {
+      "generation": 53,
+      "best": 3.5415742715774226,
+      "mean": 1.6349684478689008,
+      "diversity": 7.532337902523934,
+      "n_evaluations": 10558
+    },
+    {
+      "generation": 54,
+      "best": 3.5415742715774226,
+      "mean": 1.678718917621315,
+      "diversity": 7.534554503916449,
+      "n_evaluations": 10750
+    },
+    {
+      "generation": 55,
+      "best": 3.5415742715774226,
+      "mean": 1.6624654060072779,
+      "diversity": 7.534976066144473,
+      "n_evaluations": 10942
+    },
+    {
+      "generation": 56,
+      "best": 3.5415742715774226,
+      "mean": 1.6454860635248998,
+      "diversity": 7.565314947780679,
+      "n_evaluations": 11134
+    },
+    {
+      "generation": 57,
+      "best": 3.5415742715774226,
+      "mean": 1.6763042766329697,
+      "diversity": 7.55130820278503,
+      "n_evaluations": 11326
+    },
+    {
+      "generation": 58,
+      "best": 3.6868426141009123,
+      "mean": 1.7421802848814563,
+      "diversity": 7.523879460400348,
+      "n_evaluations": 11518
+    },
+    {
+      "generation": 59,
+      "best": 3.6868426141009123,
+      "mean": 1.6717358295033946,
+      "diversity": 7.550873041775457,
+      "n_evaluations": 11710
+    },
+    {
+      "generation": 60,
+      "best": 3.6868426141009123,
+      "mean": 1.665643862730211,
+      "diversity": 7.556788511749347,
+      "n_evaluations": 11902
+    },
+    {
+      "generation": 61,
+      "best": 3.6868426141009123,
+      "mean": 1.7021786860413786,
+      "diversity": 7.548602045256745,
+      "n_evaluations": 12094
+    },
+    {
+      "generation": 62,
+      "best": 3.6868426141009123,
+      "mean": 1.7687826871325114,
+      "diversity": 7.533085835509138,
+      "n_evaluations": 12286
+    },
+    {
+      "generation": 63,
+      "best": 3.694596167584445,
+      "mean": 1.7483142467299755,
+      "diversity": 7.5324874891209745,
+      "n_evaluations": 12478
+    },
+    {
+      "generation": 64,
+      "best": 3.694596167584445,
+      "mean": 1.6405232610259048,
+      "diversity": 7.530053307223673,
+      "n_evaluations": 12670
+    },
+    {
+      "generation": 65,
+      "best": 3.850339699375988,
+      "mean": 1.6715450279377155,
+      "diversity": 7.518847911227154,
+      "n_evaluations": 12862
+    },
+    {
+      "generation": 66,
+      "best": 3.850339699375988,
+      "mean": 1.7493051324950628,
+      "diversity": 7.531902741514361,
+      "n_evaluations": 13054
+    },
+    {
+      "generation": 67,
+      "best": 3.850339699375988,
+      "mean": 1.7143345004201658,
+      "diversity": 7.527034377719756,
+      "n_evaluations": 13246
+    },
+    {
+      "generation": 68,
+      "best": 3.850339699375988,
+      "mean": 1.6752281677227898,
+      "diversity": 7.492901436031332,
+      "n_evaluations": 13438
+    },
+    {
+      "generation": 69,
+      "best": 3.850339699375988,
+      "mean": 1.7204021096042899,
+      "diversity": 7.49358137510879,
+      "n_evaluations": 13629
+    },
+    {
+      "generation": 70,
+      "best": 3.850339699375988,
+      "mean": 1.7197698652015019,
+      "diversity": 7.507642515230636,
+      "n_evaluations": 13821
+    },
+    {
+      "generation": 71,
+      "best": 3.850339699375988,
+      "mean": 1.7828647973067853,
+      "diversity": 7.500108790252393,
+      "n_evaluations": 14012
+    },
+    {
+      "generation": 72,
+      "best": 3.8567446738413276,
+      "mean": 1.7705942089184432,
+      "diversity": 7.511232593559617,
+      "n_evaluations": 14204
+    },
+    {
+      "generation": 73,
+      "best": 3.8567446738413276,
+      "mean": 1.7977665597131895,
+      "diversity": 7.513177219321149,
+      "n_evaluations": 14396
+    },
+    {
+      "generation": 74,
+      "best": 3.8567446738413276,
+      "mean": 1.7606047739354456,
+      "diversity": 7.503821257615318,
+      "n_evaluations": 14588
+    },
+    {
+      "generation": 75,
+      "best": 3.8567446738413276,
+      "mean": 1.765884664819076,
+      "diversity": 7.506826588337685,
+      "n_evaluations": 14780
+    },
+    {
+      "generation": 76,
+      "best": 3.8567446738413276,
+      "mean": 1.7827106184294308,
+      "diversity": 7.50361727589208,
+      "n_evaluations": 14972
+    },
+    {
+      "generation": 77,
+      "best": 3.8567446738413276,
+      "mean": 1.8065958543980176,
+      "diversity": 7.470844212358573,
+      "n_evaluations": 15164
+    },
+    {
+      "generation": 78,
+      "best": 3.8567446738413276,
+      "mean": 1.792817135599605,
+      "diversity": 7.450704416884247,
+      "n_evaluations": 15356
+    },
+    {
+      "generation": 79,
+      "best": 3.8567446738413276,
+      "mean": 1.8556400474041765,
+      "diversity": 7.445944843342037,
+      "n_evaluations": 15548
+    },
+    {
+      "generation": 80,
+      "best": 3.8567446738413276,
+      "mean": 1.8130417653010078,
+      "diversity": 7.437676784160139,
+      "n_evaluations": 15740
+    },
+    {
+      "generation": 81,
+      "best": 3.8567446738413276,
+      "mean": 1.882678804360217,
+      "diversity": 7.4188560704960835,
+      "n_evaluations": 15931
+    },
+    {
+      "generation": 82,
+      "best": 3.8567446738413276,
+      "mean": 1.7974496759470089,
+      "diversity": 7.422718124456049,
+      "n_evaluations": 16123
+    },
+    {
+      "generation": 83,
+      "best": 3.8567446738413276,
+      "mean": 1.8436459486979342,
+      "diversity": 7.395044604003481,
+      "n_evaluations": 16315
+    },
+    {
+      "generation": 84,
+      "best": 3.8567446738413276,
+      "mean": 1.8366811376341763,
+      "diversity": 7.396785248041775,
+      "n_evaluations": 16507
+    },
+    {
+      "generation": 85,
+      "best": 3.8567446738413276,
+      "mean": 1.877052892777031,
+      "diversity": 7.383771214099217,
+      "n_evaluations": 16699
+    },
+    {
+      "generation": 86,
+      "best": 3.8567446738413276,
+      "mean": 1.8232437684875737,
+      "diversity": 7.395085400348129,
+      "n_evaluations": 16891
+    },
+    {
+      "generation": 87,
+      "best": 3.8567446738413276,
+      "mean": 1.8423617533226742,
+      "diversity": 7.3741704743255,
+      "n_evaluations": 17083
+    },
+    {
+      "generation": 88,
+      "best": 3.8567446738413276,
+      "mean": 1.8324039815865083,
+      "diversity": 7.3851990861618795,
+      "n_evaluations": 17275
+    },
+    {
+      "generation": 89,
+      "best": 3.8567446738413276,
+      "mean": 1.9006827640062471,
+      "diversity": 7.325405243690166,
+      "n_evaluations": 17467
+    },
+    {
+      "generation": 90,
+      "best": 3.8567446738413276,
+      "mean": 1.8708278498162347,
+      "diversity": 7.368010226283725,
+      "n_evaluations": 17659
+    },
+    {
+      "generation": 91,
+      "best": 3.8567446738413276,
+      "mean": 1.8884863862539145,
+      "diversity": 7.362421127067015,
+      "n_evaluations": 17851
+    },
+    {
+      "generation": 92,
+      "best": 3.8567446738413276,
+      "mean": 1.8393848285800782,
+      "diversity": 7.3621355526544825,
+      "n_evaluations": 18043
+    },
+    {
+      "generation": 93,
+      "best": 3.8567446738413276,
+      "mean": 1.811755165503282,
+      "diversity": 7.376006309834639,
+      "n_evaluations": 18234
+    },
+    {
+      "generation": 94,
+      "best": 3.8567446738413276,
+      "mean": 1.8777269863217125,
+      "diversity": 7.346660139251523,
+      "n_evaluations": 18426
+    },
+    {
+      "generation": 95,
+      "best": 3.8567446738413276,
+      "mean": 1.8900934108936849,
+      "diversity": 7.329634464751958,
+      "n_evaluations": 18618
+    },
+    {
+      "generation": 96,
+      "best": 3.8567446738413276,
+      "mean": 1.910779931255984,
+      "diversity": 7.311969647519582,
+      "n_evaluations": 18810
+    },
+    {
+      "generation": 97,
+      "best": 3.8567446738413276,
+      "mean": 1.8938411357692166,
+      "diversity": 7.3486727589208005,
+      "n_evaluations": 19002
+    },
+    {
+      "generation": 98,
+      "best": 3.8567446738413276,
+      "mean": 1.9141903658564958,
+      "diversity": 7.332626196692776,
+      "n_evaluations": 19193
+    },
+    {
+      "generation": 99,
+      "best": 3.8567446738413276,
+      "mean": 1.8915406454156656,
+      "diversity": 7.321611183637946,
+      "n_evaluations": 19385
+    },
+    {
+      "generation": 100,
+      "best": 3.8567446738413276,
+      "mean": 1.8475288578110058,
+      "diversity": 7.292604982593559,
+      "n_evaluations": 19577
+    },
+    {
+      "generation": 101,
+      "best": 3.8567446738413276,
+      "mean": 1.8817192353156933,
+      "diversity": 7.292713772845953,
+      "n_evaluations": 19769
+    },
+    {
+      "generation": 102,
+      "best": 3.8567446738413276,
+      "mean": 1.8552902708667787,
+      "diversity": 7.29852045256745,
+      "n_evaluations": 19961
+    },
+    {
+      "generation": 103,
+      "best": 3.8567446738413276,
+      "mean": 1.9603389237876936,
+      "diversity": 7.2593695604873805,
+      "n_evaluations": 20153
+    },
+    {
+      "generation": 104,
+      "best": 3.8567446738413276,
+      "mean": 1.9337956887993464,
+      "diversity": 7.278421453437772,
+      "n_evaluations": 20345
+    },
+    {
+      "generation": 105,
+      "best": 3.8567446738413276,
+      "mean": 1.9397977350249154,
+      "diversity": 7.270343777197563,
+      "n_evaluations": 20537
+    },
+    {
+      "generation": 106,
+      "best": 3.8567446738413276,
+      "mean": 1.8908914856757857,
+      "diversity": 7.278095082680592,
+      "n_evaluations": 20729
+    },
+    {
+      "generation": 107,
+      "best": 3.8567446738413276,
+      "mean": 1.9166695541178065,
+      "diversity": 7.272818755439513,
+      "n_evaluations": 20921
+    },
+    {
+      "generation": 108,
+      "best": 3.8567446738413276,
+      "mean": 1.9341548117416327,
+      "diversity": 7.287491840731071,
+      "n_evaluations": 21111
+    },
+    {
+      "generation": 109,
+      "best": 3.8567446738413276,
+      "mean": 1.9122529388441987,
+      "diversity": 7.254759573542211,
+      "n_evaluations": 21302
+    },
+    {
+      "generation": 110,
+      "best": 3.8567446738413276,
+      "mean": 1.9702618359685449,
+      "diversity": 7.283860966057441,
+      "n_evaluations": 21494
+    },
+    {
+      "generation": 111,
+      "best": 3.8567446738413276,
+      "mean": 1.8937502539048836,
+      "diversity": 7.269106288076588,
+      "n_evaluations": 21686
+    },
+    {
+      "generation": 112,
+      "best": 3.8567446738413276,
+      "mean": 1.8713496917303514,
+      "diversity": 7.267297650130549,
+      "n_evaluations": 21878
+    },
+    {
+      "generation": 113,
+      "best": 3.8567446738413276,
+      "mean": 1.9015459796857126,
+      "diversity": 7.2467090948651,
+      "n_evaluations": 22070
+    },
+    {
+      "generation": 114,
+      "best": 3.926179851358092,
+      "mean": 1.9565680778578811,
+      "diversity": 7.265040252393385,
+      "n_evaluations": 22262
+    },
+    {
+      "generation": 115,
+      "best": 3.926179851358092,
+      "mean": 1.9198603628547872,
+      "diversity": 7.221469756309834,
+      "n_evaluations": 22454
+    },
+    {
+      "generation": 116,
+      "best": 3.926179851358092,
+      "mean": 2.005940333608215,
+      "diversity": 7.225794168842472,
+      "n_evaluations": 22646
+    },
+    {
+      "generation": 117,
+      "best": 3.926179851358092,
+      "mean": 1.8676682068672223,
+      "diversity": 7.25674499564839,
+      "n_evaluations": 22838
+    },
+    {
+      "generation": 118,
+      "best": 3.926179851358092,
+      "mean": 1.9483458931987114,
+      "diversity": 7.231655243690166,
+      "n_evaluations": 23030
+    },
+    {
+      "generation": 119,
+      "best": 3.926179851358092,
+      "mean": 1.9403720512195086,
+      "diversity": 7.184181897302002,
+      "n_evaluations": 23221
+    },
+    {
+      "generation": 120,
+      "best": 3.926179851358092,
+      "mean": 1.9721750810395846,
+      "diversity": 7.227725195822455,
+      "n_evaluations": 23412
+    },
+    {
+      "generation": 121,
+      "best": 3.926179851358092,
+      "mean": 1.9313570937701476,
+      "diversity": 7.2573977371627505,
+      "n_evaluations": 23604
+    },
+    {
+      "generation": 122,
+      "best": 3.926179851358092,
+      "mean": 1.9870710553875142,
+      "diversity": 7.254460400348129,
+      "n_evaluations": 23795
+    },
+    {
+      "generation": 123,
+      "best": 3.926179851358092,
+      "mean": 1.9547677860173394,
+      "diversity": 7.214588772845953,
+      "n_evaluations": 23986
+    },
+    {
+      "generation": 124,
+      "best": 3.926179851358092,
+      "mean": 1.8635039985216764,
+      "diversity": 7.301063424717145,
+      "n_evaluations": 24178
+    },
+    {
+      "generation": 125,
+      "best": 3.926179851358092,
+      "mean": 1.9414520098071566,
+      "diversity": 7.254011640557006,
+      "n_evaluations": 24370
+    },
+    {
+      "generation": 126,
+      "best": 3.926179851358092,
+      "mean": 1.9728867169594693,
+      "diversity": 7.237883485639687,
+      "n_evaluations": 24562
+    },
+    {
+      "generation": 127,
+      "best": 3.926179851358092,
+      "mean": 1.9739939683444951,
+      "diversity": 7.221075391644908,
+      "n_evaluations": 24753
+    },
+    {
+      "generation": 128,
+      "best": 3.926179851358092,
+      "mean": 1.907148938019213,
+      "diversity": 7.264074738903394,
+      "n_evaluations": 24945
+    },
+    {
+      "generation": 129,
+      "best": 3.926179851358092,
+      "mean": 1.9737314571813507,
+      "diversity": 7.2495920365535245,
+      "n_evaluations": 25137
+    },
+    {
+      "generation": 130,
+      "best": 3.926179851358092,
+      "mean": 1.9598255728068892,
+      "diversity": 7.250870322019147,
+      "n_evaluations": 25329
+    },
+    {
+      "generation": 131,
+      "best": 3.926179851358092,
+      "mean": 1.9673963379470276,
+      "diversity": 7.202676240208877,
+      "n_evaluations": 25521
+    },
+    {
+      "generation": 132,
+      "best": 3.926179851358092,
+      "mean": 1.9781832645146853,
+      "diversity": 7.181271758050479,
+      "n_evaluations": 25713
+    },
+    {
+      "generation": 133,
+      "best": 3.926179851358092,
+      "mean": 1.9801787827636115,
+      "diversity": 7.220313859878155,
+      "n_evaluations": 25905
+    },
+    {
+      "generation": 134,
+      "best": 3.926179851358092,
+      "mean": 2.05025051974536,
+      "diversity": 7.174349978241949,
+      "n_evaluations": 26096
+    },
+    {
+      "generation": 135,
+      "best": 3.926179851358092,
+      "mean": 2.0115261428222655,
+      "diversity": 7.155270887728459,
+      "n_evaluations": 26288
+    },
+    {
+      "generation": 136,
+      "best": 3.926179851358092,
+      "mean": 1.9486275021505346,
+      "diversity": 7.118989338555266,
+      "n_evaluations": 26480
+    },
+    {
+      "generation": 137,
+      "best": 3.926179851358092,
+      "mean": 2.013700403486826,
+      "diversity": 7.132112162750218,
+      "n_evaluations": 26672
+    },
+    {
+      "generation": 138,
+      "best": 3.926179851358092,
+      "mean": 1.9610732660039298,
+      "diversity": 7.114828111401218,
+      "n_evaluations": 26864
+    },
+    {
+      "generation": 139,
+      "best": 3.926179851358092,
+      "mean": 2.0061400921371564,
+      "diversity": 7.0930836597040905,
+      "n_evaluations": 27056
+    },
+    {
+      "generation": 140,
+      "best": 3.926179851358092,
+      "mean": 2.0327511247589807,
+      "diversity": 7.082626196692776,
+      "n_evaluations": 27248
+    },
+    {
+      "generation": 141,
+      "best": 3.926179851358092,
+      "mean": 2.048962626378163,
+      "diversity": 7.0485068537859,
+      "n_evaluations": 27440
+    },
+    {
+      "generation": 142,
+      "best": 3.926179851358092,
+      "mean": 1.9794537439698852,
+      "diversity": 7.067490752828546,
+      "n_evaluations": 27632
+    },
+    {
+      "generation": 143,
+      "best": 3.926179851358092,
+      "mean": 1.9748359582038626,
+      "diversity": 7.090513489991297,
+      "n_evaluations": 27823
+    },
+    {
+      "generation": 144,
+      "best": 3.926179851358092,
+      "mean": 2.094496633288824,
+      "diversity": 7.060582571801566,
+      "n_evaluations": 28013
+    },
+    {
+      "generation": 145,
+      "best": 3.926179851358092,
+      "mean": 1.9871834376633775,
+      "diversity": 7.098958333333333,
+      "n_evaluations": 28205
+    },
+    {
+      "generation": 146,
+      "best": 3.926179851358092,
+      "mean": 2.0387391391083813,
+      "diversity": 7.078587358572672,
+      "n_evaluations": 28397
+    },
+    {
+      "generation": 147,
+      "best": 3.9740618078724586,
+      "mean": 2.0191399743591663,
+      "diversity": 7.119342906875544,
+      "n_evaluations": 28588
+    },
+    {
+      "generation": 148,
+      "best": 3.9740618078724586,
+      "mean": 1.9412492874234994,
+      "diversity": 7.122796997389034,
+      "n_evaluations": 28780
+    },
+    {
+      "generation": 149,
+      "best": 3.9740618078724586,
+      "mean": 2.0166710214356978,
+      "diversity": 7.083129351610096,
+      "n_evaluations": 28972
+    },
+    {
+      "generation": 150,
+      "best": 3.9740618078724586,
+      "mean": 2.0344740084625244,
+      "diversity": 7.06644364664926,
+      "n_evaluations": 29164
+    },
+    {
+      "generation": 151,
+      "best": 3.9740618078724586,
+      "mean": 2.0015783335888613,
+      "diversity": 7.101351718885987,
+      "n_evaluations": 29356
+    },
+    {
+      "generation": 152,
+      "best": 3.9740618078724586,
+      "mean": 2.0615642647391064,
+      "diversity": 7.119383703220191,
+      "n_evaluations": 29548
+    },
+    {
+      "generation": 153,
+      "best": 3.9740618078724586,
+      "mean": 2.038733107442512,
+      "diversity": 7.1274613794604,
+      "n_evaluations": 29740
+    },
+    {
+      "generation": 154,
+      "best": 3.9740618078724586,
+      "mean": 1.9968113133649945,
+      "diversity": 7.088963228894691,
+      "n_evaluations": 29931
+    },
+    {
+      "generation": 155,
+      "best": 3.9740618078724586,
+      "mean": 2.0578421624496293,
+      "diversity": 7.084611618798956,
+      "n_evaluations": 30123
+    },
+    {
+      "generation": 156,
+      "best": 3.9740618078724586,
+      "mean": 2.0290872573462173,
+      "diversity": 7.132533724978242,
+      "n_evaluations": 30314
+    },
+    {
+      "generation": 157,
+      "best": 3.9740618078724586,
+      "mean": 2.000910623497488,
+      "diversity": 7.115589643167972,
+      "n_evaluations": 30506
+    },
+    {
+      "generation": 158,
+      "best": 3.9740618078724586,
+      "mean": 2.0575815503488974,
+      "diversity": 7.062581592689295,
+      "n_evaluations": 30697
+    },
+    {
+      "generation": 159,
+      "best": 3.9740618078724586,
+      "mean": 2.039478965454783,
+      "diversity": 7.094593124456049,
+      "n_evaluations": 30888
+    },
+    {
+      "generation": 160,
+      "best": 3.9740618078724586,
+      "mean": 2.0602502345920772,
+      "diversity": 7.120621192341166,
+      "n_evaluations": 31080
+    },
+    {
+      "generation": 161,
+      "best": 3.9740618078724586,
+      "mean": 2.0307858117103255,
+      "diversity": 7.082259029590949,
+      "n_evaluations": 31272
+    },
+    {
+      "generation": 162,
+      "best": 3.9740618078724586,
+      "mean": 2.0328568125698316,
+      "diversity": 7.087698542210618,
+      "n_evaluations": 31464
+    },
+    {
+      "generation": 163,
+      "best": 3.9740618078724586,
+      "mean": 2.066953861465135,
+      "diversity": 7.121137946040035,
+      "n_evaluations": 31655
+    },
+    {
+      "generation": 164,
+      "best": 3.9740618078724586,
+      "mean": 2.0256811513196697,
+      "diversity": 7.088106505657093,
+      "n_evaluations": 31847
+    },
+    {
+      "generation": 165,
+      "best": 3.9740618078724586,
+      "mean": 2.0328067344328953,
+      "diversity": 7.1702431462141,
+      "n_evaluations": 32039
+    },
+    {
+      "generation": 166,
+      "best": 3.9740618078724586,
+      "mean": 2.027084365318649,
+      "diversity": 7.147179612706702,
+      "n_evaluations": 32231
+    },
+    {
+      "generation": 167,
+      "best": 3.9740618078724586,
+      "mean": 2.037664227002098,
+      "diversity": 7.118635770234987,
+      "n_evaluations": 32422
+    },
+    {
+      "generation": 168,
+      "best": 3.9740618078724586,
+      "mean": 2.07029744216945,
+      "diversity": 7.126713446475196,
+      "n_evaluations": 32614
+    },
+    {
+      "generation": 169,
+      "best": 3.9740618078724586,
+      "mean": 2.0599953457899,
+      "diversity": 7.154332571801566,
+      "n_evaluations": 32806
+    },
+    {
+      "generation": 170,
+      "best": 3.9740618078724586,
+      "mean": 2.05341025699496,
+      "diversity": 7.148389904264578,
+      "n_evaluations": 32998
+    },
+    {
+      "generation": 171,
+      "best": 3.9740618078724586,
+      "mean": 2.081457687698768,
+      "diversity": 7.13141862489121,
+      "n_evaluations": 33190
+    },
+    {
+      "generation": 172,
+      "best": 3.9740618078724586,
+      "mean": 1.990023681230732,
+      "diversity": 7.1865752828546565,
+      "n_evaluations": 33381
+    },
+    {
+      "generation": 173,
+      "best": 3.9740618078724586,
+      "mean": 2.0089192494240664,
+      "diversity": 7.129881962576153,
+      "n_evaluations": 33572
+    },
+    {
+      "generation": 174,
+      "best": 3.9740618078724586,
+      "mean": 2.032816564533862,
+      "diversity": 7.157800261096606,
+      "n_evaluations": 33763
+    },
+    {
+      "generation": 175,
+      "best": 3.9740618078724586,
+      "mean": 1.9854619490424374,
+      "diversity": 7.175873041775457,
+      "n_evaluations": 33955
+    },
+    {
+      "generation": 176,
+      "best": 3.9740618078724586,
+      "mean": 2.0718638295301317,
+      "diversity": 7.147206810269799,
+      "n_evaluations": 34147
+    },
+    {
+      "generation": 177,
+      "best": 3.9740618078724586,
+      "mean": 2.0368018330933677,
+      "diversity": 7.125557550043516,
+      "n_evaluations": 34339
+    },
+    {
+      "generation": 178,
+      "best": 3.9740618078724586,
+      "mean": 2.0563497115829166,
+      "diversity": 7.121913076588338,
+      "n_evaluations": 34531
+    },
+    {
+      "generation": 179,
+      "best": 3.9740618078724586,
+      "mean": 1.9786751216542402,
+      "diversity": 7.16415089208007,
+      "n_evaluations": 34723
+    },
+    {
+      "generation": 180,
+      "best": 3.9740618078724586,
+      "mean": 2.0944594398872467,
+      "diversity": 7.155026109660574,
+      "n_evaluations": 34915
+    },
+    {
+      "generation": 181,
+      "best": 3.9740618078724586,
+      "mean": 2.0851679799442127,
+      "diversity": 7.152197563098347,
+      "n_evaluations": 35107
+    },
+    {
+      "generation": 182,
+      "best": 3.9740618078724586,
+      "mean": 1.9803192709257502,
+      "diversity": 7.198854982593559,
+      "n_evaluations": 35299
+    },
+    {
+      "generation": 183,
+      "best": 3.9740618078724586,
+      "mean": 1.9492259652761266,
+      "diversity": 7.156114012184508,
+      "n_evaluations": 35490
+    },
+    {
+      "generation": 184,
+      "best": 3.9740618078724586,
+      "mean": 2.074556360221209,
+      "diversity": 7.15279590948651,
+      "n_evaluations": 35681
+    },
+    {
+      "generation": 185,
+      "best": 3.9740618078724586,
+      "mean": 2.050344955041405,
+      "diversity": 7.119968450826806,
+      "n_evaluations": 35873
+    },
+    {
+      "generation": 186,
+      "best": 3.9740618078724586,
+      "mean": 2.0267904726593198,
+      "diversity": 7.158262619669277,
+      "n_evaluations": 36064
+    },
+    {
+      "generation": 187,
+      "best": 3.9740618078724586,
+      "mean": 2.0382890141756977,
+      "diversity": 7.191566035683203,
+      "n_evaluations": 36256
+    },
+    {
+      "generation": 188,
+      "best": 3.9740618078724586,
+      "mean": 2.036813399701045,
+      "diversity": 7.185133812010444,
+      "n_evaluations": 36448
+    },
+    {
+      "generation": 189,
+      "best": 3.9740618078724586,
+      "mean": 2.024386761269829,
+      "diversity": 7.183569952132289,
+      "n_evaluations": 36640
+    },
+    {
+      "generation": 190,
+      "best": 3.9740618078724586,
+      "mean": 1.993830982141865,
+      "diversity": 7.162083877284595,
+      "n_evaluations": 36831
+    },
+    {
+      "generation": 191,
+      "best": 3.9740618078724586,
+      "mean": 2.0025146514086507,
+      "diversity": 7.14556135770235,
+      "n_evaluations": 37023
+    },
+    {
+      "generation": 192,
+      "best": 3.9740618078724586,
+      "mean": 2.0001113420321275,
+      "diversity": 7.173098890339426,
+      "n_evaluations": 37214
+    },
+    {
+      "generation": 193,
+      "best": 3.9740618078724586,
+      "mean": 2.0328575496890173,
+      "diversity": 7.174608355091384,
+      "n_evaluations": 37406
+    },
+    {
+      "generation": 194,
+      "best": 3.9740618078724586,
+      "mean": 2.104801785029658,
+      "diversity": 7.164178089643168,
+      "n_evaluations": 37597
+    },
+    {
+      "generation": 195,
+      "best": 3.9740618078724586,
+      "mean": 2.0300118701351897,
+      "diversity": 7.180020670147955,
+      "n_evaluations": 37789
+    },
+    {
+      "generation": 196,
+      "best": 3.9740618078724586,
+      "mean": 2.003054726832144,
+      "diversity": 7.179735095735422,
+      "n_evaluations": 37980
+    },
+    {
+      "generation": 197,
+      "best": 3.9740618078724586,
+      "mean": 2.062300485889527,
+      "diversity": 7.145629351610096,
+      "n_evaluations": 38170
+    },
+    {
+      "generation": 198,
+      "best": 3.9740618078724586,
+      "mean": 2.042064947550833,
+      "diversity": 7.171480635335074,
+      "n_evaluations": 38362
+    },
+    {
+      "generation": 199,
+      "best": 3.9740618078724586,
+      "mean": 2.05719524617305,
+      "diversity": 7.150592906875544,
+      "n_evaluations": 38553
+    },
+    {
+      "generation": 200,
+      "best": 3.9740618078724586,
+      "mean": 2.082018441860654,
+      "diversity": 7.158874564838991,
+      "n_evaluations": 38745
+    },
+    {
+      "generation": 201,
+      "best": 3.9740618078724586,
+      "mean": 2.050711251406677,
+      "diversity": 7.179354329852045,
+      "n_evaluations": 38936
+    },
+    {
+      "generation": 202,
+      "best": 3.9740618078724586,
+      "mean": 2.0533325096339783,
+      "diversity": 7.151843994778068,
+      "n_evaluations": 39127
+    },
+    {
+      "generation": 203,
+      "best": 3.9740618078724586,
+      "mean": 1.9720089054557945,
+      "diversity": 7.210672323759791,
+      "n_evaluations": 39319
+    },
+    {
+      "generation": 204,
+      "best": 3.9740618078724586,
+      "mean": 2.043611452731022,
+      "diversity": 7.155869234116623,
+      "n_evaluations": 39511
+    },
+    {
+      "generation": 205,
+      "best": 3.9740618078724586,
+      "mean": 2.0953766474501014,
+      "diversity": 7.125843124456049,
+      "n_evaluations": 39703
+    },
+    {
+      "generation": 206,
+      "best": 3.9740618078724586,
+      "mean": 2.034236078592726,
+      "diversity": 7.201180374238469,
+      "n_evaluations": 39895
+    },
+    {
+      "generation": 207,
+      "best": 3.9740618078724586,
+      "mean": 2.0462819615043863,
+      "diversity": 7.158901762402089,
+      "n_evaluations": 40087
+    },
+    {
+      "generation": 208,
+      "best": 3.9740618078724586,
+      "mean": 2.0844304134702916,
+      "diversity": 7.190736510008703,
+      "n_evaluations": 40279
+    },
+    {
+      "generation": 209,
+      "best": 3.9740618078724586,
+      "mean": 2.09650691493375,
+      "diversity": 7.169345626631854,
+      "n_evaluations": 40471
+    },
+    {
+      "generation": 210,
+      "best": 3.9740618078724586,
+      "mean": 1.9888282182653996,
+      "diversity": 7.196787967798086,
+      "n_evaluations": 40662
+    },
+    {
+      "generation": 211,
+      "best": 3.9740618078724586,
+      "mean": 2.0422325784009945,
+      "diversity": 7.177504895561357,
+      "n_evaluations": 40854
+    },
+    {
+      "generation": 212,
+      "best": 3.9740618078724586,
+      "mean": 2.073543131387166,
+      "diversity": 7.174703546562228,
+      "n_evaluations": 41046
+    },
+    {
+      "generation": 213,
+      "best": 3.9740618078724586,
+      "mean": 2.0157421739091483,
+      "diversity": 7.186425696257615,
+      "n_evaluations": 41238
+    },
+    {
+      "generation": 214,
+      "best": 3.9740618078724586,
+      "mean": 2.046369019843306,
+      "diversity": 7.200976392515231,
+      "n_evaluations": 41429
+    },
+    {
+      "generation": 215,
+      "best": 3.9740618078724586,
+      "mean": 2.0050456572779094,
+      "diversity": 7.230648933855527,
+      "n_evaluations": 41621
+    },
+    {
+      "generation": 216,
+      "best": 3.9740618078724586,
+      "mean": 1.9989537455622142,
+      "diversity": 7.183991514360313,
+      "n_evaluations": 41812
+    },
+    {
+      "generation": 217,
+      "best": 3.9740618078724586,
+      "mean": 2.049247134152209,
+      "diversity": 7.175111510008703,
+      "n_evaluations": 42004
+    },
+    {
+      "generation": 218,
+      "best": 3.9740618078724586,
+      "mean": 2.009028323639497,
+      "diversity": 7.213528067885117,
+      "n_evaluations": 42196
+    },
+    {
+      "generation": 219,
+      "best": 3.9740618078724586,
+      "mean": 2.071381952008799,
+      "diversity": 7.197495104438643,
+      "n_evaluations": 42387
+    },
+    {
+      "generation": 220,
+      "best": 3.9740618078724586,
+      "mean": 1.992132272058501,
+      "diversity": 7.172065382941688,
+      "n_evaluations": 42579
+    },
+    {
+      "generation": 221,
+      "best": 3.9740618078724586,
+      "mean": 2.0299594668472665,
+      "diversity": 7.198759791122716,
+      "n_evaluations": 42771
+    },
+    {
+      "generation": 222,
+      "best": 3.9740618078724586,
+      "mean": 2.1313562897411034,
+      "diversity": 7.12648226718886,
+      "n_evaluations": 42962
+    },
+    {
+      "generation": 223,
+      "best": 3.9740618078724586,
+      "mean": 2.016835441697315,
+      "diversity": 7.189417428198434,
+      "n_evaluations": 43154
+    },
+    {
+      "generation": 224,
+      "best": 3.9740618078724586,
+      "mean": 2.053037277350508,
+      "diversity": 7.162260661444734,
+      "n_evaluations": 43346
+    },
+    {
+      "generation": 225,
+      "best": 3.9740618078724586,
+      "mean": 2.0308555139820776,
+      "diversity": 7.124224869451697,
+      "n_evaluations": 43538
+    },
+    {
+      "generation": 226,
+      "best": 3.9740618078724586,
+      "mean": 2.0999275298310454,
+      "diversity": 7.156317993907746,
+      "n_evaluations": 43729
+    },
+    {
+      "generation": 227,
+      "best": 3.9740618078724586,
+      "mean": 2.0405026820905,
+      "diversity": 7.170623912097476,
+      "n_evaluations": 43920
+    },
+    {
+      "generation": 228,
+      "best": 3.9740618078724586,
+      "mean": 1.854347352747567,
+      "diversity": 7.464697563098347,
+      "n_evaluations": 44112
+    },
+    {
+      "generation": 229,
+      "best": 3.9740618078724586,
+      "mean": 1.8666172804842442,
+      "diversity": 7.439648607484769,
+      "n_evaluations": 44304
+    },
+    {
+      "generation": 230,
+      "best": 3.9740618078724586,
+      "mean": 1.8729479116526015,
+      "diversity": 7.42417319408181,
+      "n_evaluations": 44496
+    },
+    {
+      "generation": 231,
+      "best": 3.9740618078724586,
+      "mean": 1.8882587355328118,
+      "diversity": 7.423098890339426,
+      "n_evaluations": 44688
+    },
+    {
+      "generation": 232,
+      "best": 3.9740618078724586,
+      "mean": 1.8737143710911228,
+      "diversity": 7.451778720626632,
+      "n_evaluations": 44880
+    },
+    {
+      "generation": 233,
+      "best": 3.9740618078724586,
+      "mean": 1.8134764024671401,
+      "diversity": 7.441198868581375,
+      "n_evaluations": 45072
+    },
+    {
+      "generation": 234,
+      "best": 3.9740618078724586,
+      "mean": 1.9165282743148209,
+      "diversity": 7.443986618798956,
+      "n_evaluations": 45264
+    },
+    {
+      "generation": 235,
+      "best": 3.9740618078724586,
+      "mean": 1.8615693900293353,
+      "diversity": 7.4424227589208005,
+      "n_evaluations": 45456
+    },
+    {
+      "generation": 236,
+      "best": 3.9740618078724586,
+      "mean": 1.8742683942309206,
+      "diversity": 7.465527088772846,
+      "n_evaluations": 45648
+    },
+    {
+      "generation": 237,
+      "best": 3.9740618078724586,
+      "mean": 1.8720650820916351,
+      "diversity": 7.440845300261096,
+      "n_evaluations": 45840
+    },
+    {
+      "generation": 238,
+      "best": 3.9740618078724586,
+      "mean": 1.8747737969484515,
+      "diversity": 7.4471823324630115,
+      "n_evaluations": 46032
+    },
+    {
+      "generation": 239,
+      "best": 3.9740618078724586,
+      "mean": 1.8549972122632379,
+      "diversity": 7.433841927763273,
+      "n_evaluations": 46224
+    },
+    {
+      "generation": 240,
+      "best": 3.9740618078724586,
+      "mean": 1.870548822897323,
+      "diversity": 7.451561140121845,
+      "n_evaluations": 46416
+    },
+    {
+      "generation": 241,
+      "best": 3.9740618078724586,
+      "mean": 1.864345499983015,
+      "diversity": 7.457680591818973,
+      "n_evaluations": 46608
+    },
+    {
+      "generation": 242,
+      "best": 3.9740618078724586,
+      "mean": 1.8235263300195463,
+      "diversity": 7.439621409921671,
+      "n_evaluations": 46800
+    },
+    {
+      "generation": 243,
+      "best": 3.9740618078724586,
+      "mean": 1.8511490270710593,
+      "diversity": 7.45279862924282,
+      "n_evaluations": 46992
+    },
+    {
+      "generation": 244,
+      "best": 3.9740618078724586,
+      "mean": 1.8681349703541905,
+      "diversity": 7.442708333333333,
+      "n_evaluations": 47184
+    },
+    {
+      "generation": 245,
+      "best": 3.9740618078724586,
+      "mean": 1.853822159686942,
+      "diversity": 7.441810813751088,
+      "n_evaluations": 47376
+    },
+    {
+      "generation": 246,
+      "best": 3.9740618078724586,
+      "mean": 1.8569729900084624,
+      "diversity": 7.409092145343777,
+      "n_evaluations": 47568
+    },
+    {
+      "generation": 247,
+      "best": 3.9740618078724586,
+      "mean": 1.8866002339277557,
+      "diversity": 7.409513707571802,
+      "n_evaluations": 47760
+    },
+    {
+      "generation": 248,
+      "best": 3.9740618078724586,
+      "mean": 1.8539405458807383,
+      "diversity": 7.461134682332463,
+      "n_evaluations": 47952
+    },
+    {
+      "generation": 249,
+      "best": 3.9740618078724586,
+      "mean": 1.848796371885653,
+      "diversity": 7.458795691906006,
+      "n_evaluations": 48144
+    },
+    {
+      "generation": 250,
+      "best": 3.9740618078724586,
+      "mean": 1.9105516421750066,
+      "diversity": 7.433515557006093,
+      "n_evaluations": 48336
+    },
+    {
+      "generation": 251,
+      "best": 3.9740618078724586,
+      "mean": 1.9342452529930387,
+      "diversity": 7.403734225413403,
+      "n_evaluations": 48528
+    },
+    {
+      "generation": 252,
+      "best": 3.9740618078724586,
+      "mean": 1.8639234064208656,
+      "diversity": 7.473305591818973,
+      "n_evaluations": 48719
+    },
+    {
+      "generation": 253,
+      "best": 3.9740618078724586,
+      "mean": 1.855155020410317,
+      "diversity": 7.446366405570061,
+      "n_evaluations": 48911
+    },
+    {
+      "generation": 254,
+      "best": 3.9740618078724586,
+      "mean": 1.8555913083084559,
+      "diversity": 7.419767188859878,
+      "n_evaluations": 49103
+    },
+    {
+      "generation": 255,
+      "best": 3.9740618078724586,
+      "mean": 1.8642212442081234,
+      "diversity": 7.417550587467363,
+      "n_evaluations": 49295
+    },
+    {
+      "generation": 256,
+      "best": 3.9740618078724586,
+      "mean": 1.8674969910884027,
+      "diversity": 7.424499564838991,
+      "n_evaluations": 49487
+    },
+    {
+      "generation": 257,
+      "best": 3.9740618078724586,
+      "mean": 1.9285994339538213,
+      "diversity": 7.451275565709312,
+      "n_evaluations": 49678
+    },
+    {
+      "generation": 258,
+      "best": 3.9740618078724586,
+      "mean": 1.8397996172152773,
+      "diversity": 7.468124456048738,
+      "n_evaluations": 49870
+    },
+    {
+      "generation": 259,
+      "best": 3.9740618078724586,
+      "mean": 1.8525982942828823,
+      "diversity": 7.4418516100957355,
+      "n_evaluations": 50062
+    },
+    {
+      "generation": 260,
+      "best": 3.9740618078724586,
+      "mean": 1.8830091315475121,
+      "diversity": 7.440410139251523,
+      "n_evaluations": 50254
+    },
+    {
+      "generation": 261,
+      "best": 3.9740618078724586,
+      "mean": 1.9366019475178529,
+      "diversity": 7.445482484769364,
+      "n_evaluations": 50446
+    },
+    {
+      "generation": 262,
+      "best": 3.9740618078724586,
+      "mean": 1.85644007778345,
+      "diversity": 7.437567993907746,
+      "n_evaluations": 50637
+    },
+    {
+      "generation": 263,
+      "best": 3.9740618078724586,
+      "mean": 1.8518591800230375,
+      "diversity": 7.421521431679722,
+      "n_evaluations": 50829
+    },
+    {
+      "generation": 264,
+      "best": 3.9740618078724586,
+      "mean": 1.9412519005699735,
+      "diversity": 7.417074630113142,
+      "n_evaluations": 51021
+    },
+    {
+      "generation": 265,
+      "best": 3.9740618078724586,
+      "mean": 1.8633788549418997,
+      "diversity": 7.424880330722368,
+      "n_evaluations": 51213
+    },
+    {
+      "generation": 266,
+      "best": 3.9740618078724586,
+      "mean": 1.833372503769987,
+      "diversity": 7.443673846823325,
+      "n_evaluations": 51404
+    },
+    {
+      "generation": 267,
+      "best": 3.9740618078724586,
+      "mean": 1.897367453306714,
+      "diversity": 7.433297976501305,
+      "n_evaluations": 51596
+    },
+    {
+      "generation": 268,
+      "best": 3.9740618078724586,
+      "mean": 1.8695176637119315,
+      "diversity": 7.441579634464752,
+      "n_evaluations": 51787
+    },
+    {
+      "generation": 269,
+      "best": 3.9740618078724586,
+      "mean": 1.8667544817608965,
+      "diversity": 7.417237815491732,
+      "n_evaluations": 51979
+    },
+    {
+      "generation": 270,
+      "best": 3.9740618078724586,
+      "mean": 1.8945434774967485,
+      "diversity": 7.426498585726719,
+      "n_evaluations": 52171
+    },
+    {
+      "generation": 271,
+      "best": 3.9740618078724586,
+      "mean": 1.870839676553441,
+      "diversity": 7.428116840731071,
+      "n_evaluations": 52363
+    },
+    {
+      "generation": 272,
+      "best": 3.9740618078724586,
+      "mean": 1.925955176492086,
+      "diversity": 7.424853133159269,
+      "n_evaluations": 52555
+    },
+    {
+      "generation": 273,
+      "best": 3.9740618078724586,
+      "mean": 1.8960548305167106,
+      "diversity": 7.4448977371627505,
+      "n_evaluations": 52747
+    },
+    {
+      "generation": 274,
+      "best": 3.9740618078724586,
+      "mean": 1.8772463011546379,
+      "diversity": 7.407229112271541,
+      "n_evaluations": 52938
+    },
+    {
+      "generation": 275,
+      "best": 3.9740618078724586,
+      "mean": 1.9356807582524416,
+      "diversity": 7.4429259138381205,
+      "n_evaluations": 53130
+    },
+    {
+      "generation": 276,
+      "best": 3.9740618078724586,
+      "mean": 1.8770542184937409,
+      "diversity": 7.42598183202785,
+      "n_evaluations": 53322
+    },
+    {
+      "generation": 277,
+      "best": 3.9740618078724586,
+      "mean": 1.867046575448373,
+      "diversity": 7.401884791122716,
+      "n_evaluations": 53514
+    },
+    {
+      "generation": 278,
+      "best": 3.9740618078724586,
+      "mean": 1.8832242733475948,
+      "diversity": 7.392515230635335,
+      "n_evaluations": 53706
+    },
+    {
+      "generation": 279,
+      "best": 3.9740618078724586,
+      "mean": 1.9296403419499233,
+      "diversity": 7.396853241949521,
+      "n_evaluations": 53898
+    },
+    {
+      "generation": 280,
+      "best": 3.9740618078724586,
+      "mean": 1.8542157415826406,
+      "diversity": 7.392855200174065,
+      "n_evaluations": 54090
+    },
+    {
+      "generation": 281,
+      "best": 3.9740618078724586,
+      "mean": 1.9010118500763686,
+      "diversity": 7.390434617058312,
+      "n_evaluations": 54282
+    },
+    {
+      "generation": 282,
+      "best": 3.9740618078724586,
+      "mean": 1.9069518795187446,
+      "diversity": 7.38782365100087,
+      "n_evaluations": 54474
+    },
+    {
+      "generation": 283,
+      "best": 3.9740618078724586,
+      "mean": 1.8817132796675666,
+      "diversity": 7.406603568320278,
+      "n_evaluations": 54666
+    },
+    {
+      "generation": 284,
+      "best": 3.9740618078724586,
+      "mean": 1.905909198925069,
+      "diversity": 7.389605091383812,
+      "n_evaluations": 54858
+    },
+    {
+      "generation": 285,
+      "best": 3.9740618078724586,
+      "mean": 1.88862284580613,
+      "diversity": 7.374197671888599,
+      "n_evaluations": 55050
+    },
+    {
+      "generation": 286,
+      "best": 3.9740618078724586,
+      "mean": 1.9190461995600028,
+      "diversity": 7.384587140992167,
+      "n_evaluations": 55242
+    },
+    {
+      "generation": 287,
+      "best": 3.9740618078724586,
+      "mean": 1.9326672141013475,
+      "diversity": 7.353649912967798,
+      "n_evaluations": 55434
+    },
+    {
+      "generation": 288,
+      "best": 3.9740618078724586,
+      "mean": 1.9399633793931332,
+      "diversity": 7.363971388163621,
+      "n_evaluations": 55625
+    },
+    {
+      "generation": 289,
+      "best": 3.9740618078724586,
+      "mean": 1.9290804694872257,
+      "diversity": 7.404808529155788,
+      "n_evaluations": 55817
+    },
+    {
+      "generation": 290,
+      "best": 3.9740618078724586,
+      "mean": 1.9578249866680333,
+      "diversity": 7.360734878154918,
+      "n_evaluations": 56009
+    },
+    {
+      "generation": 291,
+      "best": 3.9740618078724586,
+      "mean": 1.8870575926021316,
+      "diversity": 7.340431897302002,
+      "n_evaluations": 56201
+    },
+    {
+      "generation": 292,
+      "best": 3.9740618078724586,
+      "mean": 1.8946092864007602,
+      "diversity": 7.339588772845953,
+      "n_evaluations": 56393
+    },
+    {
+      "generation": 293,
+      "best": 3.9740618078724586,
+      "mean": 1.9350559999580135,
+      "diversity": 7.3336869016536115,
+      "n_evaluations": 56585
+    },
+    {
+      "generation": 294,
+      "best": 3.9740618078724586,
+      "mean": 1.8725651118087565,
+      "diversity": 7.344389142732811,
+      "n_evaluations": 56777
+    },
+    {
+      "generation": 295,
+      "best": 3.9740618078724586,
+      "mean": 1.9367157739746999,
+      "diversity": 7.34899912967798,
+      "n_evaluations": 56968
+    },
+    {
+      "generation": 296,
+      "best": 3.9740618078724586,
+      "mean": 1.9515096025316438,
+      "diversity": 7.330232811140122,
+      "n_evaluations": 57160
+    },
+    {
+      "generation": 297,
+      "best": 3.9740618078724586,
+      "mean": 1.9550457039684783,
+      "diversity": 7.314417428198434,
+      "n_evaluations": 57352
+    },
+    {
+      "generation": 298,
+      "best": 3.9740618078724586,
+      "mean": 1.9439283193652965,
+      "diversity": 7.305999782419495,
+      "n_evaluations": 57544
+    },
+    {
+      "generation": 299,
+      "best": 3.9740618078724586,
+      "mean": 1.9247472220177826,
+      "diversity": 7.29488957789382,
+      "n_evaluations": 57736
+    },
+    {
+      "generation": 300,
+      "best": 3.9740618078724586,
+      "mean": 1.948314870731127,
+      "diversity": 7.308229982593559,
+      "n_evaluations": 57928
+    }
+  ]
+}

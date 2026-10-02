@@ -1,0 +1,21 @@
+{
+  "prefix": "66",
+  "records": [
+    {
+      "magic": 661801,
+      "name": "test_strategy",
+      "version": 1
+    },
+    {
+      "magic": 661901,
+      "name": "h1_xauusd_miaosuan",
+      "version": 1
+    },
+    {
+      "magic": 662001,
+      "name": "d1_au0_miaosuan",
+      "version": 1
+    }
+  ],
+  "version": 1
+}

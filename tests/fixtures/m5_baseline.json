@@ -1,6 +1,6 @@
 {
-  "_comment": "由 scripts/gen_m5_baseline.py 用冻结 AM 生成，请勿手工编辑。",
-  "source": "AlphaMaster-main/model_core + strategy_manager/signal.py",
+  "_comment": "由 scripts/gen_m5_baseline.py 用冻结基准 生成，请勿手工编辑。",
+  "source": "妙算/model_core + strategy_manager/signal.py",
   "torch_version": "2.14.0+cpu",
   "numpy_version": "2.5.3",
   "seed": 20260910,

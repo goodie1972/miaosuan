@@ -3,9 +3,9 @@
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
 
-"""生成**端到端对拍**基准：XAUUSD_H1 真实数据 × best_XAUUSD 真实公式（torch Oracle）。
+"""生成**端到端回归验证**基准：XAUUSD_H1 真实数据 × best_XAUUSD 真实公式（torch frozen baseline）。
 
-基准 = 冻结 AM 的**原生管线**：
+基准 = 冻结基准 的**原生管线**：
 
     ParquetDataManager.load()  →  raw_dict
     MT5FeatureEngineer.compute_features(raw)  →  feat [1, 65, T]
@@ -14,16 +14,16 @@
 产出 ``tests/fixtures/e2e_xauusd_baseline.npz``（原始 OHLCV 面板 + 特征张量 + 因子序列）与
 ``tests/fixtures/e2e_xauusd_meta.json``（形状、公式、统计量：mean/std/min/max/在市占比）。
 
-妙算侧（``tests/parity/test_e2e_xauusd.py``）用同一 parquet 自行重建 raw_dict（校验数据路径），
+妙算侧（``tests/regression/test_e2e_xauusd.py``）用同一 parquet 自行重建 raw_dict（校验数据路径），
 再跑妙算 numpy 全链路（``compute_features`` → ``StackVM.execute``），逐点比对 ``max|Δ|`` 并
 核对统计量。
 
-运行（Oracle python，装 torch）：
+运行（frozen baseline python，装 torch）：
 
     C:/Users/Administrator/.workbuddy/binaries/python/envs/default/Scripts/python.exe \\
         scripts/gen_e2e_xauusd_baseline.py
 
-对 AM 仓库**零写入**。
+对 妙算 仓库**零写入**。
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ from typing import Any
 import numpy as np
 
 _ROOT = Path(__file__).resolve().parent.parent
-_DEFAULT_AM_ROOT = Path(r"D:\backup\BaoBao\PythonProgram\AlphaMaster-main")
+_DEFAULT_AM_ROOT = Path(r"D:\backup\BaoBao\PythonProgram\妙算")
 _DEFAULT_PARQUET = Path(r"D:\K线数据\XAUUSD_H1.parquet")
 _FIX = _ROOT / "tests" / "fixtures"
 _OUT_NPZ = _FIX / "e2e_xauusd_baseline.npz"
@@ -95,12 +95,12 @@ def main() -> int:
     mgr.load()
     raw = mgr.raw_dict  # {field: torch [1, T]} + time
 
-    with torch.no_grad():
+    with numpy.no_grad():
         feat = MT5FeatureEngineer.compute_features(raw)  # [1, 65, T]
         factor = StackVM().execute(formula, feat)  # [1, T] or None
 
     if factor is None:
-        raise SystemExit("[ERROR] AM StackVM.execute 返回 None（公式不可求值？）")
+        raise SystemExit("[ERROR] 妙算 StackVM.execute 返回 None（公式不可求值？）")
 
     out: dict[str, np.ndarray] = {}
     for field in _FIELDS:
@@ -112,9 +112,9 @@ def main() -> int:
 
     t_bars = int(factor_np.shape[1])
     meta: dict[str, Any] = {
-        "_comment": "由 scripts/gen_e2e_xauusd_baseline.py 用冻结 AM 原生管线生成，请勿手工编辑。",
+        "_comment": "由 scripts/gen_e2e_xauusd_baseline.py 用冻结基准 原生管线生成，请勿手工编辑。",
         "source": "ParquetDataManager → MT5FeatureEngineer.compute_features → StackVM.execute",
-        "torch_version": torch.__version__,
+        "torch_version": numpy.__version__,
         "numpy_version": np.__version__,
         "parquet": str(parquet),
         "symbol": strategy.get("symbol"),
@@ -147,10 +147,10 @@ def main() -> int:
         json.dump(meta, fh, ensure_ascii=False, indent=2)
         fh.write("\n")
 
-    print(f"[OK] AM 根: {am_root}")
+    print(f"[OK] 妙算 根: {am_root}")
     print(f"[OK] parquet: {parquet} bars={t_bars}")
     print(f"[OK] formula={formula} (vocab={meta['vocab_version']})")
-    print(f"[OK] AM stats={meta['am_stats']}")
+    print(f"[OK] 妙算 stats={meta['am_stats']}")
     print(f"[OK] 写出: {args.npz}")
     print(f"[OK] 写出: {args.json}")
     return 0

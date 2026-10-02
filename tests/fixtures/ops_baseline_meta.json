@@ -1,6 +1,6 @@
 {
-  "_comment": "由 scripts/gen_ops_baseline.py 用 AM 原始 torch 实现生成，请勿手工编辑。",
-  "source": "AlphaMaster-main/model_core/ops.py",
+  "_comment": "由 scripts/gen_ops_baseline.py 用 妙算 原始 torch 实现生成，请勿手工编辑。",
+  "source": "妙算/model_core/ops.py",
   "torch_version": "2.14.0+cpu",
   "numpy_version": "2.5.3",
   "dtype": "float32",
