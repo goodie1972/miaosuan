@@ -1,6 +1,0 @@
-﻿status= updated
-path= data\cache\XAUUSD_D1_Dukascopy.parquet
-source_used= Dukascopy
-errors= []
-warnings= []
-stale= False

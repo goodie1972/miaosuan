@@ -1,3 +1,0 @@
-TOTAL_COLLECTED = 1059
-COMBO_FILES = {'tests/test_combo.py': 39}
-ERRORS = []
