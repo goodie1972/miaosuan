@@ -1,3 +1,0 @@
-BASETEMP: ABSENT_OK
-h1_data: True
-TEMP: C:\Users\ADMINI~1\AppData\Local\Temp
