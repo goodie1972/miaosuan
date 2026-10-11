@@ -13,7 +13,7 @@
 关键等价与参数化：
 
 * 妙算 由根目录 ``config.Config.MIN_TRADE_EXPOSURE``（=0.05）隐式读取阈值；妙算改为
-  **参数注入** ``min_trade_exposure``（默认 0.05，与 妙算 一致），``core/`` 不读环境、不做 IO。
+  **参数注入** ``min_trade_exposure``（默认 0.05，与对拍基准一致），``core/`` 不读环境、不做 IO。
 * 妙算 的 ``numpy.tanh`` → ``np.tanh``；``numpy.where(cond,a,b)`` → ``np.where(cond,a,b)``；
   ``numpy.zeros_like`` → ``np.zeros_like``。dtype 保持（float32 in → float32 out）。
 * ``long_only`` 为妙算新增的**预留开关**（架构 §T02 验收 4：long_only=True 时无负仓位），
@@ -139,7 +139,7 @@ class SignalMapper:
     """信号映射器（架构类图 `SignalMapper`）。
 
     把「因子 → 连续仓位」这一步封装为可配置对象，便于 search / backtest 复用同一映射，
-    并预留 ``long_only`` / ``neutral_band`` 两个产品轴开关（默认与 妙算 一致）。
+    并预留 ``long_only`` / ``neutral_band`` 两个产品轴开关（默认与对拍基准一致）。
 
     :param position_fn: 仓位函数名，当前仅支持 ``"tanh"``（妙算 语义）。
     :param neutral_band: 中性带下界（映射到 ``min_trade_exposure``）。

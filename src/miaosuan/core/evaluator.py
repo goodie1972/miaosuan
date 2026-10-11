@@ -161,7 +161,7 @@ def _compute_ic_rankic(cand: np.ndarray, tgt: np.ndarray) -> tuple[float, float,
         try:
             ic_val, _ = pearsonr(cv, tv)
             ric_val, _ = spearmanr(cv, tv)
-        except Exception:  # noqa: BLE001 - 与 妙算 一致：单品种失败跳过
+        except Exception:  # noqa: BLE001 - 与对拍基准一致：单品种失败跳过
             continue
         if math.isfinite(ic_val):
             ic_list.append(float(ic_val))
@@ -208,7 +208,7 @@ def _compute_mi(cand: np.ndarray, tgt: np.ndarray) -> float:
         t_q = np.unique(t_q)
         c_bins = np.searchsorted(c_q[1:-1], cv, side="right")
         t_bins = np.searchsorted(t_q[1:-1], tv, side="right")
-    except Exception:  # noqa: BLE001 - 与 妙算 一致：分箱失败返回 0
+    except Exception:  # noqa: BLE001 - 与对拍基准一致：分箱失败返回 0
         return 0.0
 
     n_c = len(c_q)
@@ -258,7 +258,7 @@ def _pearson_corr(a: np.ndarray, b: np.ndarray) -> float:
     try:
         r, _ = pearsonr(av, bv)
         return abs(float(r)) if math.isfinite(r) else 0.0
-    except Exception:  # noqa: BLE001 - 与 妙算 一致
+    except Exception:  # noqa: BLE001 - 与对拍基准一致
         return 0.0
 
 
@@ -542,7 +542,7 @@ def ablate(
 
         try:
             m_with = _compute_metric(with_dict, tgt_w, horizon, w_rankic, w_mi)
-        except Exception as e:  # noqa: BLE001 - 与 妙算 一致：失败即返回 error
+        except Exception as e:  # noqa: BLE001 - 与对拍基准一致：失败即返回 error
             return AblationResult(
                 name=name,
                 marginal_contribution=None,

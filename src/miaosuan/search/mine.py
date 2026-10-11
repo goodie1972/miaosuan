@@ -37,7 +37,7 @@ from ..data.panel import Panel
 from ..data.split import DEFAULT_SEAL_PATH, DataSplit, HoldoutSealRegistry, make_split
 from ..market.profiles import FrozenMarketProfile, get_profile
 from .budget import DEFAULT_PROFILE, Budget
-from .ga import AMFitnessEvaluator, FormulaEvaluator, RpnGA
+from .ga import WFFitnessEvaluator, FormulaEvaluator, RpnGA
 from .rpn import Individual, decode
 
 __all__ = [
@@ -167,7 +167,7 @@ def _oos_slices(folds: list[dict[str, int]]) -> list[slice]:
 
 def _gate_candidate(
     ind: Individual,
-    evaluator: AMFitnessEvaluator,
+    evaluator: WFFitnessEvaluator,
     *,
     base_cost_rate: float,
     periods_per_year: int,
@@ -269,10 +269,10 @@ def mine(
     :param registry: hold-out 封印台账（缺省落盘 :data:`DEFAULT_SEAL_PATH`；测试用 ``IN_MEMORY``）。
     :param profile: 市场画像（缺省按 ``panel.market_profile_name`` 查找）。
     :param budget: 预算（缺省按 ``budget_profile`` 构造）；其 ``pop_size`` 等可按测试缩减。
-    :param evaluator: 适应度评估器（缺省构造 :class:`AMFitnessEvaluator`；测试可注入合成评估器）。
+    :param evaluator: 适应度评估器（缺省构造 :class:`WFFitnessEvaluator`；测试可注入合成评估器）。
     :param top_k: 汇总的候选数。
     :param budget_profile: 预算档位名（``quick`` / ``standard`` / ``deep``）。
-    :param n_folds: Walk-Forward 折数（默认 5，与 妙算 一致）。
+    :param n_folds: Walk-Forward 折数（默认 5，与对拍基准一致）。
     :param gap: 折间间隔（默认 20，与 妙算 ``WF_GAP`` 一致）。
     """
     prof = _resolve_profile(panel, profile)
@@ -294,7 +294,7 @@ def mine(
     if evaluator is not None:
         eval_impl = evaluator
     else:
-        eval_impl = AMFitnessEvaluator(
+        eval_impl = WFFitnessEvaluator(
             features,
             target_ret,
             cost_rate=float(prof.cost_model.total("buy")),
@@ -329,7 +329,7 @@ def mine(
     base_cost_rate = float(prof.cost_model.total("buy"))
     candidates: list[Candidate] = []
     for ind in ga.top_individuals(top_k):
-        if isinstance(eval_impl, AMFitnessEvaluator):
+        if isinstance(eval_impl, WFFitnessEvaluator):
             candidates.append(
                 _gate_candidate(
                     ind,

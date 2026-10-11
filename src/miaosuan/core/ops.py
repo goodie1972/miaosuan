@@ -15,7 +15,7 @@
   ``VOCAB_VERSION`` 会漂移、旧产物被 ``verify()`` 拒绝；由
   ``tests/fixtures/frozen_token_order.json`` 与 ``tests/regression`` 回归锁定。
 * **数值细节逐一对齐**，不做「顺手优化」：dtype 保持、``clamp`` 边界、``nan``/``inf``
-  处理、除零保护 ``_EPS``、``nan_to_num`` 的默认 ``posinf``/``neginf`` 语义均与 妙算 一致。
+  处理、除零保护 ``_EPS``、``nan_to_num`` 的默认 ``posinf``/``neginf`` 语义均与对拍基准一致。
 * **禁止** import torch、禁止文件 IO、禁止读取环境变量（CI 的
   ``tests/test_dependency_direction.py`` 强制校验）。
 
@@ -51,7 +51,7 @@ __all__ = [
     "is_registered",
 ]
 
-# 除零保护常数（与 妙算 一致）
+# 除零保护常数（与对拍基准一致）
 # 增加到 1e-4 以在更长公式/更大搜索空间下提供更强的数值稳定性
 _EPS = 1e-6
 

@@ -18,7 +18,7 @@
 * **数值细节逐一对齐**，不做「顺手优化」：dtype 保持、``clamp`` 边界、``nan``/``inf``
   处理、除零保护 ``_EPS``、``nan_to_num`` 的默认 ``posinf``/``neginf`` 语义、
   ``标准差`` 的**无偏**（``ddof=1``）默认、``numpy.median`` 偶数窗口取**下中位数**
-  的语义，均与 妙算 一致。
+  的语义，均与对拍基准一致。
 * **禁止** import torch、禁止文件 IO、禁止读取环境变量（CI 的
   ``tests/test_dependency_direction.py`` 强制校验）。active_features 白名单改为
   **参数注入**（``compute_features(..., active_features=...)`` / ``build_feature_registry``），
@@ -1171,7 +1171,7 @@ FEATURE_REGISTRY: Registry = build_feature_registry()
 #: 由注册表导出有序特征名视图（保持下游 import 兼容）。
 FEATURE_NAMES: tuple[str, ...] = FEATURE_REGISTRY.feature_names
 
-#: 特征总数（= 65，与 妙算 一致）。
+#: 特征总数（= 65，与对拍基准一致）。
 FEATURE_COUNT: int = len(FEATURE_REGISTRY.feature_names)
 
 

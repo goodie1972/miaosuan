@@ -548,9 +548,9 @@ def _single_factor_gate(tokens: list[int]) -> tuple[Any, dict[str, Any]]:
     target = np.zeros((1, n), dtype=np.float32)
     op = raw["open"]
     target[:, :-2] = np.log(op[:, 2:] / op[:, 1:-1])
-    from miaosuan.search.ga import AMFitnessEvaluator
+    from miaosuan.search.ga import WFFitnessEvaluator
 
-    evaluator = AMFitnessEvaluator(
+    evaluator = WFFitnessEvaluator(
         features, target, cost_rate=0.0003, periods_per_year=6240, n_folds=5, gap=20
     )
     ind = Individual(tokens=np.asarray(tokens, dtype=np.int64))
@@ -604,7 +604,7 @@ def _combo_candidate(tokens: list[list[int]], *, method: str = "equal") -> Any:
     """直接调 :func:`miaosuan.search.combo.combine`（不落盘，供门禁口径对照）。"""
     from miaosuan.core.features import compute_features
     from miaosuan.search.combo import combine
-    from miaosuan.search.ga import AMFitnessEvaluator
+    from miaosuan.search.ga import WFFitnessEvaluator
 
     rng = np.random.default_rng(11)
     n = 1000
@@ -623,7 +623,7 @@ def _combo_candidate(tokens: list[list[int]], *, method: str = "equal") -> Any:
     target = np.zeros((1, n), dtype=np.float32)
     op = raw["open"]
     target[:, :-2] = np.log(op[:, 2:] / op[:, 1:-1])
-    evaluator = AMFitnessEvaluator(
+    evaluator = WFFitnessEvaluator(
         features, target, cost_rate=0.0003, periods_per_year=6240, n_folds=5, gap=20
     )
     return combine(tokens, evaluator=evaluator, n_trials=1000, method=method)

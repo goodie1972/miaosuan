@@ -16,7 +16,7 @@
 * **``_normalize_output`` 原样实现**：滚动 500 期 z-score（``ddof=1``，与 ``标准差`` 默认
   一致），``clip[-3, 3]``，warm-up 前 ``_ROLL_WINDOW-1``（=499）根输出 0；``T < 窗口`` 退化
   expanding；``N > 1`` 走截面 z-score；全局常数短路。``roll_window`` 改为**可注入参数**
-  （默认 500，与 妙算 一致）。
+  （默认 500，与对拍基准一致）。
 * **``except`` 不再静默**：妙算 的 ``except Exception: return None`` 会吞掉真实错误。妙算仍
   **返回 None**（保持「不可求值」判定不变，否则搜索空间改变），但把异常计数并记录
   ``last_error``（实例级状态，不引入全局可变状态），保证可复现。
@@ -168,7 +168,7 @@ class StackVM:
             for i, cfg in enumerate(OPS_CONFIG)
             if cfg[0] in POSITIVE_ONLY_OPS
         }
-        # 归一化滚动窗口（可注入；默认 500 与 妙算 一致）。
+        # 归一化滚动窗口（可注入；默认 500 与对拍基准一致）。
         self.roll_window = int(roll_window)
         # 实例级统计（不引入全局可变状态，保证可复现）：不可求值计数 + 末次异常。
         self.none_count = 0

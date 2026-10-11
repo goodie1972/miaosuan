@@ -15,7 +15,7 @@ from miaosuan.core.features import compute_features
 from miaosuan.data.panel import PANEL_FIELDS, Panel
 from miaosuan.search.budget import STOP_MAX_GENERATIONS, Budget
 from miaosuan.search.ga import (
-    AMFitnessEvaluator,
+    WFFitnessEvaluator,
     EvalResult,
     RpnGA,
     _apply_ic_gate,
@@ -190,7 +190,7 @@ def test_ga_top_individuals_dedup_sorted() -> None:
     assert len({ind.key() for ind in top}) == len(top)
 
 
-# ── AMFitnessEvaluator 一致性（合成数据，无需外部文件）───────────────────────
+# ── WFFitnessEvaluator 一致性（合成数据，无需外部文件）───────────────────────
 
 
 def _synthetic_panel(n: int = 1600, seed: int = 0) -> Panel:
@@ -216,7 +216,7 @@ def test_am_fitness_evaluator_smoke() -> None:
     from miaosuan.search.mine import compute_target_ret
 
     tret = compute_target_ret(panel.open)
-    ev = AMFitnessEvaluator(feats, tret, cost_rate=0.0003, periods_per_year=6240, n_folds=5, gap=20)
+    ev = WFFitnessEvaluator(feats, tret, cost_rate=0.0003, periods_per_year=6240, n_folds=5, gap=20)
     assert len(ev.folds) >= 1
     res = ev.evaluate(random_feasible(np.random.default_rng(4), 8))
     assert res.status in {"ok", "none", "const"}
@@ -230,7 +230,7 @@ def test_am_fitness_evaluator_none_for_infeasible() -> None:
     from miaosuan.search.mine import compute_target_ret
 
     tret = compute_target_ret(panel.open)
-    ev = AMFitnessEvaluator(feats, tret, cost_rate=0.0003, periods_per_year=6240)
+    ev = WFFitnessEvaluator(feats, tret, cost_rate=0.0003, periods_per_year=6240)
     # 特征越界 token（>= F）→ 不可求值
     bad = np.full(8, 9999, dtype=np.int64)
     res = ev.evaluate(bad)

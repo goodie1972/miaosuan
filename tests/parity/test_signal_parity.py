@@ -6,7 +6,7 @@
 """M5 signal 数值回归验证：妙算 numpy vs 冻结基准 的 ``strategy_manager/signal.py``。
 
 连续仓位 = ``tanh(factor)`` 后套中性带（``|pos| < min_trade_exposure`` → 0）；并校验妙算新增
-的 ``long_only`` 预留开关（默认 False 与 妙算 一致）。
+的 ``long_only`` 预留开关（默认 False 与对拍基准一致）。
 """
 
 from __future__ import annotations

@@ -14,7 +14,7 @@
   → **单次** tanh → **单次** 中性带（底层复用 :mod:`miaosuan.core.combo`，不重写）；
 * **§1.7 门禁完全同款**：``evaluate_cost_curve → deflated_sharpe_ratio →
   evaluate_verdict``，与 ``search/mine._gate_candidate`` **同序同参**；折分打分走
-  :meth:`AMFitnessEvaluator.fold_scores_of`（单因子 ``fold_scores`` 也转调它，
+  :meth:`WFFitnessEvaluator.fold_scores_of`（单因子 ``fold_scores`` 也转调它，
   单一实现，杜绝口径漂移）；
 * **§1.3 n_trials 累加**：``n_trials_combo = Σ(各成员来源运行的 n_trials，按运行去重)
   + 权重搜索次数``。**等权与 IC 加权都计 0 次权重搜索** —— 二者都是确定性映射
@@ -40,7 +40,7 @@ from ..core.signal import MIN_TRADE_EXPOSURE
 from ..core.vm import DEFAULT_ROLL_WINDOW
 from ..errors import ConfigError
 from ..report.metrics import information_coefficient
-from .ga import AMFitnessEvaluator
+from .ga import WFFitnessEvaluator
 
 __all__ = [
     "COMBO_METHODS",
@@ -129,7 +129,7 @@ def weights_for(
 def combine(
     members: Sequence[Sequence[int]],
     *,
-    evaluator: AMFitnessEvaluator,
+    evaluator: WFFitnessEvaluator,
     n_trials: int,
     method: str = "equal",
     weights: np.ndarray | Sequence[float] | None = None,

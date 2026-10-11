@@ -18,7 +18,7 @@
 * 妙算 由 ``strategy_manager.signal`` 取仓位 → 妙算改用同包 :mod:`.signal`。
 * 妙算 由根目录 ``config.Config.COST_RATE``（=0.0003）/ ``ModelConfig.REWARD_MODE``
   （当前 ``"ftmo"``）隐式决定行为；妙算改为**参数注入** ``cost_rate``（默认 0.0003）与
-  ``reward_mode``（默认 ``"ftmo"``），默认值与 妙算 一致以保证回归验证，``core/`` 不读环境/不做 IO。
+  ``reward_mode``（默认 ``"ftmo"``），默认值与对拍基准一致以保证回归验证，``core/`` 不读环境/不做 IO。
 * 数据驱动年化因子 ``estimate_periods_per_year`` 保留；妙算 的 tqdm/print 兜底告警改为
   ``warnings.warn``（无 IO 副作用）。
 
@@ -119,7 +119,7 @@ class MT5Backtest:
         periods_per_year: int = _H1_PERIODS_PER_YEAR,
         reward_mode: str = _DEFAULT_REWARD_MODE,
     ) -> None:
-        # 成本率与奖励模式改为参数注入（默认值与 妙算 一致：0.0003 / "ftmo"）。
+        # 成本率与奖励模式改为参数注入（默认值与对拍基准一致：0.0003 / "ftmo"）。
         self.cost_rate = _DEFAULT_COST_RATE if cost_rate is None else float(cost_rate)
         self.periods_per_year = int(periods_per_year)
         self.reward_mode = str(reward_mode)

@@ -36,7 +36,7 @@ from .ir.schema import ComboPayload, Evidence, FactorPayload, Semantics, Strateg
 from .market.profiles import FrozenMarketProfile, get_profile
 from .search.budget import DEFAULT_PROFILE, Budget
 from .search.combo import COMBO_METHODS, ComboCandidate, combine
-from .search.ga import AMFitnessEvaluator
+from .search.ga import WFFitnessEvaluator
 from .search.mine import Candidate, MineResult, compute_target_ret, mine
 
 __all__ = [
@@ -648,7 +648,7 @@ def run_combine(
     features = compute_features(dev_panel.to_raw_dict())
     target_ret = compute_target_ret(dev_panel.open)
 
-    evaluator = AMFitnessEvaluator(
+    evaluator = WFFitnessEvaluator(
         features,
         target_ret,
         cost_rate=float(profile.cost_model.total("buy")),

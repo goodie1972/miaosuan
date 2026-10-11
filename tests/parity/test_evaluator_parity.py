@@ -195,7 +195,7 @@ def test_ablate_regression(m5_npz: dict, m5_meta: dict) -> None:
 
 
 def test_ablate_missing_name_returns_error() -> None:
-    """消融不存在的候选 → 返回 error 而非抛异常（与 妙算 一致）。"""
+    """消融不存在的候选 → 返回 error 而非抛异常（与对拍基准一致）。"""
     cands, target, _cats, horizon = _cases()
     res = ablate("NOT_IN_SET", cands, target, horizon=horizon)
     assert res.error is not None

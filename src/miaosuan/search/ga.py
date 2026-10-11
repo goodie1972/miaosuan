@@ -7,7 +7,7 @@
 
 本模块把「表示/算子」（:mod:`miaosuan.search.rpn`）、「预算/早停」
 （:mod:`miaosuan.search.budget`）、「岛屿模型」（:mod:`miaosuan.search.islands`）与
-「口径适应度评估器」（:class:`AMFitnessEvaluator`）组装为可复现的进化引擎
+「口径适应度评估器」（:class:`WFFitnessEvaluator`）组装为可复现的进化引擎
 :class:`RpnGA`。
 
 设计要点（与团队任务书 M10/M11 对齐）：
@@ -53,7 +53,7 @@ from .rpn import (
 )
 
 __all__ = [
-    "AMFitnessEvaluator",
+    "WFFitnessEvaluator",
     "EvalResult",
     "FormulaEvaluator",
     "GAStats",
@@ -74,7 +74,7 @@ DEFAULT_N_FOLDS: int = 5
 NONE_SCORE: float = -5.0
 CONST_SCORE: float = -2.0
 
-#: 因子有效性下限（``std < 1e-4`` 视为常数，妙算 一致）。
+#: 因子有效性下限（``std < 1e-4`` 视为常数，与对拍基准一致）。
 _CONST_STD: float = 1e-4
 
 
@@ -198,17 +198,17 @@ def _repetition_penalty(tokens: np.ndarray) -> float:
     return float(penalty)
 
 
-class AMFitnessEvaluator:
+class WFFitnessEvaluator:
     """口径适应度评估器（5 折滚动 Walk-Forward + IC 门控 + 重复惩罚）。
 
     :param features: ``[N, F, T]`` 特征张量（由 :func:`miaosuan.core.features.compute_features` 产出）。
     :param target_ret: ``[N, T]`` 前瞻收益（``target_ret[t] = log(open[t+2]/open[t+1])``）。
     :param cost_rate: 单边成本率（来自 :class:`~miaosuan.market.profiles.FrozenMarketProfile`.cost_model）。
     :param periods_per_year: 年化因子（来自 profile ``bars_per_year``；**不硬编码**）。
-    :param n_folds: 滚动折数（默认 5，与 妙算 一致）。
+    :param n_folds: 滚动折数（默认 5，与对拍基准一致）。
     :param gap: 折间间隔（默认 20，与 妙算 ``WF_GAP`` 一致）。
-    :param reward_mode: 回测奖励模式（默认 ``"ftmo"``，与 妙算 一致）。
-    :param reward_alpha: 训练分缩放（默认 1.0，与 妙算 一致）。
+    :param reward_mode: 回测奖励模式（默认 ``"ftmo"``，与对拍基准一致）。
+    :param reward_alpha: 训练分缩放（默认 1.0，与对拍基准一致）。
     :param folds: 可选显式折（否则按 ``T/n_folds`` 自动构建）。
     """
 
@@ -314,7 +314,7 @@ class AMFitnessEvaluator:
         train_score = float(np.mean(train_scores))
         val_score = float(np.mean(val_scores))
 
-        # 重复惩罚（妙算 一致：train/val 同时扣）。
+        # 重复惩罚（与对拍基准一致：train/val 同时扣）。
         penalty = _repetition_penalty(tokens)
         train_score -= penalty
         val_score -= penalty
