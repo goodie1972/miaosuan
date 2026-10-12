@@ -240,35 +240,26 @@ def test_list_cached_does_not_build_acquisition_singleton(
 def test_scan_cache_dirs_returns_stable_fields(tmp_path: Any) -> None:
     """扫描结果字段结构稳定（前端与 server.py 依赖，勿改名）。"""
     import pandas as pd
+    from unittest.mock import patch
 
-    from miaosuan.data.acquisition import _scan_cache_dirs
+    from miaosuan.data.acquisition import _scan_cache_dirs, _cache_dirs_from_config
 
-    df = pd.DataFrame({
-        "time": [1_700_000_000, 1_700_003_600],
-        "open": [1.0, 2.0], "high": [2.0, 3.0], "low": [0.5, 1.5],
-        "close": [1.5, 2.5], "volume": [10.0, 10.0],
-    })
-    df.to_parquet(tmp_path / "XAUUSD_H1.parquet", index=False)
-    (tmp_path / "notes.txt").write_text("ignored", encoding="utf-8")
+    # 由于 _cache_dirs_from_config 现在只认配置，需在测试中 patch 它返回临时目录
+    with patch("miaosuan.data.acquisition._cache_dirs_from_config", return_value=(tmp_path,)):
+        df = pd.DataFrame({
+            "time": [1_700_000_000, 1_700_003_600],
+            "open": [1.0, 2.0], "high": [2.0, 3.0], "low": [0.5, 1.5],
+            "close": [1.5, 2.5], "volume": [10.0, 10.0],
+        })
+        df.to_parquet(tmp_path / "XAUUSD_H1.parquet", index=False)
+        (tmp_path / "notes.txt").write_text("ignored", encoding="utf-8")
 
-    rows = _scan_cache_dirs((tmp_path,))
-    assert len(rows) == 1, "非 .parquet/.csv 应被过滤"
-    assert sorted(rows[0]) == ["mtime", "name", "path", "size_mb", "source"]
-    assert rows[0]["name"] == "XAUUSD_H1.parquet"
-    assert rows[0]["source"] == "cache"
-    # 2 行 parquet 只有 ~1KB，round(KB/1e6, 2) 会取到 0.0，故只断言类型与非负
-    assert isinstance(rows[0]["size_mb"], float) and rows[0]["size_mb"] >= 0
+        rows = _scan_cache_dirs((tmp_path,))
+        assert len(rows) == 1, "非 .parquet/.csv 应被过滤"
+        assert sorted(rows[0]) == ["mtime", "name", "path", "size_mb", "source"]
+        assert rows[0]["name"] == "XAUUSD_H1.parquet"
+        assert rows[0]["source"] == "cache"
+        # 2 行 parquet 只有 ~1KB，round(KB/1e6, 2) 会取到 0.0，故只断言类型与非负
+        assert isinstance(rows[0]["size_mb"], float) and rows[0]["size_mb"] >= 0
 
 
-def test_default_cache_dirs_points_to_repo_data() -> None:
-    """``_DEFAULT_CACHE_DIRS`` 必须指向仓库根的 ``data/cache`` 目录。
-
-    目录重构（2026-10-01）后缓存统一到 ``data/cache``——仓库根 ``data/``
-    不再直接存放 parquet，``_DEFAULT_CACHE_DIRS`` 对应改为 ``data/cache``。
-    """
-    from miaosuan.data.acquisition import _DEFAULT_CACHE_DIRS
-
-    repo_root = Path(__file__).resolve().parents[1]
-    expected = (repo_root / "data" / "cache").resolve()
-    assert any(d.resolve() == expected for d in _DEFAULT_CACHE_DIRS), \
-        f"_DEFAULT_CACHE_DIRS 应包含 {expected}，实际为 {_DEFAULT_CACHE_DIRS}"

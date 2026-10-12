@@ -29,6 +29,8 @@
 
 from __future__ import annotations
 
+from ..errors import MiaoSuanError
+
 import hashlib
 import json
 import math
@@ -162,9 +164,7 @@ class ComboPayload:
     def from_dict(cls, data: Mapping[str, Any]) -> ComboPayload:
         """从字典还原（:meth:`to_dict` 的逆操作）。"""
         return cls(
-            members=tuple(
-                tuple(int(t) for t in m) for m in (data.get("members") or ())
-            ),
+            members=tuple(tuple(int(t) for t in m) for m in (data.get("members") or ())),
             weights=tuple(float(w) for w in (data.get("weights") or ())),
             vocab_version=str(data.get("vocab_version", "")),
         )
@@ -181,6 +181,10 @@ class Semantics:
         warmup_bars: 预热根数：不足则不出信号（与滚动归一化窗口绑定）。
         timeframe: 目标周期（如 ``H1``）。
         roll_window: 因子滚动归一化窗口（默认 500，与 ``StackVM`` 一致）。
+        execution_lag_bars: 运行时口径：信号 bar 与可执行 bar 的延迟（默认 1 =
+            bar t 收盘出信号、t+1 开盘执行，与回测口径
+            ``target_ret[t] = log(open[t+2]/open[t+1])`` 一致）。v2 追加字段，
+            回测/纸面/实盘三方共用，禁止另立配置。
     """
 
     position_fn: str = "tanh"
@@ -189,6 +193,15 @@ class Semantics:
     warmup_bars: int = DEFAULT_WARMUP_BARS
     timeframe: str = "H1"
     roll_window: int = 500
+    execution_lag_bars: int = 1
+
+    def __post_init__(self) -> None:
+        allowed = ("M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1")
+        if self.timeframe not in allowed:
+            raise MiaoSuanError(
+                f"不支持的周期: {self.timeframe!r}，允许值: {allowed}",
+                context={"supported": allowed},
+            )
 
     def to_dict(self) -> dict[str, Any]:
         """序列化为纯字典。"""
@@ -199,11 +212,12 @@ class Semantics:
             "warmup_bars": self.warmup_bars,
             "timeframe": self.timeframe,
             "roll_window": self.roll_window,
+            "execution_lag_bars": self.execution_lag_bars,
         }
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> Semantics:
-        """从字典还原（:meth:`to_dict` 的逆操作）。"""
+        """从字典还原（:meth:`to_dict` 的逆操作；旧 spec 缺新键取默认值）。"""
         return cls(
             position_fn=str(data.get("position_fn", "tanh")),
             neutral_band=float(data.get("neutral_band", DEFAULT_NEUTRAL_BAND)),
@@ -211,7 +225,24 @@ class Semantics:
             warmup_bars=int(data.get("warmup_bars", DEFAULT_WARMUP_BARS)),
             timeframe=str(data.get("timeframe", "H1")),
             roll_window=int(data.get("roll_window", 500)),
+            execution_lag_bars=int(data.get("execution_lag_bars", 1)),
         )
+
+    def identity_dict(self) -> dict[str, Any]:
+        """参与 :attr:`StrategySpec.spec_id` 身份哈希的语义子集。
+
+        = :meth:`to_dict` 去掉 :data:`_RUNTIME_CALIBER_FIELDS`（运行时口径）——
+        旧 spec（JSON 无新字段）与新 spec（口径字段取任意值）算出**同一**
+        spec_id：加字段不漂移既有身份，指纹/门禁记录/回归基线不受影响。
+        """
+        return {k: v for k, v in self.to_dict().items() if k not in _RUNTIME_CALIBER_FIELDS}
+
+
+#: 运行时口径字段（v2 追加）：参与序列化与回测/实盘共享，但**不参与 spec_id
+#: 身份哈希**——spec_id 表达「策略身份」，执行口径调整不应改变身份（旧 spec
+#: 重新加载/重导出得到同一 spec_id，指纹/门禁记录/回归基线不受影响）。
+#: 新增此类字段时必须同步登记到这里，并升级 ``test_ir_schema`` 的稳定性断言。
+_RUNTIME_CALIBER_FIELDS: frozenset[str] = frozenset({"execution_lag_bars"})
 
 
 @dataclass(frozen=True)
@@ -383,9 +414,7 @@ class StrategySpec:
         elif kind == ComboPayload.kind:
             payload = ComboPayload.from_dict(raw_payload)
         else:
-            raise ValueError(
-                f"未知 payload.kind: {kind!r}（期望 'factor' / 'param' / 'combo'）"
-            )
+            raise ValueError(f"未知 payload.kind: {kind!r}（期望 'factor' / 'param' / 'combo'）")
         return cls(
             spec_version=str(data.get("spec_version", SPEC_VERSION)),
             name=str(data.get("name", "")),
@@ -402,10 +431,14 @@ class StrategySpec:
 
         只由 ``payload`` + ``semantics`` + 词表版本决定，**不含**时间戳、
         git sha、证据等易变量，因此同一因子重复导出得到同一 id。
+
+        semantics 走 :meth:`Semantics.identity_dict`——运行时口径字段
+        （如 ``execution_lag_bars``）不进身份哈希：加口径字段/调口径
+        **不**漂移既有 spec 的身份（指纹/门禁记录/回归基线不受影响）。
         """
         core = {
             "payload": self.payload.to_dict(),
-            "semantics": self.semantics.to_dict(),
+            "semantics": self.semantics.identity_dict(),
             "spec_version": self.spec_version,
         }
         return _stable_hash(core)

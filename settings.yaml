@@ -5,32 +5,30 @@ webui:
 shenji:
   port: 1783
   host: 127.0.0.1
-  timeout: 3.0
+  timeout: 3
 mt4:
   host: 127.0.0.1
   port: 23232
   time_base: utc
-  timeout: 5.0
+  timeout: 5
   poll_wait: 1000
   drain_wait: 100
 paths:
-  data_cache: data/cache    # 唯一缓存目录（所有 OHLCV parquet/csv 缓存）
-  artifacts: artifacts      # spec 专属：仅 StrategySpec JSON 及其 sidecar
-  strategies: strategies    # 策略专属：策略 .py + 中英说明文档 + 映射表
-  results: data/results     # spec 关联文档：回测 / 寻优结果
-  tmp: tmp                  # 中间 / 临时文件（可安全清空）
-  kline: D:\K线数据
+  artifacts: artifacts
+  strategies: strategies
+  results: data/results
+  tmp: tmp
+  kline: data/cache
   shenji_db: ''
 data:
   timeout: 30
   source: ''
   api_url: ''
-  cache_dir: ''
   dukascopy_user: ''
   dukascopy_password: ''
   proxy: http://127.0.0.1:10808
 logging:
-  level: INFO
+  level: DEBUG
   json_lines: true
 features:
   enable_webui: true

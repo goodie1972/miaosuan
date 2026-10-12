@@ -52,7 +52,11 @@ _FORBIDDEN_PROFILE_TOKENS: tuple[str, ...] = (
 )
 
 #: ``core/`` 中**禁止**依赖的上层包（产品轴实现层）
-_FORBIDDEN_LAYER_PACKAGES: tuple[str, ...] = ("miaosuan.market", "miaosuan.data", "miaosuan.adapters")
+_FORBIDDEN_LAYER_PACKAGES: tuple[str, ...] = (
+    "miaosuan.market",
+    "miaosuan.data",
+    "miaosuan.adapters",
+)
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -184,8 +188,14 @@ def test_adding_fourth_profile_leaves_core_byte_identical() -> None:
     after = _snapshot(CORE_DIR)
     assert before == after, (
         "「新增第 4 个画像 → 使用它」导致 core/ 发生变化；"
-        "两处快照差异：" + repr({k: (before.get(k), after.get(k)) for k in set(before) | set(after)
-                                if before.get(k) != after.get(k)})
+        "两处快照差异："
+        + repr(
+            {
+                k: (before.get(k), after.get(k))
+                for k in set(before) | set(after)
+                if before.get(k) != after.get(k)
+            }
+        )
     )
 
 
@@ -193,14 +203,14 @@ def test_adding_fourth_profile_leaves_core_byte_identical() -> None:
 
 
 def test_registry_extensible_without_core_change() -> None:
-    # 现有 5 个画像齐备（含 CRYPTO_BTC 与新增 CN_COMMODITY_FUTURES）
+    # 现有 6 个画像齐备（含 CRYPTO_BTC、CN_COMMODITY_FUTURES 与 MT5 通道 FOREX_XAUUSD_MT5）
     assert set(EXPECTED_PROFILE_NAMES) <= set(PROFILES)
     assert PROFILES[CRYPTO_BTC.name] is CRYPTO_BTC
-    assert len(PROFILES) == 5
+    assert len(PROFILES) == 6
 
     # 在副本上再追加 1 个，不影响原注册表，也不需要 core 参与
     extended = dict(PROFILES)
     synthetic = _synthetic_fourth()
     extended[synthetic.name] = synthetic
-    assert len(extended) == 6
-    assert len(PROFILES) == 5, "不得就地污染全局注册表"
+    assert len(extended) == 7
+    assert len(PROFILES) == 6, "不得就地污染全局注册表"

@@ -10,6 +10,16 @@
         "horizon": 2,
         "seed": 9999
       }
+    },
+    "sha256:d4451367792a950db3779cabcafaf098e3226e3e603a9d74a4dc7d009d37587d": {
+      "seq": 2,
+      "meta": {
+        "panel_fingerprint": "sha256:93ce59284fddaf6bd4ace837fc5fe976b7d96c8fd8d97250aad4d15aaa9c383e",
+        "split_fingerprint": "sha256:37eb976063a631ed7c048029324183ff174c6b07fac11654c1bf251ca22980b5",
+        "n_bars": 468614,
+        "horizon": 2,
+        "seed": 20260910
+      }
     }
   }
 }

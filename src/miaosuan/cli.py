@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) 2026 MiaoSuan Team
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
@@ -31,6 +30,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -44,7 +44,6 @@ from .adapters.shenji import ShenjiPort
 from .adapters.shenji.lint import lint_source
 from .config import AppConfig
 from .config import strategies_dir as _default_strategies_dir
-from .strategy_docs import write_strategy_docs
 from .core.features import compute_features
 from .core.signal import MIN_TRADE_EXPOSURE
 from .core.vm import StackVM
@@ -57,6 +56,7 @@ from .market.profiles import get_profile
 from .pipeline import _gate_reasons, derive_labels, run_combine, run_mine
 from .report.equity import run_full_backtest
 from .search.budget import Budget
+from .strategy_docs import write_strategy_docs
 from .tune import TuneConfig, TuneEngine, load_param_space_from_spec, save_tune_result
 
 __all__ = [
@@ -333,8 +333,7 @@ def _resolve_search_space(
         )
     if eff_islands > eff_pop:
         _die(
-            f"--n-islands({eff_islands}) 不得超过 pop_size({eff_pop})"
-            "（每个岛至少要分到 1 个个体）"
+            f"--n-islands({eff_islands}) 不得超过 pop_size({eff_pop})（每个岛至少要分到 1 个个体）"
         )
 
     search_over: dict[str, Any] = {}
@@ -380,9 +379,7 @@ def mine(
         "--history-out",
         help="逐代历史 sidecar 路径（缺省由 --out 派生：<stem>.history.json）",
     ),
-    pop_size: int = typer.Option(
-        0, "--pop-size", help="覆盖种群规模 P（0 = 用预算档位值）"
-    ),
+    pop_size: int = typer.Option(0, "--pop-size", help="覆盖种群规模 P（0 = 用预算档位值）"),
     elite_size: int = typer.Option(
         0, "--elite-size", help="覆盖精英数（0 = 用预算档位值；须 ≤ pop_size）"
     ),
@@ -525,11 +522,14 @@ def mine(
 @app.command()
 def combine(
     candidates: str = typer.Option(
-        ..., "--candidates",
+        ...,
+        "--candidates",
         help="候选落盘 JSON 路径（mine --dump-candidates 的产物），逗号分隔",
     ),
     data: str = typer.Option(..., "--data", help="行情数据文件（须与候选同周期、同指纹）"),
-    method: str = typer.Option("equal", "--method", help="权重方法 equal/ic（确定性，禁 GA 搜权重）"),
+    method: str = typer.Option(
+        "equal", "--method", help="权重方法 equal/ic（确定性，禁 GA 搜权重）"
+    ),
     seed: int = typer.Option(0, "--seed", help="随机种子（0 = 使用配置默认值）"),
     out: str = typer.Option("artifacts/combo.json", "--out", help="ComboStrategySpec 输出路径"),
     top_per_file: int = typer.Option(
@@ -819,7 +819,9 @@ def import_spec(
 
     spec = extract_spec_from_py(file)
     if out:
-        Path(out).write_text(json.dumps(spec.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        Path(out).write_text(
+            json.dumps(spec.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         _echo(f"已写入：{out}")
     else:
         _echo(json.dumps(spec.to_dict(), ensure_ascii=False, indent=2))
@@ -999,6 +1001,7 @@ def ui(
     # 端口缺省从统一设置系统读取（支持 settings.yaml / 环境变量 / 热重载）
     if port is None:
         from .settings import get_config
+
         port = get_config().webui.port
 
     try:
@@ -1011,6 +1014,439 @@ def ui(
 
     _echo(f"妙算仪表盘已启动：http://{host}:{port}（Ctrl+C 退出）")
     uvicorn.run(create_app(), host=host, port=port, log_level="warning")
+
+
+@app.command()
+def fetch(
+    symbol: str = typer.Option(..., "--symbol", help="品种标识（如 XAUUSD）"),
+    timeframe: str = typer.Option(..., "--timeframe", help="周期（如 M30 / H1 / D1）"),
+    source: str = typer.Option(
+        "",
+        "--source",
+        help=(
+            "数据源类型（Shenji/TradingView/OKX/Dukascopy/Binance/AkShare/MT4/MT5/其他）；"
+            "空 = 按优先级自动（妙算本地库 > 网络 > MT5 直连）"
+        ),
+    ),
+    note: str = typer.Option("", "--note", help="备注（非空时追加进缓存文件名）"),
+) -> None:
+    """获取行情数据并缓存为本地 parquet（全量 + 增量自动判定）。
+
+    MT5 直连为第三通道（路线图 R1）：需本机 MT5 终端在运行且已登录，
+    缺依赖时 ``pip install miaosuan\\[live]``（仅 Windows）::
+
+        miaosuan fetch --symbol XAUUSD --timeframe M30 --source MT5
+    """
+    from .data.acquisition import DataAcquisition, FetchStatus
+
+    try:
+        result = DataAcquisition().fetch(
+            symbol, timeframe, source=source or None, note=note or None
+        )
+    except MiaoSuanError as exc:
+        _die(str(exc))
+        return
+    _echo(f"状态：{result.status.value}（来源 {result.source_used or '—'}）")
+    _echo(f"缓存：{result.path}")
+    for warning in result.warnings:
+        _echo(f"警告：{warning}")
+    for error in result.errors:
+        _echo(f"错误：{error}")
+    if result.status is FetchStatus.STALE_FALLBACK:
+        _echo("提示：所有来源失败，已回退旧缓存（数据可能过期）。")
+
+
+# ── watchlist（路线图 R2.3：收盘信号监视，不下单）───────────────────────────
+
+watch_app = typer.Typer(help="watchlist：收盘信号监视（信号模式，不下单）")
+app.add_typer(watch_app, name="watch")
+
+
+@watch_app.command("add")
+def watch_add(
+    symbol: str = typer.Argument(..., help="品种标识（如 XAUUSD）"),
+    spec: str = typer.Option(
+        ..., "--spec", help="StrategySpec JSON 路径（须已过 DEPLOYABLE 门禁）"
+    ),
+    profile: str = typer.Option("", "--profile", help="市场画像名（备注用，如 FOREX_XAUUSD_MT5）"),
+    timeframe: str = typer.Option(
+        "", "--timeframe", help="周期（缺省取 spec.semantics.timeframe）"
+    ),
+) -> None:
+    """把「品种 + spec」挂上 watchlist（挂载即过启动安全链，坏 spec 拒绝）。"""
+    from .runtime.signal_engine import load_spec_checked
+    from .runtime.watchlist import WatchEntry, WatchlistStore
+
+    spec_path = Path(spec).expanduser().resolve()
+    try:
+        spec_obj = load_spec_checked(spec_path)  # 门禁 + 词表安全链前置
+    except MiaoSuanError as exc:
+        _die(f"spec 未通过启动安全链：{exc}")
+        return
+    tf = (timeframe or str(spec_obj.semantics.timeframe)).upper()
+    entry = WatchEntry(symbol=symbol, spec_path=str(spec_path), profile=profile, timeframe=tf)
+    WatchlistStore().add(entry)
+    _echo(f"已挂载：{symbol} {tf} ← {spec_path.name}（profile={profile or '—'}）")
+    _echo(f"watchlist：{WatchlistStore().path}")
+
+
+@watch_app.command("list")
+def watch_list() -> None:
+    """列出 watchlist 条目。"""
+    from .runtime.watchlist import WatchlistStore
+
+    entries = WatchlistStore().load()
+    if not entries:
+        _echo("（空——用 `miaosuan watch add` 挂载）")
+        return
+    for e in entries:
+        _echo(
+            f"{e.symbol:<12} {e.timeframe or '?':<5} spec={e.spec_path} profile={e.profile or '—'}"
+        )
+
+
+@watch_app.command("remove")
+def watch_remove(
+    symbol: str = typer.Argument(..., help="要移除的品种"),
+) -> None:
+    """从 watchlist 移除一个品种。"""
+    from .runtime.watchlist import WatchlistStore
+
+    if WatchlistStore().remove(symbol):
+        _echo(f"已移除：{symbol}")
+    else:
+        _die(f"watchlist 中不存在：{symbol}")
+
+
+@watch_app.command("run")
+def watch_run(
+    poll_seconds: float = typer.Option(30.0, "--poll-seconds", help="轮询间隔（秒）"),
+    once: bool = typer.Option(False, "--once", help="轮询一轮即退出（冒烟/测试）"),
+    stop_after: float = typer.Option(
+        0.0, "--stop-after", help="运行上限（秒）；0 = 长驻（Ctrl+C 退出）"
+    ),
+) -> None:
+    """运行信号模式：收盘 → 信号 → 日志/通知（不下单）。
+
+    断线重连与补拉由数据端口增量语义承担；启动时回填历史建立水位
+    （历史不出信号），此后每根**新**收盘 bar 产出一次信号。
+    """
+    from .runtime.notifiers.log import LogNotifier
+    from .runtime.scheduler import WatchItem, run_watchlist
+    from .runtime.signal_engine import SignalEngine, load_spec_checked
+    from .runtime.sources.mt5 import MT5DataPort
+    from .runtime.watchlist import WatchlistStore
+
+    # 信号日志直接可见（收盘信号/转折经 logger 输出）
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+    entries = WatchlistStore().load()
+    if not entries:
+        _die("watchlist 为空：先 `miaosuan watch add <symbol> --spec <path>`")
+        return
+    items = []
+    for e in entries:
+        spec = load_spec_checked(Path(e.spec_path))  # 启动安全链逐条复验
+        items.append(WatchItem(symbol=e.symbol, timeframe=e.timeframe, engine=SignalEngine(spec)))
+    _echo(f"信号模式启动：{len(items)} 个品种（不下单）poll={poll_seconds}s")
+    notifier = LogNotifier()
+    try:
+        run_watchlist(
+            items,
+            MT5DataPort(),
+            notifier=notifier,
+            poll_seconds=poll_seconds,
+            once=once,
+            stop_after_seconds=stop_after or None,
+        )
+    except KeyboardInterrupt:  # pragma: no cover - 交互退出
+        _echo("已停止。")
+        return
+    _echo("本轮结束。")
+
+
+# ── paper（路线图 R3.4：纸面模式，下一根开盘撮合，不动真钱）────────────────
+
+paper_app = typer.Typer(help="paper：纸面交易（信号 → 风险手数 → 撮合 → 对账 → kill）")
+app.add_typer(paper_app, name="paper")
+
+
+@paper_app.command("start")
+def paper_start(
+    risk_usd: float = typer.Option(200.0, "--risk-usd", help="单 bar 美元波动预算（风险仓位）"),
+    poll_seconds: float = typer.Option(30.0, "--poll-seconds", help="轮询间隔（秒）"),
+    once: bool = typer.Option(False, "--once", help="轮询一轮即退出（冒烟/测试）"),
+    stop_after: float = typer.Option(
+        0.0, "--stop-after", help="运行上限（秒）；0 = 长驻（Ctrl+C 退出）"
+    ),
+) -> None:
+    """启动纸面模式（按 watchlist 条目；条目须绑定携带 broker_spec 的画像）。
+
+    启动安全链：kill 文件检查 → 单实例锁 → 账本恢复（pending 重放）→
+    启动对账先行。运行中 `miaosuan paper stop` 创建 STOP 文件即可在
+    ≤ 1 个调度周期内平仓停机。
+    """
+    _run_paper(risk_usd=risk_usd, poll_seconds=poll_seconds, once=once, stop_after=stop_after)
+
+
+def _run_paper(*, risk_usd: float, poll_seconds: float, once: bool, stop_after: float) -> None:
+    from .errors import BrokerKillswitchError, MiaoSuanError
+    from .runtime.paper import PaperConfig, PaperRunner
+    from .runtime.scheduler import CloseScheduler, WatchItem
+    from .runtime.signal_engine import SignalEngine, load_spec_checked
+    from .runtime.sources.mt5 import MT5DataPort
+    from .runtime.watchlist import WatchlistStore
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    entries = WatchlistStore().load()
+    if not entries:
+        _die("watchlist 为空：先 `miaosuan watch add <symbol> --spec <path> --profile <画像>`")
+        return
+    if len(entries) > 1:
+        _die("多品种纸面运行属组合层（后续版本）；当前请只保留一个 watchlist 条目")
+        return
+    entry = entries[0]
+    if not entry.profile:
+        _die(f"条目 {entry.symbol} 未绑定画像（--profile），纸面模式需要 broker_spec 与成本模型")
+        return
+
+    port = MT5DataPort()
+    scheduler = CloseScheduler(port, poll_seconds=poll_seconds)
+    try:
+        spec = load_spec_checked(Path(entry.spec_path))
+        item = WatchItem(symbol=entry.symbol, timeframe=entry.timeframe, engine=SignalEngine(spec))
+        runner = PaperRunner(
+            item,
+            port,
+            profile_name=entry.profile,
+            config=PaperConfig(risk_usd_per_bar=risk_usd, poll_seconds=poll_seconds),
+        )
+        runner.start()
+    except BrokerKillswitchError as exc:
+        _die(f"纸面启动被安全链拒绝：{exc}")
+        return
+    except MiaoSuanError as exc:
+        _die(f"纸面启动失败：{exc}")
+        return
+
+    _echo(
+        f"纸面模式启动：{entry.symbol}.{entry.timeframe}"
+        f"（下一根开盘撮合，不动真钱）poll={poll_seconds}s risk_usd={risk_usd}"
+    )
+    try:
+        runner.run_with_scheduler(scheduler, once=once, stop_after_seconds=stop_after or None)
+    except BrokerKillswitchError as exc:
+        _echo(f"已急停：{exc}")
+    except KeyboardInterrupt:  # pragma: no cover - 交互退出
+        _echo("已停止（账本已落盘，重新 start 自动恢复）。")
+    finally:
+        runner.stop()
+    _echo("本轮结束。")
+
+
+@paper_app.command("stop")
+def paper_stop() -> None:
+    """急停：创建 STOP 文件，运行中的纸面实例 ≤ 1 个调度周期内平仓停机。"""
+    from .runtime.state import kill_file_path, state_dir
+
+    path = kill_file_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("stop\n", encoding="utf-8")
+    _echo(f"STOP 已创建：{path}")
+    _echo(f"状态目录：{state_dir()}")
+
+
+@paper_app.command("status")
+def paper_status() -> None:
+    """查看纸面状态：kill 文件 / 锁 / 账本持仓与成交。"""
+    from .runtime.state import Ledger, kill_file_exists, state_dir
+    from .runtime.watchlist import WatchlistStore
+
+    _echo(f"状态目录：{state_dir()}")
+    _echo(f"kill 文件：{'存在（急停挂起）' if kill_file_exists() else '无'}")
+    entries = WatchlistStore().load()
+    if not entries:
+        _echo("watchlist：（空）")
+        return
+    from .runtime.paper import paper_ledger_path
+
+    for e in entries:
+        path = paper_ledger_path(e.symbol, e.timeframe)
+        if not path.is_file():
+            _echo(f"{e.symbol}.{e.timeframe}: 无账本（未启动过纸面）")
+            continue
+        ledger = Ledger(path)
+        positions = ledger.open_positions()
+        _echo(
+            f"{e.symbol}.{e.timeframe}: fills={len(ledger.all_fills())} "
+            f"fees={ledger.total_fees():.2f} pending={len(ledger.pending_intents())}"
+        )
+        for pos in positions:
+            _echo(
+                f"    持仓 {pos['position_id']} {pos['side']} {pos['lots']} lots "
+                f"@ {pos['avg_price']:.4f}"
+            )
+        if not positions:
+            _echo("    持仓：（空仓）")
+
+
+# ── live（路线图 R4：MT5 实盘执行——真钱通道，多重安全门）───────────────────
+
+live_app = typer.Typer(help="live：MT5 实盘执行（真钱！须显式 --i-understand-real-money）")
+app.add_typer(live_app, name="live")
+
+
+def _read_mt5_credentials() -> dict[str, Any]:
+    """从环境读取 MT5 凭证（CLI 是唯一 env 边界；注入 broker 构造参数）。"""
+    import os as _os
+
+    login_raw = (_os.environ.get("MIAOSUAN_MT5_LOGIN", "") or "").strip()
+    creds: dict[str, Any] = {
+        "terminal_path": (_os.environ.get("MIAOSUAN_MT5_TERMINAL", "") or "").strip() or None,
+        "server": (_os.environ.get("MIAOSUAN_MT5_SERVER", "") or "").strip() or None,
+    }
+    if login_raw:
+        creds["login"] = int(login_raw)
+        creds["password"] = _os.environ.get("MIAOSUAN_MT5_PASSWORD", "") or None
+    return creds
+
+
+@live_app.command("start")
+def live_start(
+    risk_usd: float = typer.Option(200.0, "--risk-usd", help="单 bar 美元波动预算"),
+    max_daily_loss: float = typer.Option(
+        100.0, "--max-daily-loss", help="熔断：单日最大亏损（USD）"
+    ),
+    poll_seconds: float = typer.Option(30.0, "--poll-seconds", help="轮询间隔（秒）"),
+    once: bool = typer.Option(False, "--once", help="轮询一轮即退出（冒烟/测试）"),
+    stop_after: float = typer.Option(0.0, "--stop-after", help="运行上限（秒）；0 = 长驻"),
+    i_understand_real_money: bool = typer.Option(
+        False, "--i-understand-real-money", help="确认这是真钱账户（必填，防误触）"
+    ),
+) -> None:
+    """启动 MT5 实盘执行（真钱通道！启动链：kill→锁→连接→恢复→对账）。
+
+    前置条件：watchlist 条目已绑定画像；R3 对账在真实行情下连续一周零差异；
+    强烈建议先在**模拟户**完成 R4.5 手工验收清单。
+    """
+    if not i_understand_real_money:
+        _die("真钱通道：必须显式传入 --i-understand-real-money 才能启动实盘")
+        return
+    _run_live(
+        risk_usd=risk_usd,
+        max_daily_loss=max_daily_loss,
+        poll_seconds=poll_seconds,
+        once=once,
+        stop_after=stop_after,
+    )
+
+
+def _run_live(
+    *, risk_usd: float, max_daily_loss: float, poll_seconds: float, once: bool, stop_after: float
+) -> None:
+    from .errors import BrokerKillswitchError, MiaoSuanError
+    from .runtime.breaker import BreakerConfig
+    from .runtime.brokers.mt5 import MT5Broker
+    from .runtime.live import LiveConfig, LiveRunner
+    from .runtime.scheduler import CloseScheduler, WatchItem
+    from .runtime.signal_engine import SignalEngine, load_spec_checked
+    from .runtime.sources.mt5 import MT5DataPort
+    from .runtime.watchlist import WatchlistStore
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    entries = WatchlistStore().load()
+    if not entries:
+        _die("watchlist 为空：先 `miaosuan watch add <symbol> --spec <path> --profile <画像>`")
+        return
+    if len(entries) > 1:
+        _die("多品种实盘运行属组合层（后续版本）；当前请只保留一个 watchlist 条目")
+        return
+    entry = entries[0]
+    if not entry.profile:
+        _die(f"条目 {entry.symbol} 未绑定画像（--profile）")
+        return
+
+    port = MT5DataPort()
+    scheduler = CloseScheduler(port, poll_seconds=poll_seconds)
+    try:
+        spec = load_spec_checked(Path(entry.spec_path))
+        item = WatchItem(symbol=entry.symbol, timeframe=entry.timeframe, engine=SignalEngine(spec))
+        broker = MT5Broker(**_read_mt5_credentials())
+        runner = LiveRunner(
+            item,
+            port,
+            profile_name=entry.profile,
+            config=LiveConfig(
+                risk_usd_per_bar=risk_usd,
+                poll_seconds=poll_seconds,
+                breaker=BreakerConfig(max_daily_loss_usd=max_daily_loss),
+            ),
+            broker=broker,
+        )
+        runner.start()
+    except BrokerKillswitchError as exc:
+        _die(f"实盘启动被安全链拒绝：{exc}")
+        return
+    except MiaoSuanError as exc:
+        _die(f"实盘启动失败：{exc}")
+        return
+
+    _echo(
+        f"实盘模式启动：{entry.symbol}.{entry.timeframe} magic={runner.magic} "
+        f"poll={poll_seconds}s risk_usd={risk_usd} max_daily_loss={max_daily_loss}"
+    )
+    try:
+        runner.run_with_scheduler(scheduler, once=once, stop_after_seconds=stop_after or None)
+    except BrokerKillswitchError as exc:
+        _echo(f"已熔断停机：{exc}")
+    except KeyboardInterrupt:  # pragma: no cover - 交互退出
+        _echo("已停止（账本已落盘）。")
+    finally:
+        runner.stop()
+    _echo("本轮结束。")
+
+
+@live_app.command("status")
+def live_status() -> None:
+    """实盘只读状态：账户摘要 + 本域持仓 + 熔断/kill 状态（不下单）。"""
+    from .errors import MiaoSuanError
+    from .runtime.brokers.mt5 import MT5Broker
+    from .runtime.state import kill_file_exists, state_dir
+    from .runtime.watchlist import WatchlistStore
+
+    _echo(f"状态目录：{state_dir()}")
+    _echo(f"kill 文件：{'存在（急停挂起，删除后才能重启）' if kill_file_exists() else '无'}")
+    creds = _read_mt5_credentials()
+    broker = MT5Broker(**creds)
+    try:
+        broker.connect()
+    except MiaoSuanError as exc:
+        _die(f"MT5 不可用：{exc}")
+        return
+    try:
+        acct = broker.account_summary()
+        _echo(
+            f"账户：{acct['login']} @ {acct['server']} "
+            f"balance={acct['balance']:.2f} {acct['currency']} equity={acct['equity']:.2f}"
+        )
+        from .runtime.live import magic_from_spec
+        from .runtime.signal_engine import load_spec_checked
+
+        for e in WatchlistStore().load():
+            try:
+                spec = load_spec_checked(Path(e.spec_path))
+                magic = magic_from_spec(spec.spec_id)
+            except MiaoSuanError as exc:
+                _echo(f"{e.symbol}.{e.timeframe}: spec 校验失败（{exc}）")
+                continue
+            mine = [p for p in broker.positions() if int(p["magic"]) == magic]
+            _echo(f"{e.symbol}.{e.timeframe} magic={magic}: 本域持仓 {len(mine)} 笔")
+            for pos in mine:
+                _echo(
+                    f"    {pos['position_id']} {pos['side']} {pos['lots']} @ {pos['avg_price']:.4f}"
+                )
+    finally:
+        broker.close()
 
 
 def main() -> int:

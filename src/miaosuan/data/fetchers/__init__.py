@@ -5,7 +5,7 @@
 """数据获取器包（``data/fetchers/``）。
 
 集中收纳所有具体数据来源的 :class:`BaseFetcher` 实现：妙算本地库、TradingView、
-akshare、tqsdk、OKX、Dukascopy。``acquisition.py`` 通过本包接入。
+akshare、tqsdk、OKX、Dukascopy、MT4 桥、MT5 直连。``acquisition.py`` 通过本包接入。
 
 依赖方向（架构 §9.7 铁律）：本包**不**读取环境变量、不 import ``config``；
 所有外部配置（代理、凭据）由调用方经构造参数注入。``list_network_sources()``
@@ -14,11 +14,14 @@ akshare、tqsdk、OKX、Dukascopy。``acquisition.py`` 通过本包接入。
 
 from __future__ import annotations
 
+import sys
+
 from .akshare_src import AkshareFetcher
 from .base import BaseFetcher
 from .binance import BinanceFetcher
 from .dukascopy import DukascopyFetcher
 from .mt4_bridge import DEFAULT_MT4_PORT, MT4BridgeFetcher
+from .mt5_src import MT5Fetcher
 from .okx import OkxFetcher
 from .shenji_db import ShenjiDBFetcher
 from .tqsdk_src import TqsdkFetcher
@@ -34,6 +37,7 @@ __all__ = [
     "BinanceFetcher",
     "DukascopyFetcher",
     "MT4BridgeFetcher",
+    "MT5Fetcher",
     "all_network_sources",
     "list_network_sources",
 ]
@@ -87,6 +91,12 @@ def all_network_sources(
                 time_base=mt4_time_base or "utc",
             )
         )
+    # MT5 直连是**本机终端**来源（官方包附着到本机已登录终端，不耗外网）。
+    # MetaTrader5 包仅存在于 Windows：非 Windows 上连包都没有，纳入只会制造一个
+    # 注定不可用的来源（同 MT4 Bridge「显式配置才纳入」的处理逻辑——此处的
+    # 显式条件即平台本身）。包已装但终端未运行时由取数路径如实报错。
+    if sys.platform == "win32":
+        sources.append(MT5Fetcher())
     return sources
 
 

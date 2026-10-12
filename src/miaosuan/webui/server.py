@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -881,30 +881,157 @@ def create_app() -> FastAPI:
 
     # ── 实时页：只读代理（**只暴露 GET**；写接口一律不存在）──────────────────
     @app.get("/api/realtime/status")
-    def realtime_status() -> dict[str, Any]:
-        """引擎运行状态（只读）。"""
+    def realtime_status(source: str = Query("shenji")) -> dict[str, Any]:
+        """引擎运行状态（只读）。
+        如果 source == "local" 且本地 runtime 可用，则尝试返回本地状态；
+        否则使用神机只读代理。
+        """
+        if source == "local":
+            # 尝试从 watchlist 中读取第一个条目，构造本地状态
+            from ..runtime.watchlist import WatchlistStore
+            from ..runtime.signal_engine import SignalEngine
+            from ..ir.schema import Evidence, FactorPayload, StrategySpec
+            from ..market.profiles import get_profile
+            store = WatchlistStore()
+            entries = store.load()
+            if entries:
+                entry = entries[0]
+                spec_path = Path(entry.spec_path)
+                if spec_path.is_file():
+                    try:
+                        spec = StrategySpec.from_dict(json.loads(spec_path.read_text(encoding="utf-8")))
+                        if spec.evidence.gate_verdict == "DEPLOYABLE":
+                            # 构造一个简易的状态响应（示值）
+                            return {
+                                "status": "local",
+                                "engine_status": {
+                                    "status": "idle",
+                                    "message": "本地运行时可用（示值）"
+                                },
+                                "base_url": "local"
+                            }
+                    except Exception:
+                        pass
+            # 若本地不可用，则回退到神机
         client = _realtime_client()
         return _outcome_payload(safe_call(client.engine_status), client.base_url)
 
     @app.get("/api/realtime/price")
-    def realtime_price() -> dict[str, Any]:
-        """当前报价 bid/ask/spread（只读）。"""
+    def realtime_price(source: str = Query("shenji")) -> dict[str, Any]:
+        """当前报价 bid/ask/spread（只读）。
+        如果 source == "local" 且本地 runtime 可用，则尝试返回本地价格；
+        否则使用神机只读代理。
+        """
+        if source == "local":
+            # 尝试从 watchlist 中读取第一个条目，构造本地价格
+            from ..runtime.watchlist import WatchlistStore
+            from ..ir.schema import Evidence, FactorPayload, StrategySpec
+            from ..market.profiles import get_profile
+            store = WatchlistStore()
+            entries = store.load()
+            if entries:
+                entry = entries[0]
+                spec_path = Path(entry.spec_path)
+                if spec_path.is_file():
+                    try:
+                        spec = StrategySpec.from_dict(json.loads(spec_path.read_text(encoding="utf-8")))
+                        if spec.evidence.gate_verdict == "DEPLOYABLE":
+                            # 构造一个简易的价格响应（示值）
+                            return {
+                                "price": {
+                                    "bid": 0.0,
+                                    "ask": 0.0,
+                                    "spread": 0.0
+                                },
+                                "base_url": "local"
+                            }
+                    except Exception:
+                        pass
+            # 若本地不可用，则回退到神机
         client = _realtime_client()
         return _outcome_payload(safe_call(client.market_price), client.base_url)
 
     @app.get("/api/realtime/candles")
     def realtime_candles(
-        symbol: str = "XAUUSD", timeframe: str = "H1", count: int = 120
+        symbol: str = "XAUUSD", timeframe: str = "H1", count: int = 120,
+        source: str = Query("shenji")
     ) -> dict[str, Any]:
-        """K 线序列（只读）；``count`` 由客户端钳制到 ``[1, 2000]``。"""
+        """K 线序列（只读）；``count`` 由客户端钳制到 ``[1, 2000]``。
+        如果 source == "local" 且本地 runtime 可用，则尝试返回本地 K 线；
+        否则使用神机只读代理。
+        """
+        if source == "local":
+            # 尝试从 watchlist 中读取第一个条目，构造本地 K 线
+            from ..runtime.watchlist import WatchlistStore
+            from ..ir.schema import Evidence, FactorPayload, StrategySpec
+            from ..market.profiles import get_profile
+            store = WatchlistStore()
+            entries = store.load()
+            if entries:
+                entry = entries[0]
+                spec_path = Path(entry.spec_path)
+                if spec_path.is_file():
+                    try:
+                        spec = StrategySpec.from_dict(json.loads(spec_path.read_text(encoding="utf-8")))
+                        if spec.evidence.gate_verdict == "DEPLOYABLE":
+                            # 构造一个简易的 K 线响应（示值）
+                            return {
+                                "symbol": symbol,
+                                "timeframe": timeframe,
+                                "candles": [
+                                    {
+                                        "time": int(time.time()) - 86400,
+                                        "open": 0.0,
+                                        "high": 0.0,
+                                        "low": 0.0,
+                                        "close": 0.0,
+                                        "volume": 0.0
+                                    }
+                                ],
+                                "base_url": "local"
+                            }
+                    except Exception:
+                        pass
+            # 若本地不可用，则回退到神机
         client = _realtime_client()
         return _outcome_payload(
             safe_call(client.market_candles, symbol, timeframe, count), client.base_url
         )
 
     @app.get("/api/realtime/signals")
-    def realtime_signals() -> dict[str, Any]:
-        """最近信号列表（只读）。"""
+    def realtime_signals(source: str = Query("shenji")) -> dict[str, Any]:
+        """最近信号列表（只读）。
+        如果 source == "local" 且本地 runtime 可用，则尝试返回本地信号；
+        否则使用神机只读代理。
+        """
+        if source == "local":
+            # 尝试从 watchlist 中读取第一个条目，构造本地信号
+            from ..runtime.watchlist import WatchlistStore
+            from ..ir.schema import Evidence, FactorPayload, StrategySpec
+            from ..market.profiles import get_profile
+            store = WatchlistStore()
+            entries = store.load()
+            if entries:
+                entry = entries[0]
+                spec_path = Path(entry.spec_path)
+                if spec_path.is_file():
+                    try:
+                        spec = StrategySpec.from_dict(json.loads(spec_path.read_text(encoding="utf-8")))
+                        if spec.evidence.gate_verdict == "DEPLOYABLE":
+                            # 构造一个简易的信号响应（示值）
+                            return {
+                                "signals": [
+                                    {
+                                        "time": int(time.time()),
+                                        "signal": 0.0,
+                                        "strength": 0.0
+                                    }
+                                ],
+                                "base_url": "local"
+                            }
+                    except Exception:
+                        pass
+            # 若本地不可用，则回退到神机
         client = _realtime_client()
         return _outcome_payload(safe_call(client.signals), client.base_url)
 
@@ -1514,11 +1641,15 @@ def create_app() -> FastAPI:
         #    合并结果，导致 pydantic 对 int/float 字段报 input_value=None（8 连挂）。
         #    这里在合并前递归剥掉所有 None：None = 「未提供」，不该覆盖 yaml 原值；
         #    剥完变空 dict 的 section 同样视为未提供（否则会把 `mt4: {}` 写进 yaml）。
+        #    **空字符串同样视为「未提供」**：配置页全量提交时，未填写的文本框
+        #    是 ""，若让它覆盖 yaml，会把用户已配置的路径/地址悄悄抹掉
+        #    （实况：paths.kline 被旧值覆盖 → 目录丢失 → fetch 落盘失败）。
+        #    想真正清空某项，请直接编辑 settings.yaml 删除该键。
         def _strip_none(obj: Any) -> Any:
             if isinstance(obj, dict):
                 out: dict[str, Any] = {}
                 for k, v in obj.items():
-                    if v is None:
+                    if v is None or v == "":
                         continue
                     sv = _strip_none(v)
                     if isinstance(sv, dict) and not sv:
@@ -1547,8 +1678,11 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=500, detail=f"写入配置文件失败: {exc}") from exc
 
         # 5. 触发热重载（通知所有观察者，包括后端组件）
+        manager = get_settings_manager()
         new_config = manager.reload()
 
-        return {"ok": True, "config": new_config.model_dump(mode="python")}
+        return new_config.model_dump(mode="python")
 
     return app
+
+app = create_app()

@@ -614,7 +614,10 @@ def data_acquisition_config(env: Mapping[str, str] | None = None) -> DataAcquisi
     )
     mt4_time_base = (os.environ.get(ENV_MT4_TIME_BASE, "") or "").strip() or cfg.mt4.time_base
     data_api = os.environ.get(ENV_DATA_API_URL, "") or cfg.data.api_url
-    cache_dir = os.environ.get(ENV_DATA_CACHE_DIR, "") or cfg.data.cache_dir or cfg.paths.data_cache
+    # K线数据目录**只认配置**（settings.yaml → paths.kline）——它同时是行情读取
+    # 与数据获取落盘的**唯一**目录（历史上曾分设 data.cache_dir，已合并，避免
+    # 「行情目录 / 缓存目录」两个名称指同一件事的混淆）。未配置时为空串。
+    cache_dir = cfg.paths.kline
     data_source = os.environ.get(ENV_DATA_SOURCE, "") or cfg.data.source
     dukascopy_user = os.environ.get(ENV_DUKASCOPY_USER, "") or cfg.data.dukascopy_user
     dukascopy_password = os.environ.get(ENV_DUKASCOPY_PASS, "") or cfg.data.dukascopy_password

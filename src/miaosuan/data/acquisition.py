@@ -54,12 +54,8 @@ __all__ = [
     "fetch",
 ]
 
-#: 兜底缓存目录：仓库内 ``data/cache``（与 settings.yaml → paths.data_cache 一致）。
-#: 目录重构（2026-10-01）后缓存**只认 data/cache**——仓库根 data/ 不再存放
-#: parquet；kline_data_dir()（settings → paths.kline）是只读行情目录，不属于缓存。
-_DEFAULT_CACHE_DIRS: tuple[Path, ...] = (
-    Path(__file__).resolve().parents[3] / "data" / "cache",
-)
+#: K线数据目录**只认配置**（settings.yaml → paths.kline）——行情读取与数据获取落盘共用。测试会 patch
+#: _cache_dirs_from_config() 给临时目录，无此概念时的上游（如 loader）必须容忍空结果。
 
 #: 支持的 OHLCV 列名（与 ``loader.panel_from_frame`` 对齐）。
 _REQUIRED_COLUMNS = ("time", "open", "high", "low", "close", "volume", "tick_volume")
@@ -105,6 +101,7 @@ SOURCE_TYPE_DUKASCOPY = "Dukascopy"
 SOURCE_TYPE_BINANCE = "Binance"
 SOURCE_TYPE_AKSHARE = "AkShare"
 SOURCE_TYPE_MT4 = "MT4"
+SOURCE_TYPE_MT5 = "MT5"
 SOURCE_TYPE_OTHER = "其他"
 
 #: fetcher 类名 → 数据源类型。新增 fetcher 只需在此登记。
@@ -116,6 +113,7 @@ _FETCHER_TYPE_MAP: dict[str, str] = {
     "BinanceFetcher": SOURCE_TYPE_BINANCE,
     "AkshareFetcher": SOURCE_TYPE_AKSHARE,
     "MT4BridgeFetcher": SOURCE_TYPE_MT4,
+    "MT5Fetcher": SOURCE_TYPE_MT5,
     "TqsdkFetcher": SOURCE_TYPE_OTHER,
 }
 
@@ -757,40 +755,24 @@ def _probe_in_background(sources: list[DataSource]) -> None:
 
 
 def _cache_dirs_from_config() -> tuple[Path, ...]:
-    """解析缓存目录（环境变量优先，否则用默认）；与数据**来源能力无关**。
+    """解析缓存目录：**只认配置**（settings.yaml → paths.kline，K线数据唯一目录）。
+    与数据**来源能力无关**。
 
     抽成模块级函数是为了让「只扫目录」的入口（``/api/acquisition/cached``）
     不必构造 :class:`DataAcquisition`——构造会 build 全部数据源并对网络 fetcher
     逐个做 TCP 探测，本环境 ``freeserv.dukascopy.com`` / ``api.binance.com``
     不可达，各卡满 3s 超时 → 首次调用 6s。列缓存文件只扫目录，本不需要这些。
 
+    重要：**仅从配置读取缓存目录**，无默认值、无环境变量回退。
+    若未配置 `paths.kline`（空字符串），则返回空元组，表示**无本地缓存**。
     """
-    from ..config import kline_data_dir
-
-    # kline_data_dir() 在 config.py 中已检查 os.environ（兼容 monkeypatch 测试），
-    # 此处不需额外传 env。cache_dir 通过 data_acquisition_config() 也走 env 优先。
-    dirs: list[Path] = [Path(kline_data_dir()).resolve()]
-
     custom = data_acquisition_config().cache_dir
-    if custom:
-        # 必须 resolve 成绝对路径：settings.yaml 里常写的是相对值（如
-        # ``data/cache``），相对路径会跟着进程 CWD 漂移——list_cached 返回给
-        # 前端的 path 是相对串，前端回传给 /api/inspect 时按**服务端 CWD**
-        # 解析，CWD 不在仓库根（launcher exe / 改目录启动）就 400。
-        p = Path(custom).resolve()
-        p.mkdir(parents=True, exist_ok=True)
-        dirs.append(p)
-
-    dirs.extend(d.resolve() for d in _DEFAULT_CACHE_DIRS)
-
-    # 去重：kline_data_dir 与 cache_dir 可能指向同一物理目录
-    seen: set[Path] = set()
-    unique: list[Path] = []
-    for d in dirs:
-        if d not in seen:
-            seen.add(d)
-            unique.append(d)
-    return tuple(unique)
+    if not custom:
+        # 未配置缓存目录：返回空，表示无本地缓存。
+        return tuple()
+    p = Path(custom).resolve()
+    p.mkdir(parents=True, exist_ok=True)
+    return (p,)
 
 
 def _scan_cache_dirs(cache_dirs: tuple[Path, ...]) -> list[dict[str, Any]]:
@@ -847,14 +829,14 @@ class DataAcquisition:
         if sources is None:
             sources = _build_default_sources()
         self._sources: list[DataSource] = sources
-        self._cache_dirs: tuple[Path, ...] = self._resolve_cache_dirs()
 
-    @staticmethod
-    def _resolve_cache_dirs() -> tuple[Path, ...]:
-        """确定缓存目录（环境变量优先，否则用默认）。
+    @property
+    def _cache_dirs(self) -> tuple[Path, ...]:
+        """缓存目录**每次访问动态解析**（settings.yaml → paths.kline，K线数据唯一目录）。
 
-        委托模块级 :func:`_cache_dirs_from_config`（单一实现），保留本方法
-        以兼容既有调用方。
+        不在构造时固化：webui 进程启动时若尚未配置缓存目录，之后通过
+        配置页写入 settings.yaml 并热重载，下一次 fetch 就能立即写到
+        新目录——静态缓存旧值会导致「显示已更新但磁盘无文件」。
         """
         return _cache_dirs_from_config()
 
@@ -871,7 +853,14 @@ class DataAcquisition:
         - 当显式指定 source 时，source_type 自动加入文件名（如 XAUUSD_H1_Dukascopy.parquet）
         - note 非空时追加在末尾（如 XAUUSD_H1_Dukascopy_manual.parquet）
         - 自动模式（source=None）不加 source_type，保持原命名兼容
+
+        如果未配置缓存目录（self._cache_dirs 为空），则返回一个不可用的路径，
+        后续读取该路径将视为无缓存，写入将被调用方跳过（以满足“只有配置才能生效”）。
         """
+        # 未配置缓存目录：返回一个不可用的路径，后续读取将 miss，写入将被跳过。
+        if not self._cache_dirs:
+            return Path("/nonexistent miaosuan cache") / f"{symbol}_{timeframe}.parquet"
+
         parts = [symbol, timeframe]
         if source_type:
             parts.append(_slugify(source_type))
@@ -989,7 +978,9 @@ class DataAcquisition:
                     except Exception:  # noqa: BLE001 - 旧缓存损坏则按首跑重写
                         old_df = pd.DataFrame()
                 merged = self._merge_and_dedup(old_df, att.df) if len(old_df) > 0 else att.df
-                self._write_parquet_atomic(merged, cache_path)
+                # 只有配置了缓存目录时才写入缓存
+                if self._cache_dirs:
+                    self._write_parquet_atomic(merged, cache_path)
                 return FetchResult(
                     path=cache_path,
                     status=FetchStatus.UPDATED,
@@ -1011,7 +1002,9 @@ class DataAcquisition:
         # 首跑或增量失败 → 全量获取
         att = self._try_fetch_full(sources, symbol, timeframe)
         if att.df is not None and len(att.df) > 0:
-            self._write_parquet_atomic(att.df, cache_path)
+            # 只有配置了缓存目录时才写入缓存
+            if self._cache_dirs:
+                self._write_parquet_atomic(att.df, cache_path)
             return FetchResult(
                 path=cache_path,
                 status=FetchStatus.UPDATED,
@@ -1151,9 +1144,7 @@ class DataAcquisition:
         )
 
     @staticmethod
-    def _validate_append_name(
-        target: Path, symbol: str, timeframe: str
-    ) -> list[str]:
+    def _validate_append_name(target: Path, symbol: str, timeframe: str) -> list[str]:
         """追加前置校验：目标文件名声明的品种/周期与请求一致（纯文件名，不读盘）。
 
         用 :func:`~miaosuan.data.loader.infer_symbol_timeframe` 解析——
@@ -1296,9 +1287,7 @@ class DataAcquisition:
                 return [str(d) for d in detail]
         return [f"{src.describe()}: {exc}"]
 
-    def _try_fetch_full(
-        self, sources: list[DataSource], symbol: str, timeframe: str
-    ) -> _Attempt:
+    def _try_fetch_full(self, sources: list[DataSource], symbol: str, timeframe: str) -> _Attempt:
         """按给定来源列表尝试全量获取。
 
         不再预先检查 is_available()：对于走代理的网络源（如 Dukascopy），
@@ -1322,9 +1311,12 @@ class DataAcquisition:
             failures.append(f"{src.describe()}: 返回空数据")
         if failures:
             import logging
+
             logging.getLogger(__name__).warning(
                 "_try_fetch_full 全部来源失败: %s %s | %s",
-                symbol, timeframe, "；".join(failures),
+                symbol,
+                timeframe,
+                "；".join(failures),
             )
         return _Attempt(df=None, failures=failures, source="", ok=False)
 
@@ -1363,9 +1355,13 @@ class DataAcquisition:
                 return _Attempt(df=df, failures=failures, source=src.source_type(), ok=True)
         if failures and not any_ok:
             import logging
+
             logging.getLogger(__name__).warning(
                 "_try_fetch_incremental 全部来源失败: %s %s since=%d | %s",
-                symbol, timeframe, since_ts, "；".join(failures),
+                symbol,
+                timeframe,
+                since_ts,
+                "；".join(failures),
             )
         return _Attempt(df=None, failures=failures, source=ok_source, ok=any_ok)
 
@@ -1409,7 +1405,9 @@ class DataAcquisition:
                     "source_type": st,
                     "description": _description_for(src),
                     "available": known,  # None = 尚未探测（前端显示「检测中」）
-                    "supported_timeframes": src.supported_timeframes() if hasattr(src, "supported_timeframes") else [],
+                    "supported_timeframes": src.supported_timeframes()
+                    if hasattr(src, "supported_timeframes")
+                    else [],
                 }
             )
         _probe_in_background(selected)

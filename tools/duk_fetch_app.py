@@ -343,7 +343,12 @@ class DukascopyFetcher:
         return self._avail_cache
 
     def http_get(self, url: str) -> Any:
-        """GET + JSON 解析，带代理和重试"""
+        """GET + JSON 解析，带代理和重试。
+
+        429（CloudFront/上游限流）单独处理：指数退避 3s/6s/12s/24s，
+        共 4 次重试；其它异常保持 1s/2s 短睡 3 次。
+        """
+        import urllib.error
         opener = self._build_opener()
         req = urllib.request.Request(url, headers={"User-Agent": "MiaoSuan-Toolkit/1.0"})
 
@@ -356,6 +361,17 @@ class DukascopyFetcher:
                     return json.loads(body.decode("utf-8"))
                 except (json.JSONDecodeError, UnicodeDecodeError) as exc:
                     raise DataError(f"HTTP 返回非 JSON: {url} ({exc})") from exc
+            except urllib.error.HTTPError as exc:
+                # 限流类：429（CloudFront/上游限流）与 400（服务端对不完整年数据
+                # 间歇性返回的限流变体，body 同为 "Too Many Requests"）同等退避。
+                # range(max_retries=3) 下 attempt ∈ {0,1,2} 恒 <4，退避 3s/6s/12s
+                # 后 continue；循环耗尽自然退出，统一 raise（保留最后一次错误）。
+                if exc.code in (400, 429):
+                    time.sleep(3 * (2 ** attempt))
+                    continue
+                if attempt == max_retries - 1:
+                    raise DataError(f"HTTP GET 失败 (重试 {max_retries} 次后): {url} ({exc})") from exc
+                time.sleep(1 * (attempt + 1))
             except Exception as exc:
                 if attempt == max_retries - 1:
                     raise DataError(f"HTTP GET 失败 (重试 {max_retries} 次后): {url} ({exc})") from exc
@@ -1146,7 +1162,13 @@ def run_fetch(
                 save_checkpoint(checkpoint_path, cp)
                 continue
 
-            # ── 抓取阶段（pending / fetching） ──
+            # ── 抓取阶段（pending / fetching；fetched 但 stage 无数据 → 回退 pending 重抓）──
+            # 上一轮 http_get 因 429/网络失败后仍把状态置 fetched，但 stage 无数据；
+            # 若停在 fetched 则只走验证必死锁，故此处回退重抓。
+            _probe_stage = load_stage_parquet(stage_path)
+            if prior == "fetched" and len(_probe_stage) == 0:
+                logger.log("  检测到 fetched 但 stage 无数据（上轮抓取失败残留），回退 pending 重新抓取")
+                prior = "pending"
             if prior in ("pending", "fetching"):
                 batch["status"] = "fetching"
                 save_checkpoint(checkpoint_path, cp)

@@ -129,6 +129,54 @@ def start_backend_service():
         raise
 
 
+def find_port_pids(port: int) -> list[int]:
+    """找出占用指定端口的所有进程 PID（netstat 解析，仅 LISTENING 状态）。"""
+    pids: list[int] = []
+    try:
+        result = subprocess.run(['netstat', '-ano'], capture_output=True, text=True,
+                                encoding='gbk', errors='ignore')
+        for line in result.stdout.splitlines():
+            if f':{port}' in line and 'LISTENING' in line:
+                parts = line.split()
+                if len(parts) >= 5 and parts[-1].isdigit():
+                    pid = int(parts[-1])
+                    if pid and pid not in pids:
+                        pids.append(pid)
+    except Exception:
+        pass
+    return pids
+
+
+def kill_stale_backend(port: int) -> bool:
+    """终止占用端口的旧后端进程并等待端口释放。
+
+    返回 True 表示端口已可用（原本空闲或旧进程已终止）。
+    旧进程不终止的话，launcher 只会看到「已在运行」，用户改完代码重启
+    也加载不到新代码——这正是「重启了还是不对」的根因。
+    """
+    pids = find_port_pids(port)
+    if not pids:
+        return True
+    my_pid = os.getpid()
+    for pid in pids:
+        if pid == my_pid:
+            continue  # 不会发生，但防御一下：绝不杀自己
+        print(f"  发现旧后端进程 PID={pid}，正在终止…")
+        try:
+            subprocess.run(['taskkill', '/F', '/T', '/PID', str(pid)],
+                           capture_output=True)
+        except Exception as exc:
+            print(f"  终止失败（{exc}），请手动在任务管理器结束该进程。")
+            return False
+    # 等待端口真正释放（TIME_WAIT/句柄回收需要一两秒）
+    for _ in range(10):
+        if not find_port_pids(port):
+            return True
+        time.sleep(0.5)
+    print(f"  端口 {port} 仍被占用，请手动处理后重试。")
+    return False
+
+
 def main():
     """主入口函数"""
     try:
@@ -150,33 +198,15 @@ def main():
         result = sock.connect_ex((str(host), port))
         sock.close()
         if result == 0:
-            print(f"  后端已在端口 {port} 运行")
-            print("  正在打开浏览器...")
-            import webbrowser
-            webbrowser.open(f"http://{host}:{port}")
-            print("\n后端服务已在运行。")
-            print("要停止服务，请关闭此窗口或使用任务管理器结束相关进程。")
-            if not getattr(sys, 'frozen', False):
-                print("\n按 Enter 键退出启动器（后端服务将继续运行）...")
-                input()
-            else:
-                time.sleep(3)
-            return
-
-        # 清理端口
-        print(f"步骤 2/2: 清理端口 {port}...")
-        try:
-            result = subprocess.run(['netstat', '-ano'], capture_output=True, text=True, encoding='gbk', errors='ignore')
-            for line in result.stdout.splitlines():
-                if f':{port}' in line and 'LISTENING' in line:
-                    parts = line.split()
-                    if len(parts) >= 5:
-                        pid = parts[-1]
-                        if pid.isdigit():
-                            subprocess.run(['taskkill', '/F', '/PID', pid], capture_output=True)
-                            print(f"  已终止 PID={pid}")
-        except Exception:
-            pass
+            # 端口被占 = 旧后端还活着。直接终止它再启动新后端，
+            # 否则「重启」永远加载不到新代码（用户改完配置/代码重启无效的根因）。
+            print(f"  发现旧后端仍在运行（端口 {port}）")
+            if not kill_stale_backend(port):
+                if not getattr(sys, 'frozen', False):
+                    input("\n按 Enter 键退出...")
+                else:
+                    time.sleep(3)
+                return 1
         time.sleep(1)
 
         # 验证当前 Python 能导入 miaosuan

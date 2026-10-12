@@ -79,7 +79,6 @@ DEFAULT_SETTINGS = {
     },
     # 数据目录
     "paths": {
-        "data_cache": "data/cache",  # OHLCV 数据缓存（唯一缓存目录）
         "artifacts": "artifacts",  # Spec 专属目录（仅 StrategySpec JSON 及其 sidecar）
         "strategies": "strategies",  # 策略专属目录（策略 .py + 中英说明文档 + 映射表）
         "results": "data/results",  # spec 关联文档（回测 / 寻优结果）
@@ -92,7 +91,6 @@ DEFAULT_SETTINGS = {
         "timeout": 30,  # 网络请求超时（秒）
         "source": "",  # 默认数据源（"shenji"、"tradingview"等，空=自动）
         "api_url": "",  # 通用 HTTP 数据源地址
-        "cache_dir": "",  # 数据缓存目录（留空则用 paths.data_cache）
         "dukascopy_user": "",  # Dukascopy 实盘用户名
         "dukascopy_password": "",  # Dukascopy 实盘密码
         "proxy": "",  # 网络 fetcher 代理（如 http://127.0.0.1:10808）
@@ -174,7 +172,6 @@ _ENV_ALIASES: dict[str, tuple[str, ...]] = {
     "MIAOSUAN_MT4_BRIDGE_PORT": ("mt4", "port"),
     "MIAOSUAN_MT4_TIME_BASE": ("mt4", "time_base"),
     "MIAOSUAN_DATA_API_URL": ("data", "api_url"),
-    "MIAOSUAN_DATA_CACHE_DIR": ("data", "cache_dir"),
     "MIAOSUAN_DATA_TIMEOUT": ("data", "timeout"),
     "MIAOSUAN_DATA_SOURCE": ("data", "source"),
     "MIAOSUAN_DUKASCOPY_USER": ("data", "dukascopy_user"),
@@ -286,7 +283,6 @@ class MT4Settings(BaseModel):
 
 
 class PathsSettings(BaseModel):
-    data_cache: str = Field(default="data/cache")
     artifacts: str = Field(default="artifacts")  # spec 专属目录（仅 StrategySpec JSON 及其 sidecar）
     strategies: str = Field(default="strategies")  # 策略专属目录（策略 .py + 中英说明文档 + 映射表）
     results: str = Field(default="data/results")  # spec 关联文档（回测 / 寻优结果）
@@ -312,7 +308,6 @@ class DataSettings(BaseModel):
     timeout: int = Field(default=30, gt=0)
     source: str = Field(default="")
     api_url: str = Field(default="")
-    cache_dir: str = Field(default="")  # 空则使用 paths.data_cache
     dukascopy_user: str = Field(default="")
     dukascopy_password: str = Field(default="")
     proxy: str = Field(default="")  # 网络 fetcher 代理（如 http://127.0.0.1:10808）
@@ -343,14 +338,6 @@ class Settings(BaseModel):
     data: DataSettings = Field(default_factory=DataSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     features: FeatureFlags = Field(default_factory=FeatureFlags)
-
-    @model_validator(mode="after")
-    def _resolve_cache_dir(self) -> "Settings":
-        """解析数据缓存目录：如果 data.cache_dir 为空，则使用 paths.data_cache"""
-        if not self.data.cache_dir:
-            object.__setattr__(self.data, "cache_dir", self.paths.data_cache)
-        return self
-
 
 class SettingsManager:
     """配置管理器单例"""
@@ -540,7 +527,7 @@ class SettingsManager:
         """关闭管理器，清理资源"""
         self.stop_file_watcher()
         self._stop_event.set()
-
+    
 
 # 全局单例实例
 _settings_manager: Optional[SettingsManager] = None
@@ -595,11 +582,6 @@ def get_mt4_port() -> int:
     return get_config().mt4.port
 
 
-def get_data_cache_dir() -> str:
-    cfg = get_config()
-    return cfg.data.cache_dir or cfg.paths.data_cache
-
-
 def get_artifacts_dir() -> str:
     return get_config().paths.artifacts
 
@@ -629,7 +611,6 @@ __all__ = [
     "stop_settings_watcher",
     "get_webui_port",
     "get_mt4_port",
-    "get_data_cache_dir",
     "get_artifacts_dir",
     "get_tmp_dir",
     "get_kline_dir",

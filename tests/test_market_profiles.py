@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) 2026 MiaoSuan Team
 # Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 # See the LICENSE file in the project root for the full license text.
@@ -23,26 +22,37 @@ from miaosuan.market.profiles import (
     CRYPTO_BTC,
     EXPECTED_PROFILE_NAMES,
     FOREX_XAUUSD,
+    FOREX_XAUUSD_MT5,
     MARKET_PROFILE_FIELDS,
+    MARKET_PROFILE_OPTIONAL_FIELDS,
     MARKET_PROFILE_REQUIRED_FIELDS,
     PROFILES,
     US_EQUITY_RESEARCH,
+    BrokerSpec,
     FrozenMarketProfile,
     get_profile,
 )
 
-# ── v1 字段冻结 ─────────────────────────────────────────────────────────────
+# ── 字段冻结（v1 14 必填 + v2 追加可选 broker_spec）─────────────────────────
 
 
 def test_all_profiles_present() -> None:
     assert tuple(PROFILES) == EXPECTED_PROFILE_NAMES
-    assert len(PROFILES) == 5
+    assert len(PROFILES) == 6
 
 
 def test_v1_field_set_frozen() -> None:
     assert len(MARKET_PROFILE_REQUIRED_FIELDS) == 14, "v1 必须为 14 必填字段"
-    assert len(MARKET_PROFILE_FIELDS) == 15
-    assert MARKET_PROFILE_FIELDS[-1] == "limit_pct"
+    assert len(MARKET_PROFILE_FIELDS) == 16, "v1 15 字段 + v2 追加 broker_spec"
+    assert MARKET_PROFILE_FIELDS[-2] == "limit_pct"
+    assert MARKET_PROFILE_FIELDS[-1] == "broker_spec"
+    # 可选集合必须显式声明（勿用 FIELDS[:-1] 切片——追加可选字段时切片会静默
+    # 把上一个可选字段误升为必填，路线图 v1.1 已修）
+    assert MARKET_PROFILE_OPTIONAL_FIELDS == ("limit_pct", "broker_spec")
+    assert (
+        tuple(f for f in MARKET_PROFILE_FIELDS if f not in MARKET_PROFILE_OPTIONAL_FIELDS)
+        == MARKET_PROFILE_REQUIRED_FIELDS
+    )
 
 
 @pytest.mark.parametrize("name", EXPECTED_PROFILE_NAMES)
@@ -51,6 +61,7 @@ def test_every_profile_has_all_v1_fields(name: str) -> None:
     for field in MARKET_PROFILE_REQUIRED_FIELDS:
         assert hasattr(profile, field), f"{name} 缺字段 {field}"
     assert hasattr(profile, "limit_pct")
+    assert hasattr(profile, "broker_spec")
     assert isinstance(profile, FrozenMarketProfile)
 
 
@@ -64,6 +75,39 @@ def test_forex_xauusd_values() -> None:
     assert FOREX_XAUUSD.allow_intraday_exit is True
     assert FOREX_XAUUSD.settlement_days == 0
     assert FOREX_XAUUSD.limit_pct is None
+    assert FOREX_XAUUSD.broker_spec is None, "研究型画像不携带经纪商规格"
+
+
+def test_forex_xauusd_mt5_values() -> None:
+    """MT5 经纪商通道画像：市场规则同 FOREX_XAUUSD，差异仅在数据源与 broker_spec。"""
+    assert FOREX_XAUUSD_MT5.name == "FOREX_XAUUSD_MT5"
+    assert FOREX_XAUUSD_MT5.data_sources == ["MT5"]
+    # 市场规则与 FOREX_XAUUSD 严格一致（同标的，仅通道不同）
+    for attr in (
+        "quote_currency",
+        "long_only",
+        "leverage",
+        "lot_size",
+        "tick_size",
+        "contract_multiplier",
+        "bars_per_year",
+        "bars_per_day",
+        "session_hours",
+        "settlement_days",
+    ):
+        assert getattr(FOREX_XAUUSD_MT5, attr) == getattr(FOREX_XAUUSD, attr), attr
+    assert FOREX_XAUUSD_MT5.broker_spec is not None
+    spec = FOREX_XAUUSD_MT5.broker_spec
+    assert spec.contract_size == 100.0, "XAUUSD 一手 = 100 盎司"
+    assert spec.tick_value == pytest.approx(1.0), "100 盎司 × 0.01 美元/tick"
+    assert spec.lot_step == 0.01 and spec.min_lot == 0.01
+
+
+def test_broker_spec_validation() -> None:
+    with pytest.raises(ConfigError, match="必须为正"):
+        BrokerSpec(tick_value=1.0, lot_step=0.0, min_lot=0.01, contract_size=100.0)
+    with pytest.raises(ConfigError, match="必须为正"):
+        BrokerSpec(tick_value=-1.0, lot_step=0.01, min_lot=0.01, contract_size=100.0)
 
 
 def test_cn_equity_research_semantics() -> None:
@@ -197,10 +241,20 @@ def test_apply_cost_shape_mismatch() -> None:
 def test_profile_validation_rejects_bad_values() -> None:
     with pytest.raises(ConfigError):
         FrozenMarketProfile(
-            name="X", quote_currency="USD", cost_model=ZERO_COST, long_only=False,
-            leverage=0.0, lot_size=1.0, tick_size=0.01, contract_multiplier=1.0,
-            bars_per_year=100, bars_per_day=1, session_hours=((0, 24),),
-            tradable_mask=None, allow_intraday_exit=True, settlement_days=0,
+            name="X",
+            quote_currency="USD",
+            cost_model=ZERO_COST,
+            long_only=False,
+            leverage=0.0,
+            lot_size=1.0,
+            tick_size=0.01,
+            contract_multiplier=1.0,
+            bars_per_year=100,
+            bars_per_day=1,
+            session_hours=((0, 24),),
+            tradable_mask=None,
+            allow_intraday_exit=True,
+            settlement_days=0,
         )
 
 

@@ -104,7 +104,8 @@ def _make_target(tmp_path: Path, name: str, df: pd.DataFrame | None = None) -> P
 
 @pytest.fixture()
 def cache_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    monkeypatch.setenv("MIAOSUAN_DATA_CACHE_DIR", str(tmp_path))
+    from miaosuan.data.acquisition import _cache_dirs_from_config
+    monkeypatch.setattr("miaosuan.data.acquisition._cache_dirs_from_config", lambda: (tmp_path,))
     return tmp_path
 
 

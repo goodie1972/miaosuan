@@ -1,0 +1,96 @@
+# ── 虚拟环境 ──────────────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Python 缓存 / 构建产物 ────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+.mypy_cache/
+.dmypy.json
+.ruff_cache/
+.pytest_cache/
+# 自定义 --basetemp 目录（本环境必须指定项目内 basetemp，见 MEMORY.md）
+.pytest_*/
+.hypothesis/
+
+# ── 妙算产物（大文件，不入库；结构见架构 §2）──────────────────────────────
+# 用 artifacts/* 而非 artifacts/，以便保留 .gitkeep 占位（目录规则无法再包含文件）
+artifacts/*
+!artifacts/.gitkeep
+
+# ── 日志 ──────────────────────────────────────────────────────────────────
+logs/
+*.log
+# 临时/诊断输出（诊断脚本、启动器日志、手工重定向产物）
+.tmp/
+tmp/
+!tmp/.gitkeep
+output.txt
+*.out
+*.err
+
+# ── 根目录垃圾文件（测试输出捕获、一次性脚本）──────────────────────────
+# 防止根目录再次积累 .txt / .log / 临时 .py 文件
+/*.txt
+/*.log
+/*.js
+
+# ── 数据（大数据文件不入库，仅保留 tests/fixtures 下的小样本）────────────
+*.parquet
+*.pq
+*.feather
+*.h5
+*.sqlite
+*.db
+
+# ── 密钥（兜底；第一道防线是 pre-commit gitleaks）──────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ── IDE / 操作系统 ───────────────────────────────────────────────────────
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== ↑ 以上同步自 .gitignore（「从 .gitignore 同步」只重写以上部分）=====
+.git/
+.hg/
+.svn/
+node_modules/
+bower_components/
+jspm_packages/
+site-packages/
+coverage/
+htmlcov/
+lcov-report/
+cmakefiles/
+cmake-build-*/
+bazel-*/
+pods/
+deriveddata/
+storybook-static/
+playwright-report/
+test-results/
+allure-results/
+allure-report/
+cdk.out/
+*.dist-info/
+eggs/
+pip-wheel-metadata/
+wheels/
+# ----- ↑ 以上为 ZCode 默认排除规则（自定义规则请写在本行下方，不会被同步/恢复改动）-----
+# 自定义规则写在下方（本行提示可删除）

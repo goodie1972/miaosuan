@@ -39,14 +39,17 @@ __all__ = [
     "CN_EQUITY_RESEARCH",
     "EXPECTED_PROFILE_NAMES",
     "FOREX_XAUUSD",
+    "FOREX_XAUUSD_MT5",
+    "BrokerSpec",
     "FrozenMarketProfile",
     "MARKET_PROFILE_FIELDS",
+    "MARKET_PROFILE_OPTIONAL_FIELDS",
     "PROFILES",
     "US_EQUITY_RESEARCH",
     "get_profile",
 ]
 
-#: ``MarketProfile`` v1 的字段名（14 必填 + 1 可选，冻结；架构 §1.2.1.5）
+#: ``MarketProfile`` 的字段名（14 必填 + 2 可选；v1 冻结 + v2 追加可选 ``broker_spec``）
 MARKET_PROFILE_FIELDS: tuple[str, ...] = (
     # 交易规则
     "name",
@@ -66,17 +69,56 @@ MARKET_PROFILE_FIELDS: tuple[str, ...] = (
     "tradable_mask",
     "allow_intraday_exit",
     "settlement_days",
-    # 可选
+    # 可选（v1）
     "limit_pct",
+    # 可选（v2 追加）：经纪商品种规格——研究侧不感知，runtime 执行侧消费
+    "broker_spec",
 )
 
-#: v1 的必填字段（14 个；``limit_pct`` 为可选）
-MARKET_PROFILE_REQUIRED_FIELDS: tuple[str, ...] = MARKET_PROFILE_FIELDS[:-1]
+#: 可选字段名（**显式集合**，勿用 ``FIELDS[:-1]`` 切片——追加可选字段时切片会
+#: 静默把上一个"可选"误升为"必填"）。
+MARKET_PROFILE_OPTIONAL_FIELDS: tuple[str, ...] = ("limit_pct", "broker_spec")
+
+#: 必填字段（14 个；``limit_pct`` / ``broker_spec`` 为可选）
+MARKET_PROFILE_REQUIRED_FIELDS: tuple[str, ...] = tuple(
+    f for f in MARKET_PROFILE_FIELDS if f not in MARKET_PROFILE_OPTIONAL_FIELDS
+)
+
+
+@dataclass(frozen=True)
+class BrokerSpec:
+    """经纪商品种规格（v2 追加的**可选**画像字段）。
+
+    只描述"一手是什么、最小怎么交易"的**执行侧**事实，供 runtime 纸面/实盘
+    （路线图 R3/R4）的仓位取整与对账消费；与成本无关——成本的单一事实仍是
+    :attr:`FrozenMarketProfile.cost_model`。研究侧（``core/``）不感知本字段：
+    既有没有 ``broker_spec`` 的画像零改动。
+
+    :param tick_value: 每 tick 每手价值（报价货币；XAUUSD = 100 盎司/手 ×
+        0.01 美元/tick = 1.0）。
+    :param lot_step: 手数步长（仓位取整粒度）。
+    :param min_lot: 最小手数；目标仓位低于此值时**不交易**（禁止向上取整）。
+    :param contract_size: 一手对应的标的数量（XAUUSD = 100 盎司/手）。
+    """
+
+    tick_value: float
+    lot_step: float
+    min_lot: float
+    contract_size: float
+
+    def __post_init__(self) -> None:
+        for field_name in ("tick_value", "lot_step", "min_lot", "contract_size"):
+            value = getattr(self, field_name)
+            if value <= 0:
+                raise ConfigError(
+                    f"BrokerSpec.{field_name} 必须为正",
+                    context={"profile_field": field_name, "value": value},
+                )
 
 
 @dataclass(frozen=True)
 class FrozenMarketProfile:
-    """冻结的 :class:`~miaosuan.core.ports.MarketProfile` 实例（v1，14 必填 + 1 可选）。
+    """冻结的 :class:`~miaosuan.core.ports.MarketProfile` 实例（14 必填 + 2 可选）。
 
     :param name: 画像名（``FOREX_XAUUSD`` / ...）。
     :param quote_currency: 计价币种（``USD`` / ``CNY`` / ``USDT``）。
@@ -96,13 +138,15 @@ class FrozenMarketProfile:
     :param allow_intraday_exit: 是否允许当日平仓（A 股 T+1 = False）。
     :param settlement_days: 结算延迟天数（A 股 = 1；外汇/加密 = 0）。
     :param limit_pct: 涨跌停幅度（A 股 0.10 / 0.20 / 0.05）；无涨跌停市场 = None。
+    :param broker_spec: 经纪商品种规格（:class:`BrokerSpec`，v2 追加可选）——仅
+        MT5 等经纪商通道画像提供；``None`` = 研究型画像（runtime 执行侧不可用）。
     :param symbols: Web UI 便捷下拉项——该画像覆盖的品种标识（如 ``["XAUUSD"]``）。
         非 v1 交易规则契约，仅供数据获取页的品种下拉；留空则 UI 不预填选项。
     :param timeframes: Web UI 便捷下拉项——该画像支持的周期标识（如 ``["H1", "D1"]``）。
         同上，仅供数据获取页的周期下拉。
     :param data_sources: Web UI 数据获取页——该市场画像**严格匹配**的数据源类型列表
         （取值为 ``Shenji`` / ``TradingView`` / ``OKX`` / ``Binance`` / ``Dukascopy``
-        / ``AkShare`` / ``其他``）。
+        / ``AkShare`` / ``MT5`` / ``其他``）。
         不同市场的数据源相互独立、互不相同；UI 仅展示该列表内的来源，杜绝跨市场串用。
         注：妙算（``Shenji``）库仅存 XAUUSD 单一品种，故只归属 FOREX_XAUUSD。
     """
@@ -122,6 +166,7 @@ class FrozenMarketProfile:
     allow_intraday_exit: bool
     settlement_days: int
     limit_pct: float | None = None
+    broker_spec: BrokerSpec | None = None
     # ── UI 选择便捷字段（非 v1 交易规则契约，仅供 Web UI 下拉联动）────
     symbols: list[str] = field(default_factory=list)
     timeframes: list[str] = field(default_factory=list)
@@ -134,7 +179,9 @@ class FrozenMarketProfile:
         if not self.quote_currency:
             raise ConfigError(f"[{self.name}] quote_currency 不得为空")
         if self.leverage <= 0:
-            raise ConfigError(f"[{self.name}] leverage 必须为正", context={"leverage": self.leverage})
+            raise ConfigError(
+                f"[{self.name}] leverage 必须为正", context={"leverage": self.leverage}
+            )
         if self.lot_size <= 0:
             raise ConfigError(f"[{self.name}] lot_size 必须为正")
         if self.tick_size <= 0:
@@ -207,6 +254,34 @@ FOREX_XAUUSD = FrozenMarketProfile(
     symbols=["XAUUSD"],
     timeframes=["D1", "H1", "H4", "M15", "M30", "M5", "W1"],
     data_sources=["Shenji", "TradingView", "Dukascopy", "MT4"],
+)
+
+#: 外汇/贵金属现货（**MT5 经纪商通道**）。市场规则同 :data:`FOREX_XAUUSD`
+#: （24×5、杠杆 100、lot 0.01、tick 0.01、100 盎司/手），差异仅在：
+#: 数据走 MT5 直连（:class:`~miaosuan.data.fetchers.MT5Fetcher`），
+#: 且携带经纪商品种规格 ``broker_spec``（路线图 R3/R4 的纸面/实盘执行侧消费；
+#: 研究/回测侧不受影响）。与 FOREX_XAUUSD 分立画像：神机库仅存 XAUUSD 单一
+#: 品种、严格归属 FOREX_XAUUSD，两画像的数据源互不串用。
+FOREX_XAUUSD_MT5 = FrozenMarketProfile(
+    name="FOREX_XAUUSD_MT5",
+    quote_currency="USD",
+    cost_model=CostModel(commission=0.0001, slippage=0.0002, sell_tax=0.0, asymmetric=False),
+    long_only=False,
+    leverage=100.0,
+    lot_size=0.01,
+    tick_size=0.01,
+    contract_multiplier=100.0,
+    bars_per_year=6240,
+    bars_per_day=24,
+    session_hours=((0, 0), (0, 24)),
+    tradable_mask=None,
+    allow_intraday_exit=True,
+    settlement_days=0,
+    limit_pct=None,
+    broker_spec=BrokerSpec(tick_value=1.0, lot_step=0.01, min_lot=0.01, contract_size=100.0),
+    symbols=["XAUUSD"],
+    timeframes=["D1", "H1", "H4", "M15", "M30", "M5", "W1"],
+    data_sources=["MT5"],
 )
 
 #: A 股研究（**占位**）：只做多、T+1、涨跌停 ±10%、卖出印花税。
@@ -299,13 +374,15 @@ CN_COMMODITY_FUTURES = FrozenMarketProfile(
     data_sources=["AkShare"],
 )
 
-#: 全部 profile 注册表（新增产品只需在此追加，**不改 ``core/``**）
+#: 全部 profile 注册表（新增产品只需在此**尾部**追加，**不改 ``core/``**；
+#: 追加在尾部保持既有条目下标稳定——有测试按位置断言占位画像）
 PROFILES: dict[str, FrozenMarketProfile] = {
     FOREX_XAUUSD.name: FOREX_XAUUSD,
     CN_EQUITY_RESEARCH.name: CN_EQUITY_RESEARCH,
     US_EQUITY_RESEARCH.name: US_EQUITY_RESEARCH,
     CRYPTO_BTC.name: CRYPTO_BTC,
     CN_COMMODITY_FUTURES.name: CN_COMMODITY_FUTURES,
+    FOREX_XAUUSD_MT5.name: FOREX_XAUUSD_MT5,
 }
 
 #: 期望存在的 profile 名（供 CI「零改主干」与完整性断言使用）
@@ -315,6 +392,7 @@ EXPECTED_PROFILE_NAMES: tuple[str, ...] = (
     "US_EQUITY_RESEARCH",
     "CRYPTO_BTC",
     "CN_COMMODITY_FUTURES",
+    "FOREX_XAUUSD_MT5",
 )
 
 

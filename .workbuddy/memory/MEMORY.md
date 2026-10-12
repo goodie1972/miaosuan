@@ -57,6 +57,14 @@
     * 移除了所有HTTP轮询和复杂逻辑，专注于让主线程阻塞在读取子进程输出上
     * 修复后日志确认正常启动："妙算仪表盘已启动：http://127.0.0.1:8686"
 
+## 2026-10-03
+
+- **神机 DB D1 导出顶替 dukascopy**（dukascopy D1/W1 因 429 限流卡住，D1 改用神机库）：
+  - 神机库 `ohlcv` 表 schema `(timeframe, timestamp, open, high, low, volume)` **无品种列**，存的全是 XAUUSD，timestamp 为**秒级 epoch (UTC)**。
+  - D1 覆盖 **2020-07-16 → 2026-10-02，1,605 根**（比 dukascopy 残缺版 1,602 根更全更新）；W1 覆盖 2011-01-23 → 2026-09-27，813 根。
+  - 已导出 `ohlcv WHERE timeframe='D1'` 到 `D:\K线数据\XAUUSD_D1.parquet`（列 `time/open/high/low/close/volume/tick_volume`，tick_volume 置 0），原 dukascopy 1602 根版备份为 `XAUUSD_D1_dukascopy1602.parquet`。
+  - 复核 PASS：time 唯一✓、升序✓、n=1605。回测 D1 用神机库即可，不依赖 dukascopy；2020 之前仍无。
+
 ## 2026-09-26
 
 - **统一配置系统落地**（完成用户需求：可配置设置模块、动态配置持久化、解决硬编码端口、热重载）：

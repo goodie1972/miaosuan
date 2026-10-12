@@ -66,6 +66,9 @@ datasource = [
     "tqsdk",
     "websocket-client>=1.9",
 ]
+# MT5 直连（路线图 R1 数据第三通道 + R4 实盘执行）：官方包仅 Windows 且
+# 需本机 MT5 终端；fetcher 惰性导入，缺失时 is_available() 优雅降级
+live = ["MetaTrader5>=5.0.45 ; sys_platform == 'win32'"]
 # 开发工具
 dev = [
     "pytest>=8.0",

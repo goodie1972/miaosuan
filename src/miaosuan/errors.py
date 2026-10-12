@@ -149,3 +149,49 @@ class TargetPortError(MiaoSuanError):
     """目标平台适配层（妙算）双向编译错误。"""
 
     code = "E-TARGETPORT"
+
+
+# ── 运行时（runtime/，路线图 2.0）──────────────────────────────────────────
+
+
+class RuntimeNotDeployableError(MiaoSuanError):
+    """未过部署门禁的策略试图装入 runtime（``gate_verdict != DEPLOYABLE``）。
+
+    门禁是 runtime 启动的**前置硬门**：``RESEARCH_ONLY`` / ``BLOCKED`` / 甚至
+    ``UNKNOWN`` 一律拒绝启动——实盘通道只吃已证明可部署的策略。
+    """
+
+    code = "E-RUNTIME-NOT-DEPLOYABLE"
+
+
+class RuntimeSignalError(MiaoSuanError):
+    """runtime 信号引擎错误（spec 形态不满足运行时要求等）。"""
+
+    code = "E-RUNTIME-SIGNAL"
+
+
+class RuntimeStateLockError(MiaoSuanError):
+    """runtime 状态单实例锁冲突（同一账本已有活实例持有锁）。"""
+
+    code = "E-RUNTIME-STATE-LOCK"
+
+
+class BrokerReconcileError(MiaoSuanError):
+    """对账失败：本地账本与撮合/券商回执逐笔比对存在差异。
+
+    R3/R4 的验收红线：开实单前对账必须零差异；差异出现即平仓告警。
+    """
+
+    code = "E-BROKER-RECONCILE"
+
+
+class BrokerKillswitchError(MiaoSuanError):
+    """kill 开关触发（STOP 文件存在 / 熔断路径）——平仓停机。"""
+
+    code = "E-BROKER-KILLSWITCH"
+
+
+class BrokerUnavailableError(MiaoSuanError):
+    """券商通道不可用（MT5 终端未连/缺依赖/下单被拒等，R4）。"""
+
+    code = "E-BROKER-UNAVAILABLE"

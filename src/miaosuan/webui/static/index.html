@@ -816,7 +816,6 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
       <section class="card">
         <h2 id="cfgSectionPaths">路径设置</h2>
         <div class="row">
-          <div style="flex:2"><label id="cfgLabelDataCache">数据缓存目录</label><div style="display:flex;gap:6px"><input id="cfgPathsDataCache" type="text" placeholder="data/cache" style="flex:1"><button class="btn ghost" type="button" onclick="pickDir('cfgPathsDataCache')" style="flex:0;min-width:72px">浏览</button></div></div>
           <div style="flex:2"><label id="cfgLabelArtifacts">Spec目录</label><div style="display:flex;gap:6px"><input id="cfgPathsArtifacts" type="text" placeholder="artifacts" style="flex:1"><button class="btn ghost" type="button" onclick="pickDir('cfgPathsArtifacts')" style="flex:0;min-width:72px">浏览</button></div></div>
         </div>
         <div class="row" style="margin-top:8px">
@@ -825,7 +824,7 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
         </div>
         <div class="row" style="margin-top:8px">
           <div style="flex:2"><label id="cfgLabelTmp">临时目录</label><div style="display:flex;gap:6px"><input id="cfgPathsTmp" type="text" placeholder="tmp" style="flex:1"><button class="btn ghost" type="button" onclick="pickDir('cfgPathsTmp')" style="flex:0;min-width:72px">浏览</button></div></div>
-          <div style="flex:2"><label id="cfgLabelKline">K线数据根目录</label><div style="display:flex;gap:6px"><input id="cfgPathsKline" type="text" placeholder="D:\K线数据" style="flex:1"><button class="btn ghost" type="button" onclick="pickDir('cfgPathsKline')" style="flex:0;min-width:72px">浏览</button></div></div>
+          <div style="flex:2"><label id="cfgLabelKline">K线数据目录（行情读取 · 数据获取落盘 · 数据选择扫描）</label><div style="display:flex;gap:6px"><input id="cfgPathsKline" type="text" placeholder="data/cache" style="flex:1"><button class="btn ghost" type="button" onclick="pickDir('cfgPathsKline')" style="flex:0;min-width:72px">浏览</button></div></div>
         </div>
         <div class="row" style="margin-top:8px">
           <div style="flex:2"><label id="cfgLabelShenjiDB">神机数据库路径</label><div style="display:flex;gap:6px"><input id="cfgPathsShenjiDB" type="text" placeholder="(留空自动探测)" style="flex:1"><button class="btn ghost" type="button" onclick="pickDir('cfgPathsShenjiDB')" style="flex:0;min-width:72px">浏览</button></div></div>
@@ -841,7 +840,6 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
         </div>
         <div class="row" style="margin-top:8px">
           <div style="flex:2"><label id="cfgLabelDataAPIUrl">HTTP数据源地址</label><input id="cfgDataAPIUrl" type="text" placeholder=""></div>
-          <div style="flex:2"><label id="cfgLabelDataCacheDir">数据缓存目录(留空用paths)</label><div style="display:flex;gap:6px"><input id="cfgDataCacheDir" type="text" placeholder="" style="flex:1"><button class="btn ghost" type="button" onclick="pickDir('cfgDataCacheDir')" style="flex:0;min-width:72px">浏览</button></div></div>
         </div>
         <div class="row" style="margin-top:8px">
           <div style="flex:2"><label id="cfgLabelDukascopyUser">Dukascopy用户名</label><input id="cfgDataDukascopyUser" type="text" placeholder=""></div>
@@ -1105,7 +1103,6 @@ var TRANSLATIONS = {
     cfgDataTimeout: "网络超时(秒)",
     cfgDataSource: "默认数据源",
     cfgDataAPIUrl: "HTTP数据源地址",
-    cfgDataCacheDir: "数据缓存目录(留空用paths)",
     cfgDukascopyUser: "Dukascopy用户名",
     cfgDukascopyPass: "Dukascopy密码",
     cfgLogLevel: "日志级别",
@@ -1326,7 +1323,6 @@ var TRANSLATIONS = {
     cfgDataTimeout: "Network Timeout (s)",
     cfgDataSource: "Default Source",
     cfgDataAPIUrl: "HTTP Source URL",
-    cfgDataCacheDir: "Data Cache Dir (empty=paths)",
     cfgDukascopyUser: "Dukascopy User",
     cfgDukascopyPass: "Dukascopy Pass",
     cfgLogLevel: "Log Level",
@@ -3148,9 +3144,9 @@ function bind() {
 }
 
 /* ── 06 设置页：加载/保存配置 ───────────────────────────────────────── */
-function loadConfig() {
+function loadConfig(keepStatus) {
   var statusEl = $("cfgStatus");
-  if (statusEl) { statusEl.textContent = "加载中…"; statusEl.className = "tiny muted"; }
+  if (!keepStatus && statusEl) { statusEl.textContent = "加载中…"; statusEl.className = "tiny muted"; }
   jfetch("/api/config").then(function (cfg) {
     // WebUI
     setVal("cfgWebUIHost", cfg.webui?.host || "127.0.0.1");
@@ -3168,7 +3164,6 @@ function loadConfig() {
     setVal("cfgMT4PollWait", cfg.mt4?.poll_wait || 1000);
     setVal("cfgMT4DrainWait", cfg.mt4?.drain_wait || 100);
     // Paths
-    setVal("cfgPathsDataCache", cfg.paths?.data_cache || "data/cache");
     setVal("cfgPathsArtifacts", cfg.paths?.artifacts || "artifacts");
     setVal("cfgPathsStrategies", cfg.paths?.strategies || "strategies");
     setVal("cfgPathsResults", cfg.paths?.results || "data/results");
@@ -3179,7 +3174,6 @@ function loadConfig() {
     setVal("cfgDataTimeout", cfg.data?.timeout || 30);
     setVal("cfgDataSource", cfg.data?.source || "");
     setVal("cfgDataAPIUrl", cfg.data?.api_url || "");
-    setVal("cfgDataCacheDir", cfg.data?.cache_dir || "");
     setVal("cfgDataDukascopyUser", cfg.data?.dukascopy_user || "");
     setVal("cfgDataDukascopyPass", cfg.data?.dukascopy_password || "");
     // Logging
@@ -3194,7 +3188,7 @@ function loadConfig() {
     setVal("cfgFeatureTune", String(cfg.features?.enable_tune || true));
     // Config file path
     var manager = cfg._manager || {};
-    if (statusEl) {
+    if (statusEl && !keepStatus) {
       statusEl.textContent = "已加载（来自 settings.yaml + 环境变量）";
       statusEl.className = "tiny muted";
     }
@@ -3247,7 +3241,6 @@ function saveConfig() {
       drain_wait: getNum("cfgMT4DrainWait")
     },
     paths: {
-      data_cache: getVal("cfgPathsDataCache"),
       artifacts: getVal("cfgPathsArtifacts"),
       strategies: getVal("cfgPathsStrategies"),
       results: getVal("cfgPathsResults"),
@@ -3259,7 +3252,6 @@ function saveConfig() {
       timeout: getNum("cfgDataTimeout"),
       source: getVal("cfgDataSource"),
       api_url: getVal("cfgDataAPIUrl"),
-      cache_dir: getVal("cfgDataCacheDir"),
       dukascopy_user: getVal("cfgDataDukascopyUser"),
       dukascopy_password: getVal("cfgDataDukascopyPass")
     },
@@ -3280,8 +3272,9 @@ function saveConfig() {
   post("/api/config", payload).then(function (res) {
     if (btn) { btn.disabled = false; btn.textContent = t("btnSaveConfig"); }
     if (statusEl) { statusEl.textContent = t("cfgSaved"); statusEl.className = "tiny ok"; }
-    // 重新加载显示最新值（含环境变量覆盖后的实际生效值）
-    loadConfig();
+    // 重新加载显示最新值（含环境变量覆盖后的实际生效值）；
+    // keepStatus=true：不覆盖上面的「已保存并热重载」成功提示
+    loadConfig(true);
   }).catch(function (e) {
     if (btn) { btn.disabled = false; btn.textContent = t("btnSaveConfig"); }
     if (statusEl) { statusEl.textContent = t("cfgError") + e.message; statusEl.className = "tiny down"; }
