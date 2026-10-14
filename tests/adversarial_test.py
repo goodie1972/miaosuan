@@ -127,8 +127,13 @@ class _FakeMT5Module(types.ModuleType):
         self.deals: list[_FakeDeal] = []
         self._next_order = 500_000
         self._next_deal = 900_000
+        #: 模拟初始化失败（登录失败 / 终端未运行）；测试按需置 True。
+        self.fail_initialize = False
 
     def initialize(self, **kwargs: Any) -> bool:
+        if self.fail_initialize:
+            self.connected = False
+            return False
         self.connected = True
         self.init_kwargs = dict(kwargs)
         return True
@@ -182,17 +187,21 @@ def fake_mt5(monkeypatch: pytest.MonkeyPatch) -> _FakeMT5Module:
 
 
 # ── 1. 错误的凭证（登录失败） ────────────────────────────────────────
-def test_mt5_broker_connect_fails_with_bad_credentials() -> None:
+def test_mt5_broker_connect_fails_with_bad_credentials(
+    fake_mt5: _FakeMT5Module,
+) -> None:
+    fake_mt5.fail_initialize = True  # 模拟登录失败（终端拒绝凭证）
     broker = MT5Broker(login=999999, password="wrong", server="bad")
     with pytest.raises(BrokerUnavailableError):
         broker.connect()
 
 
 # ── 2. MT5 终端未运行时的可用性检测 ────────────────────────────────
-def test_mt5_broker_is_available_false_when_not_running() -> None:
+def test_mt5_broker_is_available_false_when_not_running(
+    fake_mt5: _FakeMT5Module,
+) -> None:
+    fake_mt5.fail_initialize = True  # 模拟终端未运行
     broker = MT5Broker()
-    # 未调用 connect() 时 is_available 只检查依赖（这里假装置已装），
-    # 但真实终端未运行时 connect() 会失败；这里直接测 connect 失败
     with pytest.raises(BrokerUnavailableError):
         broker.connect()
 
@@ -225,13 +234,23 @@ def test_paper_start_refuses_empty_watchlist() -> None:
 def test_live_start_refuses_empty_watchlist() -> None:
     from typer.testing import CliRunner
     runner = CliRunner()
+    # 实盘启动链：真钱确认是**最外层**硬闸（安全链 R4.4），
+    # 未确认先报真钱确认，而不是空 watchlist。
     result = runner.invoke(app, ["live", "start"])
+    assert result.exit_code != 0
+    assert "i-understand-real-money" in result.output
+    # 确认真钱后，空 watchlist 才被拦截。
+    result = runner.invoke(
+        app, ["live", "start", "--i-understand-real-money"]
+    )
     assert result.exit_code != 0
     assert "watchlist 为空" in result.output
 
 
 # ── 5. 对账故意不一致（人为破坏账本）→ 应抛 E-BROKER-RECONCILE ─────
-def test_live_runner_raises_on_account_mismatch() -> None:
+def test_live_runner_raises_on_account_mismatch(
+    fake_mt5: _FakeMT5Module, tmp_path: Path,
+) -> None:
     from miaosuan.runtime.live import LiveRunner, LiveConfig
     from miaosuan.runtime.paper import PaperConfig
     from miaosuan.runtime.state import Ledger
@@ -251,15 +270,15 @@ def test_live_runner_raises_on_account_mismatch() -> None:
     engine._last_position = 0.0  # noqa: SLF001
     item = WatchItem(symbol="XAUUSD", timeframe="M30", engine=engine)
 
-    ledger = Ledger(state_dir() / "ledger_test.json")
+    ledger = Ledger(tmp_path / "ledger_test.json")
     broker = MT5Broker()  # 假终端
     broker.connect()
 
-    # 先挂单买入 0.1 lots
-    intent_id = broker.submit("XAUUSD", "buy", 0.1, magic=7, comment="signal")
-    # 人为破坏：不记录此 fill，但标记 intent 为 filled（制造不一致）
+    # 人为制造不一致：账本登记意图并标记 filled，但**不登记成交回执**
+    # （MT5Broker.submit 只发单不写账本；账本登记是 PaperBroker 的职责）。
+    intent_id = ledger.append_intent("XAUUSD", "buy", 0.1, magic=7, comment="signal")
     ledger.mark_intent_status(intent_id, "filled")
-    # 现在对账：应检测到意图为 filled 但无 fill，抛 BrokerReconcileError
+    # 对账：应检测到意图为 filled 但无成交回执，抛 BrokerReconcileError
     with pytest.raises(MiaoSuanError) as excinfo:
         reconcile(ledger, broker)
     assert "对账失败" in str(excinfo.value)
@@ -267,10 +286,12 @@ def test_live_runner_raises_on_account_mismatch() -> None:
 
 
 # ── 6. 熔断三阈值触发 → 应创建 STOP 并抛 BrokerKillswitchError ───
-def test_live_runner_trip_flow_creates_stop_and_stops() -> None:
+def test_live_runner_trip_flow_creates_stop_and_stops(
+    fake_mt5: _FakeMT5Module, tmp_path: Path,
+) -> None:
     from miaosuan.runtime.live import LiveRunner, LiveConfig
     from miaosuan.runtime.paper import PaperConfig
-    from miaosuan.runtime.broker_breaker import BreakerConfig
+    from miaosuan.runtime.breaker import BreakerConfig
     from miaosuan.runtime.state import kill_file_exists, kill_file_path
     from miaosuan.runtime.brokers.mt5 import MT5Broker
     from miaosuan.runtime.signal_engine import SignalEngine
@@ -299,6 +320,7 @@ def test_live_runner_trip_flow_creates_stop_and_stops() -> None:
             breaker=BreakerConfig(max_consecutive_rejections=2),  # 连续 2 次拒单触发
         ),
         broker=broker,
+        state_root=tmp_path,  # 隔离状态目录：STOP 落临时目录，不污染真实 artifacts
     )
     runner.start()
 
@@ -311,13 +333,13 @@ def test_live_runner_trip_flow_creates_stop_and_stops() -> None:
     with pytest.raises(BrokerKillswitchError):
         runner._trip_flow()
 
-    assert kill_file_exists(), "熔断必须创建 STOP 文件"
-    assert kill_file_path().read_text(encoding="utf-8").startswith("breaker:")
+    assert kill_file_exists(tmp_path), "熔断必须创建 STOP 文件"
+    assert kill_file_path(tmp_path).read_text(encoding="utf-8").startswith("breaker:")
     broker.close()
 
 
 # ── 7. 持仓为空时的 flatten_all（不应崩溃） ──────────────────────
-def test_mt5_broker_flatten_all_when_no_positions() -> None:
+def test_mt5_broker_flatten_all_when_no_positions(fake_mt5: _FakeMT5Module) -> None:
     broker = MT5Broker()
     broker.connect()
     # 不持任何仓，直接调用 flatten_all 应不崩溃
@@ -365,7 +387,9 @@ def test_invalid_timeframe_raises_in_spec_and_engine() -> None:
 
 
 # ── 10. MT5 端口在无终端时的 fills/positions（应抛 BrokerUnavailableError） ───
-def test_mt5_broker_positions_and_fails_when_disconnected() -> None:
+def test_mt5_broker_positions_and_fails_when_disconnected(
+    fake_mt5: _FakeMT5Module,
+) -> None:
     broker = MT5Broker()
     # 未连接
     with pytest.raises(BrokerUnavailableError, match="未连接"):

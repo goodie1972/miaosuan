@@ -30,6 +30,9 @@ data:
 logging:
   level: DEBUG
   json_lines: true
+notifiers:
+  feishu:
+    webhook_url: ''    # 飞书群机器人 Webhook；留空 = 未启用（仅日志兜底）
 features:
   enable_webui: true
   enable_mt4: true

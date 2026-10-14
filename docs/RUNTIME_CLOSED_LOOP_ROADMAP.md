@@ -57,7 +57,7 @@
 | **G2** | 任一 StrategySpec 在收盘 bar 上实时出信号，且与回测引擎**逐 bar 一致** | 对拍测试：同一份历史 bar，回测仓位序列 == 实时信号仓位序列（逐元素相等） |
 | **G3** | 纸面模式连续运行 ≥ 2 周：账本与成交回执对账差异为 0 | 运行报告 + 对账断言（`E-BROKER-RECONCILE` 不触发） |
 | **G4** | MT5 实单链路可用：下单、平仓、持仓同步、对账、紧急熔断、kill 开关；**未过 `DEPLOYABLE` 门禁的策略拒绝启动** | 手工验收清单 + 门禁单元测试 |
-| **G5** | 观测闭环：webui 实时页支持本地 runtime 后端；飞书 Webhook 在信号方向转折时推送 | e2e 冒烟脚本 |
+| **G5** | 观测闭环：webui 实时页支持本地 runtime 后端；飞书 Webhook 在信号方向转折时推送 | ✅ e2e 冒烟脚本（`scripts/test_e2e_realtime.py`）+ Playwright 实时页测试 + 通知器单测全绿 |
 | **G6** | 架构纯度：`core/` **无行为变更**（diff 为空；注释级改动须在此登记豁免） | CI 检查：`grep -r "MetaTrader5" src/miaosuan/core/` 为空 + diff 审查 |
 | **G7** | S 系列长任务鲁棒性：检查点续挖无损、分数下限防覆盖、搜索动力学变更后基线受控 | 故障注入测试 + 下限保护单测 + 基线重跑清单 |
 
@@ -166,13 +166,13 @@ CLI / webui ──► pipeline ──► {mine(GA) | tune(Optuna)} ──► cor
 
 **验收**：G4；R4 合并前 R3 的对账必须在真实行情下连续一周零差异。
 
-### R5 — 观测与通知（2~3 天）
+### R5 — 观测与通知（2~3 天） ✅ 2026-10-14 完成
 
-| 任务 | 内容 |
-|---|---|
-| R5.1 | webui 实时页扩展：数据后端从"只读神机"扩为 `local | shenji` 双通道；本地通道展示 watchlist 信号卡（方向/把握/最近调仓） |
-| R5.2 | `notifiers/feishu.py`：方向转折推送（脱敏：只发文字信号，不发持仓金额）；`notifiers/log.py` 兜底 |
-| R5.3 | e2e 冒烟脚本进 `scripts/`：起服务 → watch → 收盘信号 → 通知 mock → 断言 |
+| 任务 | 内容 | 状态 |
+|---|---|---|
+| R5.1 | webui 实时页扩展：数据后端从"只读神机"扩为 `local \| shenji` 双通道；本地通道展示 watchlist 信号卡（方向/把握/最近调仓） | ✅ `runtime/observer.py`（本地观测：watchlist+账本+信号+K线+kill）+ 四个 realtime 端点 local 通道接真实数据（**替代示值桩**）；前端实时页加通道切换下拉 |
+| R5.2 | `notifiers/feishu.py`：方向转折推送（脱敏：只发文字信号，不发持仓金额）；`notifiers/log.py` 兜底 | ✅ `FeishuNotifier`（Webhook POST，失败静默不抛）+ `MultiNotifier` + `build_notifier()`（**只认配置** `notifiers.feishu.webhook_url`，空串=仅日志）；CLI watch/paper/live 三处装配；配置页加飞书 Webhook 输入 |
+| R5.3 | e2e 冒烟脚本进 `scripts/`：起服务 → watch → 收盘信号 → 通知 mock → 断言 | ✅ `scripts/test_e2e_realtime.py` 重写（临时 settings.yaml 只认配置隔离；断言本地通道真实数据 + 通知装配） |
 
 **验收**：G5；页面与通知在 R2 的信号模式上即可先行联调。
 

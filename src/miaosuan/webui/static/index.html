@@ -573,6 +573,13 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
         <b>绝不下单、绝不平仓、绝不启停引擎</b>；没有写操作。后端地址
         <span class="mono" id="rtBackend">—</span>。
         <label class="tiny muted" style="margin-left:12px; cursor:pointer">
+          数据通道
+          <select id="rtSource" style="margin-left:4px">
+            <option value="shenji">神机（只读代理）</option>
+            <option value="local">本地 runtime</option>
+          </select>
+        </label>
+        <label class="tiny muted" style="margin-left:12px; cursor:pointer">
           <input type="checkbox" id="rtPoll" checked> 每 2 秒自动刷新
         </label>
       </div>
@@ -847,6 +854,14 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
         </div>
       </section>
 
+      <!-- 通知（R5.2：飞书群机器人 Webhook；留空 = 仅日志兜底） -->
+      <section class="card">
+        <h2 id="cfgSectionNotifiers">通知</h2>
+        <div class="row">
+          <div style="flex:2"><label id="cfgLabelFeishuWebhook">飞书 Webhook 地址（留空 = 仅日志）</label><input id="cfgFeishuWebhook" type="text" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..."></div>
+        </div>
+      </section>
+
       <!-- 日志 -->
       <section class="card">
         <h2 id="cfgSectionLogging">日志</h2>
@@ -1088,6 +1103,8 @@ var TRANSLATIONS = {
     cfgSectionData: "数据源",
     cfgSectionLogging: "日志",
     cfgSectionFeatures: "功能开关",
+    cfgSectionNotifiers: "通知",
+    cfgLabelFeishuWebhook: "飞书 Webhook 地址（留空 = 仅日志）",
     cfgPort: "端口",
     cfgHost: "主机",
     cfgReload: "热重载(开发)",
@@ -1308,6 +1325,8 @@ var TRANSLATIONS = {
     cfgSectionData: "Data Sources",
     cfgSectionLogging: "Logging",
     cfgSectionFeatures: "Feature Flags",
+    cfgSectionNotifiers: "Notifiers",
+    cfgLabelFeishuWebhook: "Feishu Webhook URL (empty = log only)",
     cfgPort: "Port",
     cfgHost: "Host",
     cfgReload: "Hot Reload (dev)",
@@ -2449,11 +2468,13 @@ function renderRtSignals(env) {
 function rtRefresh() {
   if (RT.busy) { return Promise.resolve(); }
   RT.busy = true;
+  var srcEl = $("rtSource");
+  var src = (srcEl && srcEl.value) ? srcEl.value : "shenji";
   return Promise.all([
-    rtGet("/api/realtime/status"),
-    rtGet("/api/realtime/price"),
-    rtGet("/api/realtime/candles", { symbol: "XAUUSD", timeframe: "H1", count: 120 }),
-    rtGet("/api/realtime/signals")
+    rtGet("/api/realtime/status", { source: src }),
+    rtGet("/api/realtime/price", { source: src }),
+    rtGet("/api/realtime/candles", { symbol: "XAUUSD", timeframe: "H1", count: 120, source: src }),
+    rtGet("/api/realtime/signals", { source: src })
   ]).then(function (res) {
     RT.busy = false;
     var st = res[0] || {}, pr = res[1] || {}, cd = res[2] || {}, sg = res[3] || {};
@@ -3179,6 +3200,8 @@ function loadConfig(keepStatus) {
     // Logging
     setVal("cfgLoggingLevel", cfg.logging?.level || "INFO");
     setVal("cfgLoggingJSON", String(cfg.logging?.json_lines || true));
+    // Notifiers (R5.2: 飞书 Webhook；只读配置，无默认值)
+    setVal("cfgFeishuWebhook", cfg.notifiers?.feishu?.webhook_url || "");
     // Features
     setVal("cfgFeatureWebUI", String(cfg.features?.enable_webui || true));
     setVal("cfgFeatureMT4", String(cfg.features?.enable_mt4 || true));
@@ -3266,6 +3289,11 @@ function saveConfig() {
       enable_spec_management: getVal("cfgFeatureSpec") === "true",
       enable_backtest: getVal("cfgFeatureBacktest") === "true",
       enable_tune: getVal("cfgFeatureTune") === "true"
+    },
+    notifiers: {
+      feishu: {
+        webhook_url: getVal("cfgFeishuWebhook")
+      }
     }
   };
 

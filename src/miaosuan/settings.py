@@ -109,6 +109,12 @@ DEFAULT_SETTINGS = {
         "enable_backtest": True,
         "enable_tune": True,
     },
+    # 运行时通知通道（R5.2）：webhook_url 留空 = 未启用（只认配置，无环境变量回退）
+    "notifiers": {
+        "feishu": {
+            "webhook_url": "",
+        },
+    },
 }
 
 
@@ -329,6 +335,22 @@ class FeatureFlags(BaseModel):
     enable_tune: bool = Field(default=True)
 
 
+class FeishuSettings(BaseModel):
+    """飞书群机器人 Webhook 通知（R5.2）。
+
+    **只认配置**：``webhook_url`` 仅来自 settings.yaml → ``notifiers.feishu.webhook_url``，
+    无默认地址、无环境变量回退；空串 = 未启用（仅走 LogNotifier 兜底）。
+    """
+
+    webhook_url: str = Field(default="")
+
+
+class NotifierSettings(BaseModel):
+    """运行时通知通道配置（R5.2）：飞书为第一个实现，后续通道在此平级追加。"""
+
+    feishu: FeishuSettings = Field(default_factory=FeishuSettings)
+
+
 class Settings(BaseModel):
     """顶级配置模型"""
     webui: WebUISettings = Field(default_factory=WebUISettings)
@@ -338,6 +360,7 @@ class Settings(BaseModel):
     data: DataSettings = Field(default_factory=DataSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     features: FeatureFlags = Field(default_factory=FeatureFlags)
+    notifiers: NotifierSettings = Field(default_factory=NotifierSettings)
 
 class SettingsManager:
     """配置管理器单例"""

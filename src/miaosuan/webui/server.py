@@ -319,6 +319,31 @@ def _outcome_payload(outcome: RealtimeOutcome, base_url: str) -> dict[str, Any]:
     }
 
 
+def _local_payload(func: Any, /, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    """本地 runtime 观测 → 与神机通道同形状的信封（R5.1）。
+
+    语义与 :func:`safe_call` 对齐：成功 ``{ok: True, reason: "ok"}``；
+    失败折叠成 ``{ok: False, reason, error}``，**绝不 500、绝不伪造数据**
+    （``backend`` 恒为 ``"local"``，前端据此区分数据通道）。
+    """
+    from ..errors import MiaoSuanError
+    from ..runtime import observer
+
+    try:
+        data = func(*args, **kwargs)
+    except MiaoSuanError as exc:
+        return _outcome_payload(
+            RealtimeOutcome(ok=False, data=None, reason=exc.code or "local_error", error=str(exc)),
+            "local",
+        )
+    except (ValueError, KeyError, TypeError) as exc:
+        return _outcome_payload(
+            RealtimeOutcome(ok=False, data=None, reason="invalid_argument", error=str(exc)),
+            "local",
+        )
+    return _outcome_payload(RealtimeOutcome(ok=True, data=data, reason="ok", error=""), "local")
+
+
 # ── 挖掘任务（单飞 + 增量日志）───────────────────────────────────────────────
 
 
@@ -887,67 +912,25 @@ def create_app() -> FastAPI:
         否则使用神机只读代理。
         """
         if source == "local":
-            # 尝试从 watchlist 中读取第一个条目，构造本地状态
-            from ..runtime.watchlist import WatchlistStore
-            from ..runtime.signal_engine import SignalEngine
-            from ..ir.schema import Evidence, FactorPayload, StrategySpec
-            from ..market.profiles import get_profile
-            store = WatchlistStore()
-            entries = store.load()
-            if entries:
-                entry = entries[0]
-                spec_path = Path(entry.spec_path)
-                if spec_path.is_file():
-                    try:
-                        spec = StrategySpec.from_dict(json.loads(spec_path.read_text(encoding="utf-8")))
-                        if spec.evidence.gate_verdict == "DEPLOYABLE":
-                            # 构造一个简易的状态响应（示值）
-                            return {
-                                "status": "local",
-                                "engine_status": {
-                                    "status": "idle",
-                                    "message": "本地运行时可用（示值）"
-                                },
-                                "base_url": "local"
-                            }
-                    except Exception:
-                        pass
-            # 若本地不可用，则回退到神机
+            # 本地通道：watchlist 条目 + 纸面账本持仓 + kill 文件（真实只读观测）。
+            from ..runtime.observer import local_engine_status
+
+            return _local_payload(local_engine_status)
         client = _realtime_client()
         return _outcome_payload(safe_call(client.engine_status), client.base_url)
 
     @app.get("/api/realtime/price")
-    def realtime_price(source: str = Query("shenji")) -> dict[str, Any]:
+    def realtime_price(symbol: str = "XAUUSD", source: str = Query("shenji")) -> dict[str, Any]:
         """当前报价 bid/ask/spread（只读）。
         如果 source == "local" 且本地 runtime 可用，则尝试返回本地价格；
         否则使用神机只读代理。
         """
         if source == "local":
-            # 尝试从 watchlist 中读取第一个条目，构造本地价格
-            from ..runtime.watchlist import WatchlistStore
-            from ..ir.schema import Evidence, FactorPayload, StrategySpec
-            from ..market.profiles import get_profile
-            store = WatchlistStore()
-            entries = store.load()
-            if entries:
-                entry = entries[0]
-                spec_path = Path(entry.spec_path)
-                if spec_path.is_file():
-                    try:
-                        spec = StrategySpec.from_dict(json.loads(spec_path.read_text(encoding="utf-8")))
-                        if spec.evidence.gate_verdict == "DEPLOYABLE":
-                            # 构造一个简易的价格响应（示值）
-                            return {
-                                "price": {
-                                    "bid": 0.0,
-                                    "ask": 0.0,
-                                    "spread": 0.0
-                                },
-                                "base_url": "local"
-                            }
-                    except Exception:
-                        pass
-            # 若本地不可用，则回退到神机
+            # 本地通道：缓存最后一根收盘价（显式标注 source=cached_last_close，
+            # 绝不伪造 0 报价；无本地数据返回 ok=False 降级信封）。
+            from ..runtime.observer import local_market_price
+
+            return _local_payload(local_market_price, symbol)
         client = _realtime_client()
         return _outcome_payload(safe_call(client.market_price), client.base_url)
 
@@ -961,38 +944,11 @@ def create_app() -> FastAPI:
         否则使用神机只读代理。
         """
         if source == "local":
-            # 尝试从 watchlist 中读取第一个条目，构造本地 K 线
-            from ..runtime.watchlist import WatchlistStore
-            from ..ir.schema import Evidence, FactorPayload, StrategySpec
-            from ..market.profiles import get_profile
-            store = WatchlistStore()
-            entries = store.load()
-            if entries:
-                entry = entries[0]
-                spec_path = Path(entry.spec_path)
-                if spec_path.is_file():
-                    try:
-                        spec = StrategySpec.from_dict(json.loads(spec_path.read_text(encoding="utf-8")))
-                        if spec.evidence.gate_verdict == "DEPLOYABLE":
-                            # 构造一个简易的 K 线响应（示值）
-                            return {
-                                "symbol": symbol,
-                                "timeframe": timeframe,
-                                "candles": [
-                                    {
-                                        "time": int(time.time()) - 86400,
-                                        "open": 0.0,
-                                        "high": 0.0,
-                                        "low": 0.0,
-                                        "close": 0.0,
-                                        "volume": 0.0
-                                    }
-                                ],
-                                "base_url": "local"
-                            }
-                    except Exception:
-                        pass
-            # 若本地不可用，则回退到神机
+            # 本地通道：从本地缓存 parquet/csv 读真实 K 线（无缓存 → ok=False）。
+            from ..runtime.observer import local_market_candles
+
+            bounded = max(1, min(int(count), 2000))
+            return _local_payload(local_market_candles, symbol, timeframe, bounded)
         client = _realtime_client()
         return _outcome_payload(
             safe_call(client.market_candles, symbol, timeframe, count), client.base_url
@@ -1005,33 +961,10 @@ def create_app() -> FastAPI:
         否则使用神机只读代理。
         """
         if source == "local":
-            # 尝试从 watchlist 中读取第一个条目，构造本地信号
-            from ..runtime.watchlist import WatchlistStore
-            from ..ir.schema import Evidence, FactorPayload, StrategySpec
-            from ..market.profiles import get_profile
-            store = WatchlistStore()
-            entries = store.load()
-            if entries:
-                entry = entries[0]
-                spec_path = Path(entry.spec_path)
-                if spec_path.is_file():
-                    try:
-                        spec = StrategySpec.from_dict(json.loads(spec_path.read_text(encoding="utf-8")))
-                        if spec.evidence.gate_verdict == "DEPLOYABLE":
-                            # 构造一个简易的信号响应（示值）
-                            return {
-                                "signals": [
-                                    {
-                                        "time": int(time.time()),
-                                        "signal": 0.0,
-                                        "strength": 0.0
-                                    }
-                                ],
-                                "base_url": "local"
-                            }
-                    except Exception:
-                        pass
-            # 若本地不可用，则回退到神机
+            # 本地通道：逐 watch 条目回放本地缓存 K 线 → 最新仓位/方向。
+            from ..runtime.observer import local_signals
+
+            return _local_payload(local_signals)
         client = _realtime_client()
         return _outcome_payload(safe_call(client.signals), client.base_url)
 

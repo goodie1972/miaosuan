@@ -1131,7 +1131,7 @@ def watch_run(
     断线重连与补拉由数据端口增量语义承担；启动时回填历史建立水位
     （历史不出信号），此后每根**新**收盘 bar 产出一次信号。
     """
-    from .runtime.notifiers.log import LogNotifier
+    from .runtime.notifiers import build_notifier
     from .runtime.scheduler import WatchItem, run_watchlist
     from .runtime.signal_engine import SignalEngine, load_spec_checked
     from .runtime.sources.mt5 import MT5DataPort
@@ -1149,7 +1149,7 @@ def watch_run(
         spec = load_spec_checked(Path(e.spec_path))  # 启动安全链逐条复验
         items.append(WatchItem(symbol=e.symbol, timeframe=e.timeframe, engine=SignalEngine(spec)))
     _echo(f"信号模式启动：{len(items)} 个品种（不下单）poll={poll_seconds}s")
-    notifier = LogNotifier()
+    notifier = build_notifier()  # 只认配置：feishu.webhook_url 非空才追加飞书通道
     try:
         run_watchlist(
             items,
@@ -1191,6 +1191,7 @@ def paper_start(
 
 def _run_paper(*, risk_usd: float, poll_seconds: float, once: bool, stop_after: float) -> None:
     from .errors import BrokerKillswitchError, MiaoSuanError
+    from .runtime.notifiers import build_notifier
     from .runtime.paper import PaperConfig, PaperRunner
     from .runtime.scheduler import CloseScheduler, WatchItem
     from .runtime.signal_engine import SignalEngine, load_spec_checked
@@ -1220,6 +1221,7 @@ def _run_paper(*, risk_usd: float, poll_seconds: float, once: bool, stop_after: 
             port,
             profile_name=entry.profile,
             config=PaperConfig(risk_usd_per_bar=risk_usd, poll_seconds=poll_seconds),
+            notifier=build_notifier(),  # 只认配置：feishu.webhook_url 非空才追加飞书通道
         )
         runner.start()
     except BrokerKillswitchError as exc:
@@ -1348,6 +1350,7 @@ def _run_live(
     from .runtime.breaker import BreakerConfig
     from .runtime.brokers.mt5 import MT5Broker
     from .runtime.live import LiveConfig, LiveRunner
+    from .runtime.notifiers import build_notifier
     from .runtime.scheduler import CloseScheduler, WatchItem
     from .runtime.signal_engine import SignalEngine, load_spec_checked
     from .runtime.sources.mt5 import MT5DataPort
@@ -1382,6 +1385,7 @@ def _run_live(
                 breaker=BreakerConfig(max_daily_loss_usd=max_daily_loss),
             ),
             broker=broker,
+            notifier=build_notifier(),  # 只认配置：feishu.webhook_url 非空才追加飞书通道
         )
         runner.start()
     except BrokerKillswitchError as exc:
