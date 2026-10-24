@@ -45,7 +45,8 @@ output.txt
 /*.js
 
 # ── 数据（大数据文件不入库，仅保留 tests/fixtures 下的小样本）────────────
-*.parquet
+# 注意：data/cache/ 下的正式 parquet 文件已入库（约 220MB）
+# *.parquet
 *.pq
 *.feather
 *.h5
