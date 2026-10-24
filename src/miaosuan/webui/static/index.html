@@ -387,7 +387,13 @@ details p { font-size: var(--fs-small); color: var(--ink-2); margin: 8px 0 2px; 
         <div style="max-width:100px"><label>周期</label><input id="timeframe" placeholder="H1"></div>
         <div style="max-width:200px"><label>市场画像（留空 = 按标的自动推断）</label>
           <select id="market"></select></div>
-        <div style="flex:0"><button id="btnMine" class="primary">开始挖掘</button></div>
+        <div style="flex:0">
+          <div style="display:flex; gap:6px;">
+            <button id="btnMine" class="primary">开始</button>
+            <button id="btnPause" class="ghost" style="display:none">暂停</button>
+            <button id="btnRestart" class="danger">重新开始</button>
+          </div>
+        </div>
       </div>
       <!-- 当前所选数据文件的时间范围：随 01 的 data 下拉选择实时更新（不发新请求） -->
       <div class="tiny muted" id="mineDataHint" style="margin-top:8px">当前数据：未选择</div>
@@ -1798,10 +1804,65 @@ function setStatus(text, on) {
   if (dot) { dot.className = on ? "dot on" : "dot"; }
 }
 
-function startMine() {
+function startMine(resume) {
   var data = $("data").value;
   if (!data) { alert("请先选择行情数据文件"); return; }
-  post("/api/mine", {
+  // 立即隐藏开始按钮，显示暂停按钮（不等 API 返回）
+  $("btnMine").style.display = "none";
+  $("btnPause").style.display = "";
+  post("/api/mine/start", {
+    data: data,
+    budget: $("budget").value,
+    seed: parseInt($("seed").value, 10) || 0,
+    symbol: $("symbol").value.trim(),
+    timeframe: $("timeframe").value.trim(),
+    market: $("market").value,
+    resume: !!resume
+  }).then(function (r) {
+    state.cmd = r.cmd || "";
+    $("cmdBox").value = "python -m miaosuan.cli " + (r.cmd || "");
+    state.logOffset = 0;
+    state.candidates = [];
+    state.paused = false;
+    $("log").textContent = "";
+    // 立即设置 UI 状态为"挖掘中"（不等轮询）
+    setStatus("挖掘中", true);
+    // 直接操作 DOM，确保按钮状态立即生效
+    $("btnMine").style.display = "none";
+    $("btnPause").style.display = "";
+    $("btnRestart").disabled = false;
+    // 强制重新计算按钮可见性
+    var evt = new Event("input", { bubbles: true });
+    $("btnMine").dispatchEvent(evt);
+    startPolling();
+  }).catch(function (e) { alert(e.message); });
+}
+
+function pauseMine() {
+  // 立即设置 paused 状态（不等 API 返回）
+  state.paused = true;
+  $("btnMine").textContent = "继续";
+  $("btnMine").style.display = "";
+  $("btnPause").style.display = "none";
+  setStatus("已暂停", false);
+  $("pState").textContent = "已暂停";
+  post("/api/mine/pause", {}).then(function () {
+    // API 成功，状态已设置
+  }).catch(function (e) { 
+    // API 失败，恢复状态
+    state.paused = false;
+    $("btnMine").textContent = "开始";
+    $("btnMine").style.display = "";
+    $("btnPause").style.display = "";
+    alert("暂停失败：" + e.message); 
+  });
+}
+
+function restartMine() {
+  var data = $("data").value;
+  if (!data) { alert("请先选择行情数据文件"); return; }
+  if (!confirm("确定要重新开始挖掘吗？\n将重置种群、代数和分数下限，但保留已有 Spec 历史与精英知识。")) { return; }
+  post("/api/mine/restart", {
     data: data,
     budget: $("budget").value,
     seed: parseInt($("seed").value, 10) || 0,
@@ -1813,9 +1874,10 @@ function startMine() {
     $("cmdBox").value = "python -m miaosuan.cli " + (r.cmd || "");
     state.logOffset = 0;
     state.candidates = [];
+    state.paused = false;
     $("log").textContent = "";
     startPolling();
-  }).catch(function (e) { alert(e.message); });
+  }).catch(function (e) { alert("重新开始失败：" + e.message); });
 }
 
 function startPolling() {
@@ -1834,10 +1896,18 @@ function pollJob() {
     }
     if (s.running) {
       setStatus("挖掘中", true);
-      $("btnMine").disabled = true;
+      $("btnMine").style.display = "none";
+      $("btnPause").style.display = "";
+      $("btnRestart").disabled = false;
     } else {
-      setStatus("空闲", false);
+      $("btnPause").style.display = "none";
+      $("btnMine").style.display = "";
+      if (!s.running) { $("btnMine").textContent = state.paused ? "继续" : "开始"; }
       $("btnMine").disabled = false;
+      $("btnRestart").disabled = false;
+      if (!state.paused) {
+        setStatus("空闲", false);
+      }
       if (state.polling && s.total > 0) {
         clearInterval(state.polling);
         state.polling = null;
@@ -1942,7 +2012,8 @@ function refreshLists() {
           + "<td>" + (s.deflated_sharpe === null ? "-" : Number(s.deflated_sharpe).toFixed(4)) + "</td>"
           + "<td>" + verdictChip(s.gate_verdict) + "</td>"
           + '<td class="tiny muted">' + esc(s.mtime || "") + "</td>"
-          + '<td><button class="ghost" data-file="' + esc(s.file) + '">查看</button></td></tr>';
+          + '<td><button class="ghost" data-file="' + esc(s.file) + '" data-action="view">查看</button>'
+          + '<button class="danger" data-file="' + esc(s.file) + '" data-action="delete">删除</button></td></tr>';
       }).join("") + "</table></div>";
   }).catch(function (e) {
     $("specList").className = "empty"; $("specList").textContent = "加载失败：" + e.message;
@@ -3112,7 +3183,9 @@ function bind() {
   }
   $("btnInspect").onclick = inspect;
   $("data").onchange = function () { inspect(); updateMineDataHint(); autoFillTimeframe(); };
-  $("btnMine").onclick = startMine;
+  $("btnMine").onclick = function () { startMine(state.paused); };
+  $("btnPause").onclick = pauseMine;
+  $("btnRestart").onclick = restartMine;
   $("btnCopy").onclick = copyFormula;
   $("btnVerify").onclick = runVerify;
   $("btnBacktest").onclick = runBacktest;
@@ -3128,7 +3201,22 @@ function bind() {
   // 否则文件名里的引号能逃出 HTML 转义 → 注入）。
   $("specList").addEventListener("click", function (ev) {
     var btn = (ev.target && ev.target.closest) ? ev.target.closest("button[data-file]") : null;
-    if (btn) { loadSpecByName(btn.getAttribute("data-file")); }
+    if (btn) {
+      var action = btn.getAttribute("data-action");
+      if (action === "delete") {
+        if (confirm("确定要删除该 Spec 文件？该操作将移入系统回收站，可恢复。")) {
+          jfetch("/api/spec/" + btn.getAttribute("data-file"), {method: "DELETE"}).then(function (r) {
+            if (r.ok) {
+              location.reload();
+            } else {
+              alert("删除失败： " + r.statusText);
+            }
+          }).catch(function (e) { alert("请求错误：" + e.message); });
+        }
+      } else {
+        loadSpecByName(btn.getAttribute("data-file"));
+      }
+    }
   });
   $("rtPoll").onchange = function () {
     if (state.view === "live") { rtSetPolling($("rtPoll").checked); }

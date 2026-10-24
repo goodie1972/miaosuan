@@ -43,6 +43,7 @@ from .adapters.base import install_stub_modules, uninstall_stub_modules
 from .adapters.shenji import ShenjiPort
 from .adapters.shenji.lint import lint_source
 from .config import AppConfig
+from .config import artifacts_dir as _default_artifacts_dir
 from .config import strategies_dir as _default_strategies_dir
 from .core.features import compute_features
 from .core.signal import MIN_TRADE_EXPOSURE
@@ -363,6 +364,45 @@ def _resolve_search_space(
     return config, base_budget
 
 
+def _resolve_score_floor(floor: float, config: AppConfig) -> float | None:
+    """S2 分数下限：显式 ``--floor`` 优先；缺省自动读同标的既有 spec 的最优分。
+
+    扫描 ``<artifacts>`` 下同 ``symbol`` / ``timeframe`` 的既有 spec 文件，取其中
+    ``evidence.val_score`` 的最大值作为下限（弱结果不覆盖既有最优）。没有既有
+    产物 / 读失败 → 返回 ``None``（下限关闭）。
+
+    :param floor: CLI 传入的显式下限（``-inf`` = 未显式给）。
+    :param config: 生效配置（含 ``symbol`` / ``timeframe``）。
+    """
+    if floor != float("-inf"):
+        return float(floor)
+    artifacts = Path(_default_artifacts_dir())
+    if not artifacts.is_dir():
+        return None
+    symbol = (config.symbol or "").upper()
+    timeframe = (config.timeframe or "").upper()
+    if not symbol:
+        return None
+    best: float | None = None
+    from .ir.codec import read_spec
+
+    for path in sorted(artifacts.glob("*.json")):
+        if ".history." in path.name:
+            continue
+        try:
+            spec = read_spec(path)
+        except Exception:  # noqa: BLE001 - 跳过不可读的 sidecar
+            continue
+        if (spec.semantics.timeframe or "").upper() != timeframe:
+            continue
+        val_score = spec.evidence.val_score
+        if val_score is None:
+            continue
+        if best is None or float(val_score) > best:
+            best = float(val_score)
+    return best
+
+
 @app.command()
 def mine(
     data: str = typer.Option(..., "--data", help="行情数据文件（parquet / csv）"),
@@ -393,6 +433,22 @@ def mine(
         "",
         "--dump-candidates",
         help="top-k 候选落盘 JSON 路径（缺省不落盘；供多因子组合读取）",
+    ),
+    ckpt: str = typer.Option(
+        "",
+        "--ckpt",
+        help="S1 检查点路径（缺省 <artifacts>/mine_ckpt/<symbol>_<tf>/ckpt.npz）",
+    ),
+    ckpt_every: int = typer.Option(
+        50, "--ckpt-every", help="S1 每多少代拍一次检查点（0 = 关闭；配合 --ckpt）"
+    ),
+    resume: bool = typer.Option(
+        False, "--resume", help="S1 断点续挖：检测到检查点则恢复种群/预算/RNG 继续"
+    ),
+    floor: float = typer.Option(
+        float("-inf"),
+        "--floor",
+        help="S2 分数下限：低于该值的结果不落盘（缺省自动读同标的既有 spec）",
     ),
 ) -> None:
     """挖掘因子：数据 → 切分（封印 hold-out）→ 搜索 → 门禁 → Spec JSON。
@@ -453,6 +509,10 @@ def mine(
             market=market,
             git_sha=git_sha,
             budget=runtime_budget,
+            ckpt_path=Path(ckpt) if ckpt else None,
+            ckpt_every=ckpt_every,
+            resume=resume,
+            score_floor=_resolve_score_floor(floor, config),
         )
     except MiaoSuanError as exc:
         _die(f"挖掘失败：{exc}")

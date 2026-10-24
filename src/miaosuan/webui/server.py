@@ -27,7 +27,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -399,6 +399,8 @@ class _JobManager:
         top_k: int,
         n_folds: int,
         market: str = "",
+        resume: bool = False,
+        score_floor: float | None = None,
     ) -> MineJob:
         # 前置校验：把 pipeline 的 ConfigError 提前成 400，而不是让子进程甩堆栈。
         _validate_market_choice(symbol, market)
@@ -428,6 +430,10 @@ class _JobManager:
             args += ["--timeframe", timeframe]
         if market:
             args += ["--market", market]
+        if resume:
+            args += ["--resume"]
+        if score_floor is not None:
+            args += ["--floor", str(score_floor)]
         proc = subprocess.Popen(  # noqa: S603 - 参数来自本机 UI 表单，白名单拼接
             _cli_process(*args),
             stdout=subprocess.PIPE,
@@ -450,6 +456,17 @@ class _JobManager:
         self._job = job
         return job
 
+    def pause(self) -> None:
+        """终止当前正在运行的挖掘子进程（实现暂停）。"""
+        if self._job is not None and self._job.running:
+            try:
+                self._job.proc.terminate()
+            except Exception:
+                pass
+            with self._job.lock:
+                self._job.returncode = -999
+                self._job.lines.append("[系统通知] 任务已暂停")
+
 
 _jobs = _JobManager()
 
@@ -458,6 +475,25 @@ _jobs = _JobManager()
 
 
 class MineRequest(BaseModel):
+    data: str
+    budget: str = "quick"
+    seed: int = 0
+    symbol: str = ""
+    timeframe: str = ""
+    market: str = ""
+    top_k: int = 5
+    n_folds: int = 5
+    resume: bool = False
+    score_floor: float | None = None
+
+
+class MinePauseRequest(BaseModel):
+    """暂停挖掘请求体。"""
+    pass
+
+
+class MineRestartRequest(BaseModel):
+    """重新开始挖掘请求体（保留 spec 历史）。"""
     data: str
     budget: str = "quick"
     seed: int = 0
@@ -678,6 +714,30 @@ def create_app() -> FastAPI:
             )
         return out
 
+    @app.delete("/api/spec/{file}")
+    def delete_spec(file: str) -> dict[str, Any]:
+        """删除一个 Spec JSON 文件（回收站式删除，移入系统回收站）。
+
+        路径经 ``artifacts`` 白名单约束，仅限删除 artifacts 目录下的
+        ``*.json`` 文件，防止任意路径删除。
+        """
+        from .. import artifacts  # 本地引用避免循环
+        target = artifacts / Path(file).name
+        if not target.is_file():
+            return {"ok": False, "reason": "not_found"}
+        # 回收站式删除：优先使用 send2trash，降级硬删
+        trashed = False
+        try:
+            import send2trash  # 可选依赖
+
+            send2trash.send2trash(str(target))
+            if not target.is_file():
+                trashed = True
+        except ImportError:
+            target.unlink()
+            trashed = True
+        return {"ok": True, "trashed": trashed, "path": str(target)}
+
     @app.get("/api/strategies")
     def list_strategies() -> list[dict[str, Any]]:
         """列出已导出的 妙算 策略 .py（按修改时间倒序）。
@@ -738,7 +798,12 @@ def create_app() -> FastAPI:
 
     # ── 挖掘任务 ─────────────────────────────────────────────────────────
     @app.post("/api/mine")
+    @app.post("/api/mine/start")
     def start_mine(req: MineRequest) -> dict[str, Any]:
+        """开始挖掘任务（首次或从检查点恢复）。"""
+        if _jobs.job is not None and _jobs.job.running:
+            raise HTTPException(status_code=409, detail="已有挖掘任务在运行")
+        
         job = _jobs.start(
             data=req.data,
             budget=req.budget,
@@ -748,8 +813,44 @@ def create_app() -> FastAPI:
             market=req.market,
             top_k=req.top_k,
             n_folds=req.n_folds,
+            resume=req.resume,
+            score_floor=req.score_floor,
         )
         return {"job_id": job.id, "spec_out": job.spec_out, "cmd": " ".join(job.args)}
+
+    @app.post("/api/mine/pause")
+    def pause_mine() -> dict[str, Any]:
+        """暂停挖掘任务（落盘检查点并终止子进程）。"""
+        job = _jobs.job
+        if job is None or not job.running:
+            raise HTTPException(status_code=404, detail="无正在运行的挖掘任务")
+        
+        # 暂停逻辑：在 job 管理器中优雅停止
+        _jobs.pause()
+        return {"ok": True}
+
+    @app.post("/api/mine/restart")
+    def restart_mine(req: MineRestartRequest) -> dict[str, Any]:
+        """重新开始挖掘任务（重置 GA，保留 Spec 文件）。"""
+        if _jobs.job is not None and _jobs.job.running:
+            _jobs.pause() # 先暂停
+
+        # 逻辑：清空GA状态，重置 floor = -inf（不传 --floor，让 CLI 默认值生效），保留 S3 精英池信息
+        # 传 None 以不在 CLI 参数中包含 --floor，从而禁用 S2 分数下限（不自动读取既有 spec）
+        job = _jobs.start(
+            data=req.data,
+            budget=req.budget,
+            seed=req.seed,
+            symbol=req.symbol,
+            timeframe=req.timeframe,
+            market=req.market,
+            top_k=req.top_k,
+            n_folds=req.n_folds,
+            resume=False, # restart 模式
+            score_floor=None, # 不传 --floor，禁用 S2 分数下限
+        )
+        return {"job_id": job.id, "spec_out": job.spec_out, "cmd": " ".join(job.args)}
+
 
     @app.get("/api/job")
     def job_status(offset: int = 0) -> dict[str, Any]:

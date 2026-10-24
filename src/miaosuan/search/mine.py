@@ -261,6 +261,10 @@ def mine(
     budget_profile: str = DEFAULT_PROFILE,
     n_folds: int = 5,
     gap: int = 20,
+    ckpt_path: Path | None = None,
+    ckpt_every: int = 0,
+    resume: bool = False,
+    score_floor: float | None = None,
 ) -> MineResult:
     """端到端因子挖掘：数据 → 切分（封印 hold-out）→ 搜索 → 门禁 → 候选。
 
@@ -274,6 +278,10 @@ def mine(
     :param budget_profile: 预算档位名（``quick`` / ``standard`` / ``deep``）。
     :param n_folds: Walk-Forward 折数（默认 5，与对拍基准一致）。
     :param gap: 折间间隔（默认 20，与 妙算 ``WF_GAP`` 一致）。
+    :param ckpt_path: 检查点文件路径（S1）；给定时每隔 ``ckpt_every`` 代原子落盘。
+    :param ckpt_every: 每多少代拍一次检查点（``<=0`` = 关闭；配合 ``ckpt_path`` 使用）。
+    :param resume: 检测到 ``ckpt_path`` 时断点续挖（S1：恢复种群/预算/RNG，不重新进化）。
+    :param score_floor: 分数下限（S2）；搜索期最优低于该值时返回空候选（弱结果不覆盖既有）。
     """
     prof = _resolve_profile(panel, profile)
     seal_registry = registry if registry is not None else HoldoutSealRegistry(DEFAULT_SEAL_PATH)
@@ -320,7 +328,32 @@ def mine(
             getattr(stats, "n_immigrants", 0),
         )
 
-    ga.run(active_budget, eval_impl, on_generation=_log_generation)
+    # S1：检查点回调（由 mine 层负责落盘）。续挖 = 恢复种群/预算/RNG 后继续演化。
+    resumed_from: MineCheckpoint | None = None
+    if resume and ckpt_path is not None and ckpt_path.is_file():
+        from .ckpt import load_ckpt
+
+        try:
+            resumed_from = load_ckpt(ckpt_path)
+            ga.restore(resumed_from, active_budget)
+            _logger.info("从检查点续挖: %s（gen=%d best=%.4f）", ckpt_path, resumed_from.generation, resumed_from.best_score)
+        except (ValueError, FileNotFoundError) as exc:
+            _logger.warning("检查点读取失败，从头开始: %s", exc)
+            resumed_from = None
+
+    def _save_ckpt(ckpt: object) -> None:
+        if ckpt_path is not None:
+            from .ckpt import save_ckpt
+
+            save_ckpt(ckpt, ckpt_path)
+
+    ga.run(
+        active_budget,
+        eval_impl,
+        on_generation=_log_generation,
+        on_checkpoint=_save_ckpt if (ckpt_path is not None and ckpt_every > 0) else None,
+        checkpoint_every=ckpt_every,
+    )
     result = ga.last_result
     assert result is not None  # run() 一定写入 last_result
 
@@ -355,7 +388,21 @@ def mine(
                     verdict_snapshot="{}",
                 )
             )
+    # S2：分数下限——低于既有最优的候选**不落盘**（弱结果永不覆盖冠军）。
+    if score_floor is not None and candidates and candidates[0].val_score <= score_floor:
+        _logger.info(
+            "分数下限未达：best=%.4f <= floor=%.4f（弱结果不覆盖既有最优）",
+            candidates[0].val_score,
+            score_floor,
+        )
+        candidates = []
     if not candidates:  # pragma: no cover - 空种群不应发生（初始化保证非空）
+        # 如果 score_floor 不为 None，说明是 S2 分数下限拦截了所有候选
+        if score_floor is not None:
+            raise RuntimeError(
+                f"mine: 所有候选均未达分数下限 {score_floor:.4f}（弱结果不覆盖既有最优）。"
+                f"如需继续搜索，请移除 --floor 参数或删除既有 spec 文件。"
+            )
         raise RuntimeError("mine: 未产出任何候选（种群为空？）")
 
     return MineResult(

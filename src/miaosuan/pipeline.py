@@ -292,6 +292,10 @@ def run_mine(
     created_at: str = "",
     name: str = "",
     budget: Budget | None = None,
+    ckpt_path: Path | None = None,
+    ckpt_every: int = 0,
+    resume: bool = False,
+    score_floor: float | None = None,
 ) -> MineOutcome:
     """模式 A 的唯一编排入口：搜索 → 门禁 → IR。
 
@@ -335,6 +339,10 @@ def run_mine(
         top_k=int(top_k),
         n_folds=int(n_folds),
         gap=int(gap),
+        ckpt_path=ckpt_path,
+        ckpt_every=int(ckpt_every),
+        resume=bool(resume),
+        score_floor=score_floor,
     )
     spec = build_spec(
         result.best,

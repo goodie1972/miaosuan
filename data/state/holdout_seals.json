@@ -20,6 +20,36 @@
         "horizon": 2,
         "seed": 20260910
       }
+    },
+    "sha256:b5315c19359b9a687900abb69ddb3fbca0b46cf691122640482a4396fb4e9bb3": {
+      "seq": 3,
+      "meta": {
+        "panel_fingerprint": "sha256:ee2a0fcf6e0d91e15bced8e80c140277e82efc842101cad104817507e4df60e8",
+        "split_fingerprint": "sha256:011cb69645a6807b0ee4f09774bdc32d69c70d1fce5244e8d07c7742c7c67b79",
+        "n_bars": 99999,
+        "horizon": 2,
+        "seed": 20260910
+      }
+    },
+    "sha256:5b9a050357ac109d3c01ee75472cb7ead356c9a1edb997ec73ec24b19d4ad247": {
+      "seq": 4,
+      "meta": {
+        "panel_fingerprint": "sha256:2884db40d0ae7c86ec3efc6e53c14857351214f205879b999e893e6f26eb2f54",
+        "split_fingerprint": "sha256:143025de7b1ea45d270123259a3de0ce76681ef8421264858f4677ed117a0e90",
+        "n_bars": 99999,
+        "horizon": 2,
+        "seed": 20260910
+      }
+    },
+    "sha256:c68a7ce97a6183bc546e2e2251ba9b65f978ee7d73b27b1aeb93e37958124dc4": {
+      "seq": 5,
+      "meta": {
+        "panel_fingerprint": "sha256:2884db40d0ae7c86ec3efc6e53c14857351214f205879b999e893e6f26eb2f54",
+        "split_fingerprint": "sha256:9f0c8db29f7c75cda9b3beaf24d5f1e3950dcfb4768372312e051f9b8466d4d4",
+        "n_bars": 99999,
+        "horizon": 2,
+        "seed": 8
+      }
     }
   }
 }

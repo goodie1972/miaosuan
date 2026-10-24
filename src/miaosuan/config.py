@@ -90,6 +90,10 @@ class GASearchConfig:
     :param island_migrate_every: 每隔多少代做一次岛屿迁移。
     :param island_migrate_top: 每次迁移的 top-k 个体数。
     :param immigrant_ratio: 连续无改进达到阈值时注入的随机个体比例。
+    :param elite_replay_size: S3 每代从精英池回放的个体数（0 = 关闭）。
+    :param elite_pool_size: S3 精英池容量上限（0 = 关闭；随 ``elite_replay_size`` 使用）。
+    :param elite_replay_temperature: S3 回放采样的 softmax 温度（<1 防单点垄断）。
+    :param elite_replay_halflife: S3 回放权重的半衰代数（越老权重越低）。
     """
 
     formula_len: int = 8
@@ -104,6 +108,11 @@ class GASearchConfig:
     island_migrate_every: int = 100
     island_migrate_top: int = 5
     immigrant_ratio: float = 0.30
+    # ── S3 精英龄期回放（默认关闭：保持既有搜索动力学，冻结基线不受影响）──
+    elite_replay_size: int = 0
+    elite_pool_size: int = 0
+    elite_replay_temperature: float = 0.5
+    elite_replay_halflife: float = 10.0
 
     def __post_init__(self) -> None:
         if self.formula_len < 1:
@@ -115,11 +124,22 @@ class GASearchConfig:
             )
         if not 0.0 <= self.p_mutate_point <= 1.0:
             raise ConfigError("p_mutate_point 必须在 [0,1]")
+        if self.elite_replay_size < 0 or self.elite_pool_size < 0:
+            raise ConfigError("elite_replay_size / elite_pool_size 不得为负")
+        if self.elite_replay_temperature <= 0:
+            raise ConfigError("elite_replay_temperature 必须为正（<1 防单点垄断）")
+        if self.elite_replay_halflife <= 0:
+            raise ConfigError("elite_replay_halflife 必须为正")
 
     @property
     def elite_ratio(self) -> float:
         """精英占比。"""
         return self.elite_size / self.pop_size
+
+    @property
+    def elite_replay_enabled(self) -> bool:
+        """S3 精英回放是否启用（回放规模与池容量均 > 0）。"""
+        return self.elite_replay_size > 0 and self.elite_pool_size > 0
 
 
 @dataclass(frozen=True)

@@ -32,7 +32,7 @@ import copy
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import numpy as np
 
@@ -51,6 +51,9 @@ from .rpn import (
     mutate,
     random_feasible,
 )
+
+if TYPE_CHECKING:  # S1 检查点类型（仅类型提示；运行期在 snapshot/run 内延迟 import）
+    from .ckpt import MineCheckpoint
 
 __all__ = [
     "WFFitnessEvaluator",
@@ -417,6 +420,70 @@ class RpnGA:
         self.n_diversity_rejects = 0
         self.history: list[GAStats] = []
         self.final_populations: list[list[Individual]] = []
+        # S3 精英池（跨代累积；token 去重；按 (score, birth_gen) 排序维护上限）。
+        self._elite_pool: list[Individual] = []
+        # S6 token 采样统计（低频低贡献 token 降采样先验；默认关闭）。
+        self._token_freq: dict[int, float] = {}
+
+    # ── S3：精英龄期回放权重（softmax 温度 × 半衰衰减）───────────────────────
+
+    def _elite_replay_weights(self, generation: int) -> np.ndarray:
+        """精英池的采样权重：``softmax(score / T) × 0.5^(age / halflife)``。
+
+        * 温度 ``T < 1``：拉大分数差，防单点垄断（最高分个体不会被全盘抄底）；
+        * 半衰衰减：出生越早的精英权重越低——池化不老化（新代强者优先回放）。
+        """
+        if not self._elite_pool:
+            return np.empty((0,), dtype=np.float64)
+        temp = float(self.config.elite_replay_temperature)
+        half = float(self.config.elite_replay_halflife)
+        scores = np.asarray([float(i.fitness) for i in self._elite_pool], dtype=np.float64)
+        ages = np.asarray(
+            [max(0, int(generation) - int(i.birth_gen)) for i in self._elite_pool],
+            dtype=np.float64,
+        )
+        # softmax（防溢出：减去最大值）
+        shifted = (scores - scores.max()) / temp if scores.size else scores
+        exp = np.exp(shifted)
+        soft = exp / (exp.sum() + 1e-12)
+        decay = 0.5 ** (ages / half)
+        w = soft * decay
+        total = w.sum()
+        if total <= 0:  # pragma: no cover - 全零时回退均匀
+            return np.full_like(w, 1.0 / max(1, w.size))
+        return w / total
+
+    def _replay_elite(self, generation: int) -> list[Individual]:
+        """从精英池按权重采样 ``elite_replay_size`` 条（无放回、去重）。
+
+        采样注入当代种群——老精英的优良片段继续参与交叉/变异，而不是
+        占据池位空转（路线图 S3：按 tokens 去重，防池化老化）。
+        """
+        size = int(self.config.elite_replay_size)
+        if size <= 0 or not self._elite_pool:
+            return []
+        weights = self._elite_replay_weights(generation)
+        pool = self._elite_pool
+        n = min(size, len(pool))
+        idx = self.rng.choice(len(pool), size=n, replace=False, p=weights)
+        return [copy.deepcopy(pool[int(i)]) for i in idx]
+
+    def _absorb_elite(self, generation: int, populations: list[list[Individual]]) -> None:
+        """把当代跨岛最优个体吸收进精英池（按 token 去重 + 容量上限）。"""
+        if not self.config.elite_replay_enabled:
+            return
+        cap = int(self.config.elite_pool_size)
+        by_key: dict[tuple[int, ...], Individual] = {i.key(): i for i in self._elite_pool}
+        for pop in populations:
+            for ind in pop:
+                key = ind.key()
+                cur = by_key.get(key)
+                if cur is None or ind.fitness > cur.fitness:
+                    by_key[key] = ind
+        ranked = sorted(by_key.values(), key=lambda x: (x.fitness, -x.birth_gen), reverse=True)
+        self._elite_pool = [copy.deepcopy(i) for i in ranked[:cap]]
+        if generation >= 0:
+            _ = generation  # 出生代数已记录在 Individual.birth_gen
 
     # ── 基础构件 ────────────────────────────────────────────────────────────
 
@@ -560,27 +627,50 @@ class RpnGA:
         evaluator: FormulaEvaluator,
         *,
         on_generation: Callable[[GAStats], None] | None = None,
+        on_checkpoint: Callable[[MineCheckpoint], None] | None = None,
+        checkpoint_every: int = 0,
     ) -> Individual:
         """执行一次进化搜索，返回跨岛最优个体。
 
-        :param budget: 三档预算（提供种群/选择/移民/岛屿/早停参数，且被就地更新停止原因）。
+        :param budget: 三档预算（提供种群/选择/精英/移民/岛屿/早停参数，且被就地更新停止原因）。
         :param evaluator: 适应度评估器（可实现 :class:`FormulaEvaluator`）。
         :param on_generation: 可选逐代回调（用于日志/进度）。
+        :param on_checkpoint: 可选检查点回调（S1）；配合 ``checkpoint_every`` 每 K 代
+            调用一次，传入当前 :class:`MineCheckpoint`（调用方负责落盘）。
+        :param checkpoint_every: 每多少代拍一次检查点（``<=0`` = 关闭）。
         """
-        self._cache.clear()
-        self.n_evaluations = 0
-        self.n_immigrants = 0
-        self.n_diversity_immigrants = 0
-        self.n_diversity_rejects = 0
-        self.history = []
-        budget.reset()
+        # S1 续挖分支：restore() 已置好种群/预算/缓存，这里直接消费。
+        resumed_population = self._resumed_population
+        if self._resumed:
+            self.n_evaluations = 0
+            self.n_immigrants = 0
+            self.n_diversity_immigrants = 0
+            self.n_diversity_rejects = 0
+            self.history = []
+            budget.reset()
+            if self._pending_budget_state is not None:
+                budget.restore_state(self._pending_budget_state)
+        else:
+            self._cache.clear()
+            self.n_evaluations = 0
+            self.n_immigrants = 0
+            self.n_diversity_immigrants = 0
+            self.n_diversity_rejects = 0
+            self.history = []
+            budget.reset()
 
         island_model = IslandModel(
             n_islands=int(budget.island_count),
             migrate_every=max(1, int(budget.island_migrate_every)),
             migrate_top=max(1, int(budget.island_migrate_top)),
         )
-        population = self._init_population(int(budget.pop_size), evaluator)
+        if self._resumed:
+            population = resumed_population
+            self._resumed = False
+            self._resumed_population = []
+            self._pending_budget_state = None
+        else:
+            population = self._init_population(int(budget.pop_size), evaluator)
         populations = partition_population(population, int(budget.island_count))
         island_sizes = [len(p) for p in populations]
 
@@ -590,7 +680,8 @@ class RpnGA:
         min_diversity = initial_diversity
         best = copy.deepcopy(island_model.best(populations))
 
-        generation = 0
+        generation = int(self._resumed_generation) if self._resumed_generation is not None else 0
+        self._resumed_generation = None
         stop_reason = STOP_RUNNING
         while True:
             elapsed = time.perf_counter() - start
@@ -612,6 +703,15 @@ class RpnGA:
             if on_generation is not None:
                 on_generation(stats)
 
+            # S1：每 K 代拍一次检查点（回调由 mine 层负责落盘）。
+            if (
+                on_checkpoint is not None
+                and checkpoint_every is not None
+                and checkpoint_every > 0
+                and (generation + 1) % int(checkpoint_every) == 0
+            ):
+                on_checkpoint(self.snapshot(generation, budget, populations))
+
             if budget.should_stop(generation, float(best.fitness), elapsed, diversity=diversity):
                 stop_reason = budget.stop_reason()
                 break
@@ -622,10 +722,19 @@ class RpnGA:
                 if migrated_best.fitness > best.fitness:
                     best = copy.deepcopy(migrated_best)
 
+            # S3：本代演化前注入精英回放样本（去重后参与交叉/变异）。
+            if self.config.elite_replay_enabled:
+                replay = self._replay_elite(generation)
+                if replay:
+                    populations = [pop + replay for pop in populations]
+
             populations = [
                 self._evolve_island(island, evaluator, budget, generation, size)
                 for island, size in zip(populations, island_sizes, strict=True)
             ]
+            # S3：当代演化后把跨岛最优吸收进精英池（池化不老化）。
+            if self.config.elite_replay_enabled:
+                self._absorb_elite(generation, populations)
             # 多样性地板：跌破则注入最大多样性随机个体，防熵坍塌（验收 #3 兜底）。
             if diversity_floor > 0.0:
                 self._restore_diversity(populations, island_model, evaluator, diversity_floor)
@@ -699,5 +808,84 @@ class RpnGA:
         ranked = sorted(best_by_key.values(), key=lambda x: x.fitness, reverse=True)
         return ranked[: int(k)]
 
+    # ── S1：检查点快照 / 恢复（断点续挖的可复现状态）──────────────────────────
+
+    def snapshot(
+        self, generation: int, budget: Budget, populations: list[list[Individual]]
+    ) -> MineCheckpoint:
+        """把当前搜索状态固化为检查点（S1）。
+
+        分数随快照落盘——恢复后个体**无需重新评估**（``n_evaluations`` 单调不减）。
+        RNG 状态取 ``bit_generator.state``，恢复后随机序列与中断前无缝衔接。
+        """
+        from .ckpt import MineCheckpoint
+
+        population: list[tuple[list[int], float, float, int]] = []
+        elite_pool: list[tuple[float, int, list[int]]] = []
+        best: Individual | None = None
+        for pop in populations:
+            for ind in pop:
+                population.append(
+                    (
+                        list(ind.tokens),
+                        float(ind.train_score),
+                        float(ind.val_score),
+                        int(ind.birth_gen),
+                    )
+                )
+                if best is None or ind.fitness > best.fitness:
+                    best = ind
+            for ind in sorted(pop, key=lambda x: x.fitness, reverse=True)[
+                : int(budget.elite_size)
+            ]:
+                elite_pool.append((float(ind.val_score), int(ind.birth_gen), list(ind.tokens)))
+        best_score = float(best.fitness) if best is not None else float("-inf")
+        return MineCheckpoint(
+            generation=int(generation),
+            population=population,
+            elite_pool=elite_pool,
+            rng_state=dict(self.rng.bit_generator.state),
+            budget_state=budget.snapshot_state(),
+            best_score=best_score,
+        )
+
+    def restore(self, ckpt: MineCheckpoint, budget: Budget) -> None:
+        """从检查点恢复搜索状态（供 ``mine --resume`` 使用）。
+
+        * RNG：``bit_generator.state = ckpt.rng_state``（随机序列无损续接）；
+        * 预算：早停/移民状态恢复（``wall_clock`` 重计为 0——墙钟是**本次进程**的
+          运行预算，跨进程不累计，与「墙钟为硬约束」的语义一致）；
+        * 种群：直接用检查点的个体（含分数），不再随机初始化。
+
+        注意：``budget`` 在 :meth:`run` 开头会被 ``reset()``——因此恢复的预算
+        状态暂存于 ``_pending_budget_state``，由 ``run`` 在 ``reset`` 后回填。
+        """
+        self.rng.bit_generator.state = ckpt.rng_state
+        self._resumed = True
+        self._resumed_generation = int(ckpt.generation)
+        self._pending_budget_state = ckpt.budget_state
+        self._resumed_population = [
+            Individual(
+                tokens=np.asarray(tokens, dtype=np.int64),
+                train_score=train_score,
+                val_score=val_score,
+                fitness=val_score,
+                birth_gen=birth_gen,
+            )
+            for tokens, train_score, val_score, birth_gen in ckpt.population
+        ]
+        # 恢复个体的评估缓存（避免恢复后重复评估）。
+        for ind in self._resumed_population:
+            self._cache[ind.key()] = EvalResult(
+                train_score=float(ind.train_score),
+                val_score=float(ind.val_score),
+                status=ind.status,
+            )
+
     #: 最近一次运行的结果（``run`` 后可用）。
     last_result: GAResult | None = None
+    #: S1 续挖内部状态（restore 写入、run 消费；正常启动保持默认）。
+    _resumed: bool = False
+    _resumed_generation: int | None = None
+    _pending_budget_state: dict[str, object] | None = None
+    _resumed_population: list[Individual] = []

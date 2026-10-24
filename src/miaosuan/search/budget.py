@@ -187,6 +187,25 @@ class Budget:
         self._last_improve_gen = 0
         self._last_change_gen = 0
 
+    def snapshot_state(self) -> dict[str, object]:
+        """序列化早停/移民状态（S1 检查点用；跨进程续挖的载体）。
+
+        墙钟**不**入快照——墙钟是单次进程的运行预算（S1 语义：恢复后重计）。
+        """
+        return {
+            "_reason": self._reason,
+            "_best_seen": self._best_seen,
+            "_last_improve_gen": int(self._last_improve_gen),
+            "_last_change_gen": int(self._last_change_gen),
+        }
+
+    def restore_state(self, state: dict[str, object]) -> None:
+        """从检查点恢复早停/移民状态（S1 续挖用）。"""
+        self._reason = str(state.get("_reason", STOP_RUNNING))
+        self._best_seen = float(state.get("_best_seen", float("-inf")))
+        self._last_improve_gen = int(state.get("_last_improve_gen", 0))
+        self._last_change_gen = int(state.get("_last_change_gen", 0))
+
     def should_stop(
         self,
         generation: int,
