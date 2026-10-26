@@ -101,6 +101,10 @@ class _FakeProc:
 def app(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> Any:
     """隔离产物目录 + 桩掉子进程，返回全新的 app。"""
     monkeypatch.setattr(server, "_ARTIFACTS", tmp_path)
+    # 策略 .py 与 spec 分家（strategies/ vs artifacts/）：不一起隔离的话，
+    # /api/strategies 会读到仓库里真实的导出，测试结果取决于本机文件。
+    (tmp_path / "strategies").mkdir(exist_ok=True)
+    monkeypatch.setattr(server, "_STRATEGIES", tmp_path / "strategies")
     monkeypatch.setattr(server.subprocess, "Popen", _FakeProc)
     server._jobs._job = None
     created = server.create_app()
@@ -227,23 +231,28 @@ def test_inspect_reports_404_for_missing_in_dir_file(app: Any) -> None:
 
 
 def test_strategies_lists_only_real_exports(app: Any, tmp_path: Any) -> None:
-    """只列带 ``STRATEGY_MAGIC`` 的文件 —— artifacts 下的临时脚本不算已导出策略。
+    """只列 **strategies/ 下**带 ``STRATEGY_MAGIC`` 的文件。
 
-    回归防线：该常量由导出模板强制写入，是"这是导出产物"的准确判据。若不过滤，
-    artifacts 里的调试脚本会被当成策略列出，而且每个都带 4 条 lint error（因为
-    lint 规则要求声明该常量），把真实导出淹掉。
+    两条判据各挡一类历史事故：
+    * 不带该常量的临时脚本（调试用）不算已导出策略 —— 否则每个都会挂着 4 条
+      lint error（lint 规则要求声明该常量），把真实导出淹掉；
+    * 目录口径唯一：``artifacts/`` 里的 .py 即使带常量也不列（用户明确要求
+      「策略列表只扫策略目录」，避免下载/校验按错目录找文件）。
     """
-    (tmp_path / "real_export.py").write_text(
+    strategies = tmp_path / "strategies"
+    (strategies / "real_export.py").write_text(
         'STRATEGY_MAGIC = "661801"\nSTRATEGY_NAME = "x"\n', encoding="utf-8"
     )
-    (tmp_path / "scratch_debug.py").write_text("print(1)\n", encoding="utf-8")
+    (strategies / "scratch_debug.py").write_text("print(1)\n", encoding="utf-8")
+    (tmp_path / "legacy_export.py").write_text(
+        'STRATEGY_MAGIC = "661802"\nSTRATEGY_NAME = "y"\n', encoding="utf-8"
+    )
 
     status, data = _call(app, "GET", "/api/strategies")
     assert status == 200
     files = [row["file"] for row in data]
-    assert "real_export.py" in files
-    assert "scratch_debug.py" not in files
-    row = next(r for r in data if r["file"] == "real_export.py")
+    assert files == ["real_export.py"]
+    row = data[0]
     assert row["magic"] == "661801"
     assert "lint_errors" in row and "lint_warnings" in row
 

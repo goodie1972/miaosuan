@@ -79,6 +79,7 @@ _DATA_DIRS: tuple[Path, ...] = (
 )
 
 _DATA_SUFFIXES = {".parquet", ".csv"}
+_JSON_SUFFIXES = {".json"}
 _EXCLUDED_JSON = {"magic_registry.json", "holdout_seals.json", "config_snapshot.json"}
 
 #: 进程启动时刻（Unix 秒），供 ``/api/health`` 报 uptime。
@@ -88,18 +89,54 @@ _BOOT_TS: float = time.time()
 # ── 工具 ─────────────────────────────────────────────────────────────────────
 
 
-def _safe_name(name: str, *, suffixes: set[str] | None = None) -> Path:
-    """把用户传入的文件名约束为 artifacts 下的单个文件（拒绝路径穿越）。"""
+def _safe_name(
+    name: str, *, base: Path | None = None, suffixes: set[str] | None = None
+) -> Path:
+    """把用户传入的文件名约束为 ``base``（默认 ``artifacts/``）下的单个文件。
+
+    Args:
+        name: **纯文件名**（不含任何路径分隔符）。
+        base: 白名单根目录；默认产物目录 ``artifacts/``。
+        suffixes: 允许的扩展名集合（小写）；``None`` 表示不限。
+
+    Raises:
+        HTTPException: 400=非法名字/穿越/后缀不符，404=文件不存在。
+    """
+    root = base if base is not None else _ARTIFACTS
     if not name or "/" in name or "\\" in name or ".." in name:
         raise HTTPException(status_code=400, detail=f"非法文件名：{name!r}")
-    path = (_ARTIFACTS / name).resolve()
-    if _ARTIFACTS.resolve() not in path.parents:
+    path = (root / name).resolve()
+    if root.resolve() not in path.parents:
         raise HTTPException(status_code=400, detail=f"文件不在产物目录内：{name!r}")
     if suffixes is not None and path.suffix.lower() not in suffixes:
         raise HTTPException(status_code=400, detail=f"仅允许 {sorted(suffixes)}：{name!r}")
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"文件不存在：{name}")
     return path
+
+
+#: 导出策略 .py 的候选目录（按优先级）：``strategies/`` 是 ``/api/export`` 的当前
+#: 落盘处，``artifacts/`` 只是历史遗留位置（早期导出脚本确实写在那里）。
+#: 用函数而非常量返回，保证测试 monkeypatch 这两个模块全局后即时生效。
+def _py_dirs() -> tuple[Path, ...]:
+    return (_STRATEGIES, _ARTIFACTS)
+
+
+def _safe_py(name: str) -> Path:
+    """解析导出策略 ``.py``：按 :func:`_py_dirs` 顺序查找，首个命中即返回。
+
+    ``/api/verify`` 与 ``/api/file/{name}`` 拿到的是**纯文件名**（来自
+    ``/api/strategies``），而策略文件在 ``strategies/`` 而非 ``artifacts/``；
+    旧实现直接用 ``_safe_name``（写死 ``artifacts/``）→ 校验按钮与下载链接
+    永远 404。名字校验/穿越防护仍由 :func:`_safe_name` 逐目录执行。
+    """
+    for directory in _py_dirs():
+        try:
+            return _safe_name(name, base=directory, suffixes={".py"})
+        except HTTPException as exc:
+            if exc.status_code == 400:
+                raise
+    raise HTTPException(status_code=404, detail=f"文件不存在：{name}")
 
 
 def _cli_process(*args: str) -> list[str]:
@@ -376,6 +413,10 @@ def _local_payload(func: Any, /, *args: Any, **kwargs: Any) -> dict[str, Any]:
 # ── 挖掘任务（单飞 + 增量日志）───────────────────────────────────────────────
 
 
+#: 「暂停」是强杀子进程：真实退出码没有意义，用固定哨兵值代替，前端据此判暂停。
+_PAUSE_RETURNCODE: int = -999
+
+
 @dataclass
 class MineJob:
     """一次 ``mine`` 子进程任务：按行收集输出，供前端增量拉取。"""
@@ -385,10 +426,14 @@ class MineJob:
     #: 逐代历史 sidecar 名（相对 artifacts，由 CLI 按 --out 派生）。
     history_out: str
     args: list[str]
-    proc: subprocess.Popen[str]
+    #: 子进程以**二进制**模式管道输出：Windows 下 CLI 可能按 GBK 写 stdout，
+    #: 由 :func:`_decode_cli_bytes` 逐行 UTF-8→GBK 兜底解码（见 ``pump``）。
+    proc: subprocess.Popen[bytes]
     lines: list[str] = field(default_factory=list)
     lock: threading.Lock = field(default_factory=threading.Lock)
     returncode: int | None = None
+    #: 用户主动按了「暂停」：pump 收尾时不能把强杀出来的退出码当成任务失败。
+    paused: bool = False
 
     @property
     def running(self) -> bool:
@@ -403,8 +448,14 @@ class MineJob:
                 self.lines.append(line)
         self.proc.wait()
         with self.lock:
-            self.returncode = self.proc.returncode
-            self.lines.append(f"[进程退出] code={self.proc.returncode}")
+            if self.paused:
+                # Windows 下 terminate() = TerminateProcess，退出码是随机的（常见 1）；
+                # 把它原样甩给用户会被读成"挖掘失败"，所以这里改写成暂停语义。
+                self.returncode = _PAUSE_RETURNCODE
+                self.lines.append("[进程退出] 已暂停（最近检查点仍在盘上，可点「继续」续挖）")
+            else:
+                self.returncode = self.proc.returncode
+                self.lines.append(f"[进程退出] code={self.proc.returncode}")
 
 
 class _JobManager:
@@ -486,12 +537,16 @@ class _JobManager:
     def pause(self) -> None:
         """终止当前正在运行的挖掘子进程（实现暂停）。"""
         if self._job is not None and self._job.running:
+            # 先立旗：pump 线程在 wait() 之后读这个标记，才能把强杀退出码
+            # 改写成暂停语义（否则用户看到 code=1 以为挖掘失败）。
+            with self._job.lock:
+                self._job.paused = True
+                self._job.returncode = _PAUSE_RETURNCODE
             try:
                 self._job.proc.terminate()
             except Exception:
                 pass
             with self._job.lock:
-                self._job.returncode = -999
                 self._job.lines.append("[系统通知] 任务已暂停")
 
 
@@ -606,7 +661,10 @@ def create_app() -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> FileResponse:
-        return FileResponse(_INDEX_HTML)
+        # ``no-cache``（不是 ``no-store``）：每次都带 ETag 去问服务器，没变就 304。
+        # 不这么做的后果很真实——升级 exe 后浏览器还在用磁盘上的旧 index.html，
+        # 用户看到「明明修了按钮还是坏的」，而服务器代码是对的。
+        return FileResponse(_INDEX_HTML, headers={"Cache-Control": "no-cache"})
 
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
@@ -745,13 +803,11 @@ def create_app() -> FastAPI:
     def delete_spec(file: str) -> dict[str, Any]:
         """删除一个 Spec JSON 文件（回收站式删除，移入系统回收站）。
 
-        路径经 ``artifacts`` 白名单约束，仅限删除 artifacts 目录下的
-        ``*.json`` 文件，防止任意路径删除。
+        经 ``_safe_name`` 白名单约束：仅限 ``artifacts`` 目录下的 ``*.json``，
+        拒绝路径穿越。旧实现 ``from .. import artifacts`` 引用了不存在的包属性，
+        直接 ImportError → 删除键 500 失灵。
         """
-        from .. import artifacts  # 本地引用避免循环
-        target = artifacts / Path(file).name
-        if not target.is_file():
-            return {"ok": False, "reason": "not_found"}
+        target = _safe_name(file, suffixes={".json"})
         # 回收站式删除：优先使用 send2trash，降级硬删
         trashed = False
         try:
@@ -824,7 +880,12 @@ def create_app() -> FastAPI:
 
     @app.get("/api/file/{name}")
     def get_file(name: str) -> FileResponse:
-        path = _safe_name(name, suffixes={".py", ".json"})
+        """下载产物文件：``.py`` 按策略目录顺序找，``.json`` 只在 artifacts/。"""
+        path = (
+            _safe_py(name)
+            if Path(name).suffix.lower() == ".py"
+            else _safe_name(name, suffixes=_JSON_SUFFIXES)
+        )
         return FileResponse(path, filename=name)
 
     # ── 挖掘任务 ─────────────────────────────────────────────────────────
@@ -999,35 +1060,45 @@ def create_app() -> FastAPI:
 
     @app.get("/api/backtests")
     def list_backtests() -> list[dict[str, Any]]:
-        """列出历史回测结果（按修改时间倒序）。"""
+        """列出历史回测结果（按修改时间倒序）。
+
+        回测结果由 ``/api/backtest`` 落盘在 **results 目录**（``data/results/``），
+        旧实现只扫 ``artifacts/`` → 列表永远为空。与 :func:`_scan_all_backtests`
+        同口径：先 results、后 artifacts，按文件名去重。
+        """
         out: list[dict[str, Any]] = []
-        if not _ARTIFACTS.is_dir():
-            return out
-        for path in sorted(
-            _ARTIFACTS.glob("backtest_*.json"), key=lambda p: p.stat().st_mtime, reverse=True
-        ):
-            try:
-                payload: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
+        seen: set[str] = set()
+        for directory in (_RESULTS, _ARTIFACTS):
+            if not directory.is_dir():
                 continue
-            meta = payload["meta"] if isinstance(payload.get("meta"), dict) else {}
-            summary = payload["summary"] if isinstance(payload.get("summary"), dict) else {}
-            out.append(
-                {
-                    "file": path.name,
-                    "mtime": path.stat().st_mtime,
-                    "symbol": str(meta.get("symbol", "")),
-                    "timeframe": str(meta.get("timeframe", "")),
-                    "n_bars": int(meta.get("n_bars", 0) or 0),
-                    "sharpe": float(summary.get("sharpe", 0.0) or 0.0),
-                    "total_return": float(summary.get("total_return", 0.0) or 0.0),
-                }
-            )
+            for path in sorted(
+                directory.glob("backtest_*.json"), key=lambda p: p.stat().st_mtime, reverse=True
+            ):
+                if path.name in seen:
+                    continue
+                seen.add(path.name)
+                try:
+                    payload: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    continue
+                meta = payload["meta"] if isinstance(payload.get("meta"), dict) else {}
+                summary = payload["summary"] if isinstance(payload.get("summary"), dict) else {}
+                out.append(
+                    {
+                        "file": path.name,
+                        "mtime": path.stat().st_mtime,
+                        "symbol": str(meta.get("symbol", "")),
+                        "timeframe": str(meta.get("timeframe", "")),
+                        "n_bars": int(meta.get("n_bars", 0) or 0),
+                        "sharpe": float(summary.get("sharpe", 0.0) or 0.0),
+                        "total_return": float(summary.get("total_return", 0.0) or 0.0),
+                    }
+                )
         return out
 
     @app.post("/api/verify")
     def verify(req: VerifyRequest) -> dict[str, Any]:
-        path = _safe_name(req.file, suffixes={".py"})
+        path = _safe_py(req.file)
         args = ["verify", "--file", str(path)]
         if req.data:
             args += ["--data", req.data]

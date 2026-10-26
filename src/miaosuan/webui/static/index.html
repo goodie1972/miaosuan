@@ -1839,7 +1839,15 @@ function startMine(resume) {
     var evt = new Event("input", { bubbles: true });
     $("btnMine").dispatchEvent(evt);
     startPolling();
-  }).catch(function (e) { alert(e.message); });
+  }).catch(function (e) {
+    // 后端拒绝（缺标的/已有任务/数据非法…）：必须把「开始/暂停」按钮还原，
+    // 否则点击时预先做的状态切换会把界面永久卡在「挖掘中」，只剩一个死按钮。
+    $("btnMine").style.display = "";
+    $("btnPause").style.display = "none";
+    $("btnMine").textContent = state.paused ? "继续" : "开始";
+    setStatus("空闲", false);
+    alert(e.message);
+  });
 }
 
 function pauseMine() {
@@ -2371,8 +2379,12 @@ function renderTuneResult(r) {
   var bestParams = (r.best && r.best.params) || {};
   var keys = Object.keys(bestParams);
   var rows = keys.length ? keys.map(function (k) {
+    // 并非所有参数都是数字：long_only 这类 choice 空间给的是字符串 "True"/"False"，
+    // 一律 Number(...).toFixed() 会渲染成 NaN，看起来像数据坏了。
+    var v = bestParams[k];
+    var shown = (typeof v === "number" && isFinite(v)) ? v.toFixed(6) : String(v);
     return "<tr><td class=\"mono\">" + esc(k) + "</td>"
-      + '<td class="mono">' + esc(String(Number(bestParams[k]).toFixed(6))) + "</td></tr>";
+      + '<td class="mono">' + esc(shown) + "</td></tr>";
   }).join("") : '<tr><td colspan="2" class="muted tiny">（无参数字段）</td></tr>';
   var th1 = esc(t("paramTable"));
   var th2 = esc(t("paramValue"));
