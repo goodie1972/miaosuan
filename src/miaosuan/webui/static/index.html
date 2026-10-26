@@ -133,6 +133,10 @@ button.primary { background: var(--gold); border-color: var(--gold); color: #0d1
 button.primary:hover { background: var(--gold-hover); border-color: var(--gold-hover); color: #0d1117; }
 button.primary:active { background: var(--gold-active); }
 button.ghost { background: transparent; }
+button.export { background: transparent; border-color: var(--gold); color: var(--gold); }
+/* 表格行内操作按钮：统一间距，横排不折行，避免「查看/导出/删除」挤在一起 */
+td .row-actions { display: inline-flex; gap: 6px; flex-wrap: nowrap; justify-content: flex-end; }
+td .row-actions button { padding: 4px 10px; font-size: var(--fs-tiny, 12px); white-space: nowrap; }
 
 /* ── 三步导航 ───────────────────────────────────────────────────────── */
 nav {
@@ -2012,8 +2016,11 @@ function refreshLists() {
           + "<td>" + (s.deflated_sharpe === null ? "-" : Number(s.deflated_sharpe).toFixed(4)) + "</td>"
           + "<td>" + verdictChip(s.gate_verdict) + "</td>"
           + '<td class="tiny muted">' + esc(s.mtime || "") + "</td>"
-          + '<td><button class="ghost" data-file="' + esc(s.file) + '" data-action="view">查看</button>'
-          + '<button class="danger" data-file="' + esc(s.file) + '" data-action="delete">删除</button></td></tr>';
+          + '<td><span class="row-actions">'
+          + '<button class="ghost" data-file="' + esc(s.file) + '" data-action="view">查看</button>'
+          + '<button class="export" data-file="' + esc(s.file) + '" data-action="export">导出</button>'
+          + '<button class="danger" data-file="' + esc(s.file) + '" data-action="delete">删除</button>'
+          + "</span></td></tr>";
       }).join("") + "</table></div>";
   }).catch(function (e) {
     $("specList").className = "empty"; $("specList").textContent = "加载失败：" + e.message;
@@ -2050,6 +2057,26 @@ function loadSpecByName(file) {
     renderSpec(spec);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }).catch(function (e) { alert(e.message); });
+}
+
+/* ── 手动导出策略 .py（对任意 spec，含 BLOCKED）──────────────────
+   导出是独立步骤，挖掘本身从不自动导出：BLOCKED 也能导出，
+   仅会被模板打上 RESEARCH_ONLY 警示、DEPLOYABLE=False，禁止上实盘。 */
+function exportSpec(file, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = "导出中…"; }
+  var restore = function () { if (btn) { btn.disabled = false; btn.textContent = "导出"; } };
+  post("/api/export", { spec: file }).then(function (r) {
+    restore();
+    var ok = r.returncode === 0;
+    var body = esc(r.output || "（无输出）").replace(/\n/g, "<br>");
+    showModal(ok ? "导出成功" : "导出未通过（详见输出）",
+      body + (r.out_dir ? "<br><br><span class=\"muted\">目录：" + esc(r.out_dir) + "</span>" : ""),
+      ok ? "ok" : "warn");
+    if (ok) refreshLists();
+  }).catch(function (e) {
+    restore();
+    showModal("导出失败", esc(e.message), "err");
+  });
 }
 
 /* ── 校验 ─────────────────────────────────────────────────────────── */
@@ -3213,6 +3240,8 @@ function bind() {
             }
           }).catch(function (e) { alert("请求错误：" + e.message); });
         }
+      } else if (action === "export") {
+        exportSpec(btn.getAttribute("data-file"), btn);
       } else {
         loadSpecByName(btn.getAttribute("data-file"));
       }

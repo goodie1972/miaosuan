@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -111,6 +112,34 @@ def _cli_process(*args: str) -> list[str]:
     if is_bundled():
         return [sys.executable, *args]
     return [sys.executable, "-m", "miaosuan.cli", *args]
+
+
+def _child_env() -> dict[str, str]:
+    """子进程环境：强制 UTF-8 标准输出。
+
+    Windows 下 Python 写管道时按 GBK(cp936) 编码，而本模块用 ``encoding="utf-8"``
+    解码 → 中文输出乱码（导出/校验弹窗里的 CLI 日志尤其明显）。设 ``PYTHONIOENCODING``
+    让子进程直接吐 UTF-8，父端解码即正确。
+    """
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    return env
+
+
+def _decode_cli_bytes(raw: bytes) -> str:
+    """解码 CLI 子进程输出：优先 UTF-8，失败则回退 GBK(cp936)。
+
+    ``_child_env`` 已尽力让子进程吐 UTF-8，但 **PyInstaller 冻结 exe** 会自带
+    stdio 编码、忽略 ``PYTHONIOENCODING``，在中文 Windows 上仍按 GBK 输出。
+    这里按字节自行解码：能严格解成 UTF-8 就用 UTF-8，否则按 GBK 解，彻底消除
+    导出/校验弹窗里的 ``\ufffd`` 乱码。
+    """
+    if not raw:
+        return ""
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("gbk", errors="replace")
 
 
 def _spec_id(path: Path) -> str:
@@ -366,10 +395,10 @@ class MineJob:
         return self.returncode is None
 
     def pump(self) -> None:
-        """在后台线程里按行读取子进程输出（UTF-8，容错替换）。"""
+        """在后台线程里按行读取子进程输出（字节解码：UTF-8 优先，回退 GBK）。"""
         assert self.proc.stdout is not None
-        for raw in self.proc.stdout:
-            line = raw.rstrip("\r\n")
+        for raw in self.proc.stdout:  # 二进制模式：每行是 bytes
+            line = _decode_cli_bytes(raw).rstrip("\r\n")
             with self.lock:
                 self.lines.append(line)
         self.proc.wait()
@@ -438,10 +467,8 @@ class _JobManager:
             _cli_process(*args),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
             cwd=str(_REPO_ROOT),
+            env=_child_env(),
         )
         # 逐代历史 sidecar 路径必须与 CLI 的派生规则一致（<out stem>.history.json）。
         history_out = spec_out.with_suffix(".history.json").name
@@ -742,15 +769,19 @@ def create_app() -> FastAPI:
     def list_strategies() -> list[dict[str, Any]]:
         """列出已导出的 妙算 策略 .py（按修改时间倒序）。
 
+        **只扫策略目录 ``_STRATEGIES``**（即 ``/api/export`` 的默认落盘处），
+        不碰 artifacts/ 与 shenji-strategies/，避免把非本次导出的脚本混进来。
+        旧实现扫的是 ``_ARTIFACTS``，与导出目标目录不一致，导致「导出成功却在
+        下看不到」。
+
         只认**带** ``STRATEGY_MAGIC`` 的文件：该常量由导出模板强制写入，是"这
-        是导出产物"的准确判据。否则 artifacts 下的临时脚本也会被当成策略列出
-        （且每个都带 4 条 lint error——因为 lint 规则要求声明该常量），把真实
-        导出淹掉。
+        是导出产物"的准确判据。否则临时脚本也会被当成策略列出（且每个都带
+        4 条 lint error——因为 lint 规则要求声明该常量），把真实导出淹掉。
         """
         out: list[dict[str, Any]] = []
-        if not _ARTIFACTS.is_dir():
+        if not _STRATEGIES.is_dir():
             return out
-        for path in sorted(_ARTIFACTS.glob("*.py"), key=lambda p: p.stat().st_mtime, reverse=True):
+        for path in sorted(_STRATEGIES.glob("*.py"), key=lambda p: p.stat().st_mtime, reverse=True):
             try:
                 source = path.read_text(encoding="utf-8", errors="replace")
             except OSError:
@@ -901,13 +932,11 @@ def create_app() -> FastAPI:
         proc = subprocess.run(  # noqa: S603 - 白名单拼接，见上
             _cli_process(*args),
             capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
             cwd=str(_REPO_ROOT),
+            env=_child_env(),
             timeout=600,
         )
-        output = (proc.stdout or "") + (proc.stderr or "")
+        output = _decode_cli_bytes(proc.stdout) + _decode_cli_bytes(proc.stderr)
         return proc.returncode, output.strip()
 
     @app.post("/api/export")
@@ -1252,7 +1281,11 @@ def create_app() -> FastAPI:
                 _tune_job["error"] = f"{type(exc).__name__}: {exc}"
                 _tune_job["running"] = False
 
-        _tune_job: dict[str, Any] = {"running": True, "result": None, "error": ""}
+        # 原地改写闭包内的共享 dict，切勿重新绑定名字：`_tune_job = {...}` 会在
+        # tune_start 局部创建同名变量，导致 _run 线程写的是局部 dict，而
+        # tune_status / tune_result 读的仍是外层空 dict（running 恒为 False、
+        # result 恒为 None）→ 前端秒判「未运行」又拿不到结果，报「尚未完成寻优任务」。
+        _tune_job.update({"running": True, "result": None, "error": ""})
         threading.Thread(target=_run, daemon=True).start()
         return {"ok": True, "message": "寻优任务已启动"}
 

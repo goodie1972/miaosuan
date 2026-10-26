@@ -433,7 +433,7 @@ class TuneEngine:
         result_id = uuid.uuid4().hex[:8]
         start_time = time.time()
 
-        direction = "MAXIMIZE"
+        direction = "maximize"
         self.study = optuna.create_study(
             direction=direction,
             sampler=optuna.samplers.TPESampler(seed=self.config.seed),
