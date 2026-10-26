@@ -98,10 +98,10 @@ def main() -> None:
     result = subprocess.run(ARGS, cwd=str(REPO_ROOT))
     if result.returncode == 0:
         exe_path = LAUNCHER_DIR / "dist" / f"{OUTPUT_NAME}.exe"
-        print(f"\n✅ Build successful: {exe_path}")
+        print(f"\n[OK] Build successful: {exe_path}")
         print(f"   Size: {exe_path.stat().st_size / 1024 / 1024:.1f} MB")
     else:
-        print(f"\n❌ Build failed with code {result.returncode}")
+        print(f"\n[X] Build failed with code {result.returncode}")
         sys.exit(1)
 
 
