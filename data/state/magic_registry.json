@@ -15,6 +15,11 @@
       "magic": 662001,
       "name": "d1_au0_miaosuan",
       "version": 1
+    },
+    {
+      "magic": 662101,
+      "name": "m30_xauusd_miaosuan",
+      "version": 1
     }
   ],
   "version": 1

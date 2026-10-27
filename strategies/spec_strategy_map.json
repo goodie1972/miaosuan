@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-10-01T10:31:56+00:00",
+  "updated_at": "2026-10-27T12:53:54+00:00",
   "strategies": [
     {
       "strategy_file": "20260926_m30_bb_deepreturn_optimized_v1.py",
@@ -16,6 +16,22 @@
       "docs": {
         "zh": "20260926_m30_bb_deepreturn_optimized_v1_README_zh.md",
         "en": "20260926_m30_bb_deepreturn_optimized_v1_README_en.md"
+      }
+    },
+    {
+      "strategy_file": "20261027_m30_xauusd_miaosuan_v1.py",
+      "spec_file": "spec_20261013_104732.json",
+      "spec_id": "021467c2369f2813",
+      "name": "m30_xauusd_miaosuan",
+      "magic": 662101,
+      "vocab_version": "v9217a2c0d91a",
+      "market": "FOREX_XAUUSD",
+      "generated_at": "2026-10-13T09:13:32+00:00",
+      "gate_verdict": "BLOCKED",
+      "deployable": false,
+      "docs": {
+        "zh": "20261027_m30_xauusd_miaosuan_v1_README_zh.md",
+        "en": "20261027_m30_xauusd_miaosuan_v1_README_en.md"
       }
     }
   ]
