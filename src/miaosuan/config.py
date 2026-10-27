@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import dataclasses
 import os
+import sys
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -464,26 +465,79 @@ def kline_data_dir(env: Mapping[str, str] | None = None) -> str:
         env: 覆盖用的环境映射（默认读 ``os.environ``，便于测试注入）。
 
     Returns:
-        K 线数据目录路径。
+        K 线数据目录**绝对路径**：相对设置（如 ``data/cache``）按 :data:`REPO_ROOT`
+        解析。曾经原样返回相对路径，于是它随进程 CWD 漂移——双击 exe 时 CWD 是
+        ``launcher\\dist``，行情目录直接扫不到，「本地数据」列表在打包版里全空。
     """
     if env is not None:
-        return (env.get(ENV_KLINE_DIR, "") or "").strip() or DEFAULT_KLINE_DIR
+        return _resolve_dir((env.get(ENV_KLINE_DIR, "") or "").strip() or DEFAULT_KLINE_DIR)
 
     # 环境变量实时读取（兼容 monkeypatch 测试 + 不需要 reload 单例）
     env_val = os.environ.get(ENV_KLINE_DIR, "")
     if env_val:
-        return env_val.strip()
-    return get_config().paths.kline
+        return _resolve_dir(env_val.strip())
+    return _resolve_dir(get_config().paths.kline)
 
 
 # ── 产物 / 策略 / 结果 / 临时 目录访问器 ──────────────────────────────────
 # 与 kline_data_dir 同属「唯一 env 边界」：webui / cli 只调用这些函数，
 # 绝不自行拼路径或读 env。<name>_dir 返回**绝对路径**（相对基准目录解析）。
 
-#: 仓库根（``src/miaosuan/config.py`` 往上 3 层）。相对目录（如 ``artifacts``、
-#: ``data/cache``）一律以此为基准解析成绝对路径——避免进程 CWD 漂移导致产物
-#: 落到错误位置（launcher exe / 改目录启动两种场景实测踩过）。
-REPO_ROOT: Path = Path(__file__).resolve().parents[2]
+#: 工作区根显式覆盖（打包 / 非常规布局时用）：``set MIAOSUAN_ROOT=D:\path\to\miaosuan``。
+ENV_ROOT = "MIAOSUAN_ROOT"
+
+#: 工作区根的判据：同时有 ``settings.yaml`` 和 ``data/`` 才算妙算工作区。
+_WORKSPACE_MARKERS = ("settings.yaml", "data")
+
+
+def _is_workspace_root(path: Path) -> bool:
+    return all((path / marker).exists() for marker in _WORKSPACE_MARKERS)
+
+
+def _find_workspace_up(start: Path, levels: int = 6) -> Path | None:
+    """从 ``start`` 逐级向上找第一个工作区根；找不到返回 ``None``。"""
+    current = start
+    for _ in range(levels + 1):
+        if _is_workspace_root(current):
+            return current
+        if current.parent == current:
+            break
+        current = current.parent
+    return None
+
+
+def _resolve_repo_root() -> Path:
+    r"""解析工作区根——**必须区分源码运行与 PyInstaller 打包运行**。
+
+    打包成 onefile 后 ``__file__`` 落在临时解包目录（``...\Temp\_MEIxxxx\miaosuan\config.py``），
+    照源码那样 ``parents[2]`` 会得到 ``...\Temp``，于是 artifacts / strategies / results 全
+    解析到临时目录：exe 里「规范列表 / 已导出策略 / 回测历史」永远空白，且退出临时目录后
+    产物直接消失。优先级：
+
+    1. ``MIAOSUAN_ROOT`` 环境变量（ launcher 与打包脚本据此显式锚定）；
+    2. 打包态（``sys.frozen`` 或 ``MIAOSUAN_BUNDLED=1``）：从 exe 所在目录、再从 CWD
+       向上找工作区标记；
+    3. 源码态：``src/miaosuan/config.py`` 往上两层。
+    """
+    override = os.environ.get(ENV_ROOT, "").strip()
+    if override:
+        candidate = Path(override).expanduser()
+        if candidate.is_dir():
+            return candidate.resolve()
+    if getattr(sys, "frozen", False) or os.environ.get("MIAOSUAN_BUNDLED", "").strip() == "1":
+        # MIAOSUAN_BUNDLED 直接写字面量：ENV_BUNDLED 在本块之后才定义，而 REPO_ROOT 求值于导入期。
+        for start in (Path(sys.executable).resolve().parent, Path.cwd()):
+            found = _find_workspace_up(start)
+            if found is not None:
+                return found
+        # 找不到工作区（exe 被单独拷走）：退回 CWD，产物落在用户启动处而不是临时目录。
+        return Path.cwd()
+    return Path(__file__).resolve().parents[2]
+
+
+#: 仓库根。相对目录（如 ``artifacts``、``data/cache``）一律以此为基准解析成绝对
+#: 路径——避免进程 CWD 漂移导致产物落到错误位置（launcher exe / 改目录启动两种场景实测踩过）。
+REPO_ROOT: Path = _resolve_repo_root()
 
 
 def _resolve_dir(raw: str) -> str:
@@ -550,6 +604,21 @@ def is_bundled(env: Mapping[str, str] | None = None) -> bool:
     """
     source = os.environ if env is None else env
     return (source.get(ENV_BUNDLED, "") or "").strip() == "1"
+
+
+def child_process_env(env: Mapping[str, str] | None = None) -> dict[str, str]:
+    """spawn CLI 子进程时应使用的环境：继承当前环境并强制 ``PYTHONIOENCODING=utf-8``。
+
+    Windows 下 Python 写管道按 GBK(cp936) 编码，而 WebUI 父端按 UTF-8 解码 → 导出/校验
+    弹窗里的中文日志乱码。读环境变量只允许发生在 config / cli / settings（架构 §9.2
+    「唯一 env 边界」，有守护测试把关），所以 ``webui`` 调本函数而不是自己 ``os.environ.copy()``。
+
+    Args:
+        env: 覆盖用的环境映射（默认读 ``os.environ``，便于测试注入）。
+    """
+    merged = dict(os.environ if env is None else env)
+    merged["PYTHONIOENCODING"] = "utf-8"
+    return merged
 
 
 def _default_shenji_db_path() -> str:
@@ -637,7 +706,11 @@ def data_acquisition_config(env: Mapping[str, str] | None = None) -> DataAcquisi
     # K线数据目录**只认配置**（settings.yaml → paths.kline）——它同时是行情读取
     # 与数据获取落盘的**唯一**目录（历史上曾分设 data.cache_dir，已合并，避免
     # 「行情目录 / 缓存目录」两个名称指同一件事的混淆）。未配置时为空串。
-    cache_dir = cfg.paths.kline
+    # 与行情读取共用同一个目录，也共用同一套解析：设置里写的是相对路径（``data/cache``），
+    # 必须按 REPO_ROOT 锚定。以前原样返回，acquisition 侧 ``Path(custom).resolve()`` 会把它
+    # 按**进程 CWD** 解释——双击 exe（CWD=launcher\dist）时不仅列不到缓存，还会在 CWD 里
+    # mkdir 出一个多余的 data\cache。
+    cache_dir = _resolve_dir(cfg.paths.kline)
     data_source = os.environ.get(ENV_DATA_SOURCE, "") or cfg.data.source
     dukascopy_user = os.environ.get(ENV_DUKASCOPY_USER, "") or cfg.data.dukascopy_user
     dukascopy_password = os.environ.get(ENV_DUKASCOPY_PASS, "") or cfg.data.dukascopy_password

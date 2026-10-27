@@ -37,7 +37,7 @@ __all__ = [
 ]
 
 #: 妙算版本号（与 pyproject 保持一致；此处硬编码以避免运行期读取文件）。
-MIAOSUAN_VERSION: str = "0.1.2"
+MIAOSUAN_VERSION: str = "0.1.3"
 
 
 def utc_now_iso() -> str:

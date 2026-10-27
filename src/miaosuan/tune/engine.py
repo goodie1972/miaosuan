@@ -29,6 +29,7 @@ from typing import Any, Mapping
 import numpy as np
 
 from ..adapters.base import ParamSpace
+from ..config import artifacts_dir
 from ..core.signal import MIN_TRADE_EXPOSURE
 from ..data.loader import load
 from ..ir.schema import ParamPayload, StrategySpec
@@ -47,6 +48,16 @@ __all__ = [
     "save_tune_result",
     "score_trial",
 ]
+
+
+def _default_tune_out_dir() -> str:
+    """寻优结果默认目录：``<artifacts>/tune`` 的**绝对**路径。
+
+    相对字面量 ``artifacts/tune`` 会随进程 CWD 漂移：WebUI 在 exe 里是**进程内**跑寻优
+    （CWD=``launcher\\dist``），结果于是写到仓库外，前端「调优结果」永远读不到——
+    正是「很快就终止 / 结果获取失败」的那类坑。
+    """
+    return str(Path(artifacts_dir()) / "tune")
 
 
 #: 语义参数搜索空间（缺省值与 :class:`Semantics` 默认值保持一致）。
@@ -111,7 +122,7 @@ class TuneConfig:
         n_trials: 最大试验次数（优化预算）。
         metric: 优化目标指标名（``"sharpe"`` / ``"sortino"`` / ``"calmar"`` / ``"composite"``）。
         composite_weights: 综合评分权重。
-        out_dir: 结果落盘目录（默认 ``artifacts/tune/``）。
+        out_dir: 结果落盘目录（缺省 ``<artifacts>/tune`` 绝对路径）。
         seed: 随机种子（保证可复现）。
         paper_trading_path: 实盘模拟持仓记录路径（可选）。
     """
@@ -121,7 +132,7 @@ class TuneConfig:
     n_trials: int = 50
     metric: str = "sharpe"
     composite_weights: dict[str, float] = field(default_factory=dict)
-    out_dir: str = "artifacts/tune"
+    out_dir: str = field(default_factory=_default_tune_out_dir)
     seed: int = 42
     paper_trading_path: str = ""
 
@@ -150,7 +161,7 @@ class TuneConfig:
             composite_weights={
                 str(k): float(v) for k, v in (data.get("composite_weights") or {}).items()
             },
-            out_dir=str(data.get("out_dir", "artifacts/tune")),
+            out_dir=str(data.get("out_dir") or _default_tune_out_dir()),
             seed=int(data.get("seed", 42)),
             paper_trading_path=str(data.get("paper_trading_path", "")),
         )

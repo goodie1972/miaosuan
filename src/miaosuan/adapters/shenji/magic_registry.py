@@ -33,6 +33,8 @@ from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
+from ...config import REPO_ROOT
+
 # 跨进程互斥：写入账本前先拿文件锁。msvcrt 仅 Windows 可用（本平台是 MT4/Windows），
 # 非 Windows 环境降级为无锁（并发分配保护失效，但单进程与测试不受影响）。
 try:  # pragma: no cover - 平台相关
@@ -52,10 +54,10 @@ __all__ = [
     "known_magics",
 ]
 
-#: 默认账本路径（相对仓库根：``src/miaosuan/adapters/shenji`` 往上 5 层）。
-DEFAULT_LEDGER_PATH: Path = (
-    Path(__file__).resolve().parents[4] / "data" / "state" / "magic_registry.json"
-)
+#: 默认账本路径。**必须锚在仓库根**：``parents[4]`` 这种「按源码位置反推」的写法在
+#: PyInstaller onefile 里指向临时解包目录（``...\\Temp\\_MEIxxxx``），账本随进程退出被删，
+#: 于是每次启动都从头分配序号 → magic 撞号。
+DEFAULT_LEDGER_PATH: Path = REPO_ROOT / "data" / "state" / "magic_registry.json"
 
 #: 序号上限（两位十进制）。
 _MAX_SEQ: int = 99

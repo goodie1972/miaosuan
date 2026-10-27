@@ -28,7 +28,7 @@ from typing import Any
 
 import numpy as np
 
-from ..config import SplitConfig
+from ..config import REPO_ROOT, SplitConfig
 from ..errors import DataError, HoldoutSealedError
 from .fingerprint import holdout_fingerprint, split_fingerprint
 from .panel import Panel
@@ -42,8 +42,10 @@ __all__ = [
     "three_way_split",
 ]
 
-#: 默认封印台账路径（``.gitignore`` 已忽略 ``artifacts/*``）
-DEFAULT_SEAL_PATH = Path("data") / "state" / "holdout_seals.json"
+#: 默认封印台账路径。**必须锚在仓库根**：写成 ``Path("data")/...`` 这种相对默认值会随进程
+#: CWD 漂移——双击 launcher exe（CWD=``launcher\\dist``）时台账落到别处，同一 hold-out
+#: 指纹被反复放行，「一次性封印」形同失效。
+DEFAULT_SEAL_PATH = REPO_ROOT / "data" / "state" / "holdout_seals.json"
 
 #: 台账 schema 版本
 _LEDGER_VERSION = 1

@@ -395,9 +395,16 @@ class SettingsManager:
         if self._config_path is not None:
             return self._config_path
 
-        # 默认查找顺序：当前目录/settings.yaml -> 项目根目录/settings.yaml
+        # 默认查找顺序：MIAOSUAN_ROOT/settings.yaml -> 当前目录/settings.yaml -> 上级目录
+        # MIAOSUAN_ROOT 由 launcher（打包 exe）显式锚定：onefile 打包后 ``__file__`` 落在
+        # 临时解包目录，靠代码位置反推仓库根会把设置读到 Temp 里（实测踩过）。
+        candidates: list[Path] = []
+        root_override = os.environ.get("MIAOSUAN_ROOT", "").strip()
+        if root_override:
+            candidates.append(Path(root_override) / "settings.yaml")
         cwd = Path.cwd()
-        for path in [cwd / "settings.yaml", cwd.parent / "settings.yaml"]:
+        candidates += [cwd / "settings.yaml", cwd.parent / "settings.yaml"]
+        for path in candidates:
             if path.is_file():
                 self._config_path = path
                 break

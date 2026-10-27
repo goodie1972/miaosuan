@@ -20,7 +20,6 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 import threading
@@ -45,7 +44,9 @@ from ..adapters.shenji.realtime import (
     safe_call,
 )
 from ..config import (
+    REPO_ROOT,
     artifacts_dir,
+    child_process_env,
     is_bundled,
     kline_data_dir,
     results_dir,
@@ -60,8 +61,9 @@ from ..settings import Settings, _deep_update, get_config, get_settings_manager
 
 __all__ = ["create_app"]
 
-#: 仓库根（``src/miaosuan/webui/server.py`` 往上 3 层）。
-_REPO_ROOT: Path = Path(__file__).resolve().parents[3]
+#: 仓库根。复用 :data:`miaosuan.config.REPO_ROOT`——它已按「打包态」重新锚定，
+#: 而本模块的 ``__file__`` 在 PyInstaller onefile 里落在临时解包目录，自己算会指向 Temp。
+_REPO_ROOT: Path = REPO_ROOT
 #: spec 专属目录（仅 StrategySpec JSON 及其 sidecar；settings → paths.artifacts）。
 _ARTIFACTS: Path = Path(artifacts_dir())
 #: 策略专属目录（策略 .py + 双语说明 + 映射表；settings → paths.strategies）。
@@ -152,15 +154,10 @@ def _cli_process(*args: str) -> list[str]:
 
 
 def _child_env() -> dict[str, str]:
-    """子进程环境：强制 UTF-8 标准输出。
-
-    Windows 下 Python 写管道时按 GBK(cp936) 编码，而本模块用 ``encoding="utf-8"``
-    解码 → 中文输出乱码（导出/校验弹窗里的 CLI 日志尤其明显）。设 ``PYTHONIOENCODING``
-    让子进程直接吐 UTF-8，父端解码即正确。
+    """子进程环境：强制 UTF-8 标准输出（env 读取经 config 的唯一边界，见
+    :func:`~miaosuan.config.child_process_env`——本模块直接 ``os.environ`` 会被守护测试拦下）。
     """
-    env = os.environ.copy()
-    env["PYTHONIOENCODING"] = "utf-8"
-    return env
+    return child_process_env()
 
 
 def _decode_cli_bytes(raw: bytes) -> str:
@@ -1218,7 +1215,7 @@ def create_app() -> FastAPI:
 
         路径经 :func:`_resolve_data_file` 白名单约束（拒绝任意路径 / 路径穿越）。
         使用 ``send2trash`` 走系统回收站，误删可恢复；后端进程若没有
-        ``send2trash``（可选依赖），降级为 ``os.remove`` 并返回 ``trashed=False``。
+        ``send2trash``（可选依赖），降级为 ``Path.unlink`` 硬删并返回 ``trashed=False``。
         删除成功或文件原本就不存在（幂等）都返回 200。
         """
         target = _resolve_data_file(path)
@@ -1235,9 +1232,9 @@ def create_app() -> FastAPI:
             if not target.is_file():
                 trashed = True
         except ImportError:
-            # 真正没有装 send2trash，走硬删
+            # 真正没有装 send2trash：硬删。trashed 必须保持 False，否则前端会谎报「已移入回收站」。
             target.unlink()
-            trashed = True
+            trashed = False
         except Exception as exc:  # noqa: BLE001  (send2trash 平台异常 → 看是否真的删除了)
             # 例如：路径太长、权限不足等导致 send2trash 抛 OSError 等；
             # 只要文件不存在了，就当作删除成功；仍在则重试硬删。

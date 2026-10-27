@@ -26,6 +26,18 @@ Python 解释器优先使用项目 `.venv\Scripts\python.exe`，找不到时回�
 - 入口：`launcher/main.py`（无参数 = 启动服务 + MessageBox 守护；带 CLI 子命令 = 路由到 `miaosuan.cli`）
 - 打包为单文件、无控制台窗口的 exe；服务运行期间显示 MessageBox，点「确定」即退出
 
+### exe 必须留在仓库里（或显式指定根目录）
+
+onefile 打包后，代码里的 `__file__` 指向临时解包目录（`...\Temp\_MEIxxxx`），退出 exe 该目录即被删除。
+仓库根按以下顺序解析（见 `config._resolve_repo_root`）：
+
+1. 环境变量 `MIAOSUAN_ROOT`（显式指定，优先级最高）；
+2. 从 exe 所在目录向上找到工作区（判据：同层有 `settings.yaml` 与 `data/`）；
+3. 从当前工作目录向上找；
+4. 都找不到 → 退回当前工作目录（产物会落在那里，别再拷来拷去）。
+
+所以默认放在 `launcher\dist\` 下双击即可；若要把 exe 单独拷走，先 `set MIAOSUAN_ROOT=D:\path\to\miaosuan`。
+
 ## License
 
 AGPL-3.0（与主项目一致）

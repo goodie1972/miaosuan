@@ -151,14 +151,42 @@ def _launcher_mode() -> int:
 # ── 入口 ──────────────────────────────────────────────────────────────
 
 
+def _anchor_bundled_env() -> None:
+    """把「仓库根」与「我是打包 exe」两件事固化进环境，供本进程与子进程共用。
+
+    - ``MIAOSUAN_ROOT``：onefile 下 ``__file__`` 指向临时解包目录（``...\\Temp\\_MEIxxxx``），
+      靠代码位置反推仓库根会指到 Temp——spec / 策略 / 结果列表因此在 exe 里全空，且退出后
+      产物随临时目录一起被删。config 里已做同样的搜索，这里把结论钉进环境，子进程直接继承。
+    - ``MIAOSUAN_BUNDLED``：必须在 **frozen 时**就置位，而不是只在 :func:`_launcher_mode`
+      里置位。``server._cli_process()`` 据此选 spawn 形态：打包态 ``[exe, "verify", ...]``
+      （由 :func:`_run_cli` 路由），源码态 ``[python, "-m", "miaosuan.cli", ...]``。
+      只在启动器模式置位时，用 ``exe ui --port x``（CLI 模式起仪表盘）会 spawn 出
+      ``exe -m miaosuan.cli verify ...``——exe 认不出这串参数，落回启动器模式再起一个服务
+      并弹 MessageBox，「验证」按钮因此永久卡死。
+    """
+    if not (os.environ.get("MIAOSUAN_ROOT", "") or "").strip():
+        from miaosuan.config import REPO_ROOT
+
+        os.environ["MIAOSUAN_ROOT"] = str(REPO_ROOT)
+    if getattr(sys, "frozen", False):
+        os.environ["MIAOSUAN_BUNDLED"] = "1"
+
+
 def main() -> int:
+    _anchor_bundled_env()
     args = sys.argv[1:]
 
-    # 如果带已知 CLI 子命令，路由到 CLI 模式
+    # 带已知 CLI 子命令 → 路由到 CLI 模式
     if args and args[0] in _CLI_COMMANDS:
         return _run_cli(args)
 
-    # 否则进入启动器模式
+    # 打包态拿到不认识的参数（如上游又按源码形态 spawn 出 ``-m miaosuan.cli ...``）：
+    # 必须就地失败。落回启动器模式会在用户眼前弹 MessageBox、再起一个占用 8686 的服务，
+    # 而调用方等到超时——把「明确的退出码 2」交给 UI 显示。
+    if args and getattr(sys, "frozen", False):
+        _say(f"未知命令：{args[0]!r}；可用命令：{sorted(_CLI_COMMANDS)}")
+        return 2
+
     return _launcher_mode()
 
 

@@ -19,7 +19,7 @@ build-backend = "hatchling.build"
 # ── 项目元数据 ─────────────────────────────────────────────────────────────
 [project]
 name = "miaosuan"
-version = "0.1.2"
+version = "0.1.3"
 description = "妙算（MiaoSuan）—— 去 torch 的声明式因子挖掘 + 妙算 策略调优引擎"
 readme = "README.md"
 requires-python = ">=3.11"

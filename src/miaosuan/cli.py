@@ -413,7 +413,7 @@ def mine(
     timeframe: str = typer.Option("", "--timeframe", help="周期（覆盖环境变量）"),
     top_k: int = typer.Option(5, "--top-k", help="汇总候选数"),
     n_folds: int = typer.Option(5, "--n-folds", help="Walk-Forward 折数"),
-    out: str = typer.Option("artifacts/spec.json", "--out", help="StrategySpec 输出路径"),
+    out: str = typer.Option("", "--out", help="StrategySpec 输出路径（缺省 <artifacts>/spec.json）"),
     history_out: str = typer.Option(
         "",
         "--history-out",
@@ -460,6 +460,10 @@ def mine(
     """
     if budget not in _BUDGETS:
         _die(f"未知预算档位 {budget!r}，可选 {list(_BUDGETS)}")
+
+    # 缺省落盘目录锚在配置解析出的 artifacts 绝对路径上：字面量 "artifacts/spec.json"
+    # 会随 CWD 漂移，打包 exe 里等于把 spec 写到仓库外（前端列表再也看不见它）。
+    out = out or str(Path(_default_artifacts_dir()) / "spec.json")
 
     config = AppConfig.from_env()
     overrides: dict[str, Any] = {}
@@ -591,7 +595,7 @@ def combine(
         "equal", "--method", help="权重方法 equal/ic（确定性，禁 GA 搜权重）"
     ),
     seed: int = typer.Option(0, "--seed", help="随机种子（0 = 使用配置默认值）"),
-    out: str = typer.Option("artifacts/combo.json", "--out", help="ComboStrategySpec 输出路径"),
+    out: str = typer.Option("", "--out", help="ComboStrategySpec 输出路径（缺省 <artifacts>/combo.json）"),
     top_per_file: int = typer.Option(
         3, "--top-per-file", help="每个候选文件取前几名（默认 rank0..2，跨文件去重相同 tokens）"
     ),
@@ -614,6 +618,9 @@ def combine(
         _die(f"未知权重方法 {method!r}，可选 ['equal', 'ic']（禁止 GA 搜权重）")
     if top_per_file < 1:
         _die(f"--top-per-file 必须 >= 1，收到 {top_per_file}")
+
+    # 同 mine：缺省落盘路径锚在绝对 artifacts 目录，不吃 CWD。
+    out = out or str(Path(_default_artifacts_dir()) / "combo.json")
 
     config = AppConfig.from_env()
 
