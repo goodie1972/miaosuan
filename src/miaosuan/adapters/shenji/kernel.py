@@ -41,6 +41,7 @@ from ...core import ops as ops_module
 from ...core.features import _FEATURE_DEFS
 from ...core.ops import OPS_CONFIG
 from ...core.vocab import FORMULA_VOCAB
+from .contract import GATE_TOKEN_NAME
 
 __all__ = ["KernelExtractionError", "KernelPlan", "build_kernel_plan"]
 
@@ -380,6 +381,10 @@ def build_kernel_plan(tokens: Sequence[int]) -> KernelPlan:
             symbol, _segment = op_index.resolve(_unwrap_op(op_fn), op_name)
             op_roots.append(symbol)
             op_entries.append((token, op_name, int(arity), op_index.rename(symbol)))
+            # GATE 的死区实现也一并搬运：模板不再自带第二份手写实现，
+            # 而是调用这里的 ``op_make_gate(deadband)``（与回测/实盘同一份源码）。
+            if op_name == GATE_TOKEN_NAME:
+                op_roots.append("make_gate")
 
     feature_symbols = feature_index.closure(feature_roots)
     op_symbols = op_index.closure(op_roots)

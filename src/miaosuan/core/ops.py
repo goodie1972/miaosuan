@@ -48,7 +48,11 @@ __all__ = [
     "OPERATOR_NAMES",
     "OPERATOR_COUNT",
     "OPS_CONFIG",
+    "GATE_OP_NAME",
     "is_registered",
+    "make_gate",
+    "gate_operator_index",
+    "with_gate_deadband",
 ]
 
 # 除零保护常数（与对拍基准一致）
@@ -110,6 +114,53 @@ def _op_gate(condition: np.ndarray, x: np.ndarray, y: np.ndarray) -> np.ndarray:
     mask = (condition > 0).astype(np.float32)  # 妙算: (condition > 0).float()
     out: np.ndarray = mask * x + (1.0 - mask) * y
     return out
+
+
+def _gate_hysteresis(
+    condition: np.ndarray, x: np.ndarray, y: np.ndarray, deadband: float
+) -> np.ndarray:
+    """GATE 的死区滞回核心：``|condition| <= deadband`` 时沿用上一根的选择。
+
+    条件在 0 附近因浮点归约误差抖动 ±1ULP 时，原生 GATE 会反复翻转分支；死区把
+    「未明确越界」的根折叠成上一次的决定，因此只看历史、**不引入未来函数**。
+
+    每行（每个品种）各自持有滞回状态；首次出现越界决定**之前**沿用「取 y」，
+    与逐根递推 ``prev = 0`` 起点的实现逐位一致。
+    """
+    t = condition.shape[1]
+    # +1 = 明确做多（取 x）；0 = 明确做空侧（取 y）；-1 = 落在死区内，沿用上一次决定。
+    decided = np.where(condition > deadband, 1, np.where(condition < -deadband, 0, -1)).astype(
+        np.int64
+    )
+    last = np.maximum.accumulate(
+        np.where(decided >= 0, np.arange(t, dtype=np.int64).reshape(1, t), -1), axis=1
+    )
+    latest = np.take_along_axis(decided, np.clip(last, 0, t - 1), axis=1)
+    take_x = np.where(last >= 0, latest == 1, False)
+    out: np.ndarray = np.where(take_x, x, y)
+    return out
+
+
+def make_gate(deadband: float = 0.0) -> Callable[..., Any]:
+    """构造 GATE 算子 —— 死区滞回的**唯一实现**（回测 / 实盘 / 导出内核同源）。
+
+    ``deadband <= 0`` 直接返回 :func:`_op_gate` 本体，因此默认口径与既有冻结基准
+    **逐位一致**；``> 0`` 返回闭包持有 deadband 的滞回版，**无模块级可变状态**
+    （同一进程内不同死区不会互相污染）。
+
+    Args:
+        deadband: 死区宽度（与 ``condition`` 同量纲）。``0`` = 关闭保护。
+
+    Returns:
+        三元算子 ``f(condition, x, y) -> [N, T]``（未套形状校验，由调用方包装）。
+    """
+    if deadband <= 0.0:
+        return _op_gate
+
+    def _gate_with_deadband(condition: np.ndarray, x: np.ndarray, y: np.ndarray) -> np.ndarray:
+        return _gate_hysteresis(condition, x, y, deadband)
+
+    return _gate_with_deadband
 
 
 def _op_jump(x: np.ndarray) -> np.ndarray:
@@ -470,6 +521,24 @@ def _with_shape_check(name: str, transform: Callable[..., Any]) -> Callable[...,
         return result
 
     return _checked
+
+
+#: 触发死区保护的算子名（``OPS_CONFIG`` 中的位置即 token 偏移，由词表顺序冻结）。
+GATE_OP_NAME: str = "GATE"
+
+
+def with_gate_deadband(deadband: float) -> Callable[..., Any]:
+    """带形状校验的死区 GATE transform（供 :class:`StackVM` 替换 GATE 条目）。
+
+    与 ``OPS_CONFIG`` 里的 GATE 条目**同构**（同样经 :func:`_with_shape_check` 包装），
+    注入后 arity 与 ``ShapeError`` 语义不变；``deadband <= 0`` 时逐位等价于原生 GATE。
+    """
+    return _with_shape_check(GATE_OP_NAME, make_gate(deadband))
+
+
+def gate_operator_index() -> int:
+    """GATE 在 :data:`OPS_CONFIG` / 算子维中的下标（= token id − ``operator_offset``）。"""
+    return next(i for i, cfg in enumerate(OPS_CONFIG) if cfg[0] == GATE_OP_NAME)
 
 
 # ── 初始算子定义（保持既有 44 个算子的命名、顺序与行为）──────────────────

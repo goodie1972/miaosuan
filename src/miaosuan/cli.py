@@ -47,7 +47,7 @@ from .config import artifacts_dir as _default_artifacts_dir
 from .config import strategies_dir as _default_strategies_dir
 from .core.features import compute_features
 from .core.signal import MIN_TRADE_EXPOSURE
-from .core.vm import StackVM
+from .core.vm import DEFAULT_ROLL_WINDOW, StackVM
 from .data.loader import load
 from .errors import ConfigError, MiaoSuanError
 from .ir.codec import read_spec, write_spec
@@ -83,14 +83,30 @@ app = typer.Typer(
 _BUDGETS: tuple[str, ...] = ("quick", "standard", "deep")
 
 
+def _console_safe(text: str, *, err: bool = False) -> str:
+    """把目标流编不动的字符替换成 ``?``，宁可丢装饰也不丢命令。
+
+    Windows 控制台是 GBK 代码页（打包版 ``--noconsole`` 尤其如此），消息里有 ``⚠``
+    这类字符时 rich 直接抛 ``UnicodeEncodeError``：实测打包版
+    ``export --gate-deadband`` 崩在写文件之前——产物没写出、退出码还是 1。
+    """
+    stream = sys.stderr if err else sys.stdout
+    encoding = getattr(stream, "encoding", None) or "utf-8"
+    try:
+        text.encode(encoding)
+    except UnicodeEncodeError:
+        return text.encode(encoding, errors="replace").decode(encoding, errors="replace")
+    return text
+
+
 def _echo(text: str = "") -> None:
     """统一输出（便于测试替换 stdout）。"""
-    typer.echo(text)
+    typer.echo(_console_safe(text))
 
 
 def _die(message: str) -> None:
     """打印错误并以退出码 1 结束。"""
-    typer.echo(f"错误：{message}", err=True)
+    typer.echo(_console_safe(f"错误：{message}", err=True), err=True)
     raise typer.Exit(code=1)
 
 
@@ -685,8 +701,10 @@ def export(
         True, "--docs/--no-docs", help="是否同步生成中英双语说明文档 + 更新映射表"
     ),
     name: str = typer.Option("", "--name", help="覆盖策略名（影响文件名与 STRATEGY_NAME）"),
-    gate_deadband: float = typer.Option(
-        0.0, "--gate-deadband", help="GATE 死区（R1 保护；0 = 关闭，与回测逐位一致）"
+    gate_deadband: float | None = typer.Option(
+        None,
+        "--gate-deadband",
+        help="GATE 死区（R1 保护）；缺省跟随 spec 的 semantics.gate_deadband（0 = 关闭）",
     ),
     ledger: str = typer.Option("", "--ledger", help="magic 账本路径（缺省用默认路径）"),
     date: str = typer.Option("", "--date", help="文件名日期 YYYYMMDD（缺省取当天 UTC）"),
@@ -709,9 +727,17 @@ def export(
     port = ShenjiPort(
         ledger_path=ledger or None,
         date=date,
-        gate_deadband=float(gate_deadband),
+        gate_deadband=(
+            float(spec.semantics.gate_deadband) if gate_deadband is None else float(gate_deadband)
+        ),
     )
     result = port.compile(spec)
+    if gate_deadband is not None and float(gate_deadband) != float(spec.semantics.gate_deadband):
+        _echo(
+            f"注意：--gate-deadband={float(gate_deadband)} 与本 spec 证据计算时的 "
+            f"semantics.gate_deadband={float(spec.semantics.gate_deadband)} 不一致："
+            "下方 val/DSR/成本敏感度都是**旧死区**下的结果，需要带该死区重新回测才有证据可比"
+        )
 
     target_dir = Path(out_dir) if out_dir else Path(_default_strategies_dir())
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -821,7 +847,12 @@ def _fidelity_error(path: str, tokens: tuple[int, ...], raw: dict[str, Any]) -> 
         spec.loader.exec_module(module)
 
         features = compute_features(raw)
-        native = StackVM().execute(list(tokens), features)
+        # 比对必须**同一口径**：归一化窗口与 GATE 死区都取导出文件里的常量，否则
+        # 「原生无死区 vs 导出带死区」会把正常启用的 R1 保护误判成保真度不达标。
+        native = StackVM(
+            roll_window=int(getattr(module, "_ROLL_WINDOW", DEFAULT_ROLL_WINDOW)),
+            gate_deadband=float(getattr(module, "_GATE_DEADBAND", 0.0)),
+        ).execute(list(tokens), features)
         if native is None:
             raise RuntimeError("原生 StackVM 返回 None，无法比对")
 
@@ -944,6 +975,10 @@ def backtest(
             rolling_window=rolling_window or None,
             neutral_band=float(spec.semantics.neutral_band or 0.0) or MIN_TRADE_EXPOSURE,
             long_only=not spec.semantics.long_short,
+            # 因子口径跟随 spec 语义：与实盘/导出内核同一 StackVM 配置（默认值
+            # 500 / 0.0 与旧行为逐位一致，仅当 spec 改过这两项才体现差异）。
+            factor_roll_window=int(spec.semantics.roll_window),
+            factor_gate_deadband=float(spec.semantics.gate_deadband),
         )
     except (MiaoSuanError, ValueError, RuntimeError, TypeError, IndexError) as exc:
         _die(f"回测执行失败：{type(exc).__name__}: {exc}")

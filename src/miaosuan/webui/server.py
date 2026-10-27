@@ -600,7 +600,9 @@ class MineRestartRequest(BaseModel):
 class ExportRequest(BaseModel):
     spec: str
     name: str = ""
-    gate_deadband: float = 0.0
+    #: ``None`` = 跟随该 spec 的 ``semantics.gate_deadband``（回测/实盘同源）；
+    #: 给定数值则覆盖 spec 的口径。
+    gate_deadband: float | None = None
 
 
 class VerifyRequest(BaseModel):
@@ -1018,7 +1020,7 @@ def create_app() -> FastAPI:
         args = ["export", "--spec", str(spec_path), "--out-dir", str(_STRATEGIES)]
         if req.name:
             args += ["--name", req.name]
-        if req.gate_deadband:
+        if req.gate_deadband is not None:
             args += ["--gate-deadband", str(req.gate_deadband)]
         code, output = _run_sync(args)
         return {"returncode": code, "output": output, "out_dir": str(_STRATEGIES)}

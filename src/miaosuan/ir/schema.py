@@ -181,6 +181,10 @@ class Semantics:
         warmup_bars: 预热根数：不足则不出信号（与滚动归一化窗口绑定）。
         timeframe: 目标周期（如 ``H1``）。
         roll_window: 因子滚动归一化窗口（默认 500，与 ``StackVM`` 一致）。
+        gate_deadband: GATE 死区宽度（R1 零点不连续保护，默认 0 = 关闭）。
+            回测、纸面、实盘与**导出内核**共用同一个值（唯一实现在
+            ``core.ops.make_gate``）；``0`` 时与既有冻结基准逐位一致。v2 追加
+            字段，登记进 :data:`_RUNTIME_CALIBER_FIELDS` 以免漂移既有 spec_id。
         execution_lag_bars: 运行时口径：信号 bar 与可执行 bar 的延迟（默认 1 =
             bar t 收盘出信号、t+1 开盘执行，与回测口径
             ``target_ret[t] = log(open[t+2]/open[t+1])`` 一致）。v2 追加字段，
@@ -193,6 +197,7 @@ class Semantics:
     warmup_bars: int = DEFAULT_WARMUP_BARS
     timeframe: str = "H1"
     roll_window: int = 500
+    gate_deadband: float = 0.0
     execution_lag_bars: int = 1
 
     def __post_init__(self) -> None:
@@ -212,6 +217,7 @@ class Semantics:
             "warmup_bars": self.warmup_bars,
             "timeframe": self.timeframe,
             "roll_window": self.roll_window,
+            "gate_deadband": self.gate_deadband,
             "execution_lag_bars": self.execution_lag_bars,
         }
 
@@ -225,6 +231,7 @@ class Semantics:
             warmup_bars=int(data.get("warmup_bars", DEFAULT_WARMUP_BARS)),
             timeframe=str(data.get("timeframe", "H1")),
             roll_window=int(data.get("roll_window", 500)),
+            gate_deadband=float(data.get("gate_deadband", 0.0)),
             execution_lag_bars=int(data.get("execution_lag_bars", 1)),
         )
 
@@ -242,7 +249,13 @@ class Semantics:
 #: 身份哈希**——spec_id 表达「策略身份」，执行口径调整不应改变身份（旧 spec
 #: 重新加载/重导出得到同一 spec_id，指纹/门禁记录/回归基线不受影响）。
 #: 新增此类字段时必须同步登记到这里，并升级 ``test_ir_schema`` 的稳定性断言。
-_RUNTIME_CALIBER_FIELDS: frozenset[str] = frozenset({"execution_lag_bars"})
+#:
+#: ``gate_deadband`` 归入口径而非身份是**刻意取舍**：它确实改变因子数学，但默认
+#: 0 = 关闭，既有全部冻结基线都在 0 上；若把它放进身份哈希，仅新增键就会让**所有
+#: 历史 spec 的 spec_id 漂移**（指纹/门禁记录/回归快照集体失配）。改口径的实际
+#: 生效路径是「回测/实盘/导出内核都读 ``sem.gate_deadband``」，由 :attr:`spec_id`
+#: 之外的序列化字段留痕。
+_RUNTIME_CALIBER_FIELDS: frozenset[str] = frozenset({"execution_lag_bars", "gate_deadband"})
 
 
 @dataclass(frozen=True)

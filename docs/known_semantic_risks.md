@@ -40,6 +40,12 @@ O(1) 跳变、甚至方向翻转，导致：
 3. 门禁侧增加「因子跳变率」软指标（`count(|Δfactor| > τ) / T`），超过阈值降级为
    `RESEARCH_ONLY`。
 
+**落地现状（2026-10-27）**：建议 1 已实现 —— 死区滞回的唯一实现是
+`core/ops.py::make_gate`，回测（`report/equity.run_full_backtest`）、实盘信号
+（`runtime/signal_engine.SignalEngine`）与导出内核（`adapters/shenji` 原样搬运该函数）
+共用同一份代码；宽度由 `Semantics.gate_deadband` 口径字段决定，默认 `0.0` = 关闭
+（与既有冻结基准逐位一致）。建议 2、3 仍未做。
+
 **影响范围**
 - 所有含 `GATE` / `IF_GT` / 条件分支的公式；
 - 所有**零点附近条件**（`TRIX` / `MOMENTUM` / `MA_DIFF` 等过零型特征）。

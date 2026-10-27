@@ -38,7 +38,7 @@ import warnings
 
 import numpy as np
 
-from .ops import OPS_CONFIG
+from .ops import OPS_CONFIG, gate_operator_index, with_gate_deadband
 from .vocab import FORMULA_VOCAB
 
 __all__ = [
@@ -156,12 +156,22 @@ def validate_formula_structure(
 class StackVM:
     """前缀公式栈式虚拟机（妙算 ``StackVM`` 的 numpy实现，行为等价）。"""
 
-    def __init__(self, roll_window: int = DEFAULT_ROLL_WINDOW) -> None:
+    def __init__(
+        self, roll_window: int = DEFAULT_ROLL_WINDOW, gate_deadband: float = 0.0
+    ) -> None:
         # feat_offset 动态从 FORMULA_VOCAB.operator_offset 读取（= feature_count = F）。
         self.feat_offset = FORMULA_VOCAB.operator_offset
         # op_map / arity_map 动态从 OPS_CONFIG 构建。
         self.op_map = {i + self.feat_offset: cfg[1] for i, cfg in enumerate(OPS_CONFIG)}
         self.arity_map = {i + self.feat_offset: cfg[2] for i, cfg in enumerate(OPS_CONFIG)}
+        # GATE 死区滞回（R1）：>0 时只替换**本实例** op_map 里的 GATE 条目，
+        # 不改全局 OPS_CONFIG / 注册表（无全局可变状态，实例间互不影响）。
+        # 实现与导出内核逐字同源（见 ``core.ops.make_gate``）。
+        self.gate_deadband = float(gate_deadband)
+        if self.gate_deadband > 0.0:
+            self.op_map[self.feat_offset + gate_operator_index()] = with_gate_deadband(
+                self.gate_deadband
+            )
         # 恒正算子 token id 集合（用于采样时约束）。
         self.positive_only_ids: set[int] = {
             i + self.feat_offset

@@ -36,7 +36,7 @@ import numpy as np
 
 from ..core.features import compute_features
 from ..core.signal import MIN_TRADE_EXPOSURE, compute_target_positions_stateless
-from ..core.vm import StackVM
+from ..core.vm import DEFAULT_ROLL_WINDOW, StackVM
 from ..data.panel import Panel
 from ..errors import MiaoSuanError
 from ..market.profiles import FrozenMarketProfile
@@ -363,13 +363,14 @@ def run_full_backtest(
     neutral_band: float = MIN_TRADE_EXPOSURE,
     long_only: bool | None = None,
     factor_roll_window: int | None = None,
+    factor_gate_deadband: float = 0.0,
 ) -> BacktestRun:
     """在**全样本**上跑一次回测，返回逐 bar 序列与汇总指标。
 
     计算链（全部复用 ``core`` 既有语义，不改任何已有返回值）::
 
         features  = compute_features(panel.to_raw_dict())          # [N, F, T]
-        factor    = StackVM(roll_window=factor_roll_window).execute(tokens, features)
+        factor    = StackVM(roll_window=..., gate_deadband=...).execute(tokens, features)
         position  = tanh(factor)  （过中性带置 0）                  # [N, T]
         ret       = log(open[t+2] / open[t+1])                     # [N, T]
         pnl       = profile.apply_cost(position, ret)              # [N, T]
@@ -386,6 +387,9 @@ def run_full_backtest(
         factor_roll_window: **因子归一化的滚动窗口**（喂给 :class:`StackVM`，
             真实影响信号 → 影响 metrics）。对应 :class:`Semantics.roll_window`；
             这是寻优里的 ``roll_window`` 旋钮。``None`` 时用 :class:`StackVM` 默认值。
+        factor_gate_deadband: **GATE 死区宽度**（喂给 :class:`StackVM`，>0 时启用零点
+            滞回保护）。对应 :class:`Semantics.gate_deadband`；与导出内核、实盘
+            共用 ``core.ops.make_gate`` 同一实现。``0.0``（默认）与既有基准逐位一致。
 
     Returns:
         :class:`BacktestRun`。
@@ -395,7 +399,10 @@ def run_full_backtest(
     """
     raw = panel.to_raw_dict()
     features = compute_features(raw)
-    vm = StackVM(roll_window=int(factor_roll_window)) if factor_roll_window else StackVM()
+    vm = StackVM(
+        roll_window=int(factor_roll_window) if factor_roll_window else DEFAULT_ROLL_WINDOW,
+        gate_deadband=float(factor_gate_deadband),
+    )
     factor = vm.execute([int(t) for t in tokens], features)
     if factor is None:
         raise MiaoSuanError(f"公式不可求值（tokens={list(tokens)!r}）")

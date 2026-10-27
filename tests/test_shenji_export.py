@@ -151,7 +151,10 @@ def test_gate_formula_gets_deadband_param() -> None:
     result = _port().compile(_spec(AM_BEST))
     names = [p.name for p in result.param_space]
     assert "GATE_DEADBAND" in names
-    assert "_gate_protected" in result.source
+    # 死区实现由 core/ops.make_gate 原样搬运（op_make_gate），模板不再自带第二份手写版
+    assert "def op_make_gate(" in result.source
+    assert "_make_gate_protected" not in result.source
+    assert "_OP_FUNCS[_GATE_TOKEN] = (op_make_gate(_GATE_DEADBAND), 3)" in result.source
     assert "GATE_DEADBAND = 0.0" in result.source
 
 
@@ -159,7 +162,7 @@ def test_non_gate_formula_has_no_deadband_param() -> None:
     result = _port().compile(_spec(SIMPLE))
     names = [p.name for p in result.param_space]
     assert names == ["NEUTRAL_BAND"]
-    assert "_gate_protected" not in result.source
+    assert "op_make_gate" not in result.source
 
 
 def test_gate_deadband_is_configurable() -> None:

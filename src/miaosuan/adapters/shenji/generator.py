@@ -171,7 +171,10 @@ class ShenjiPort(TargetPort):
             接受 ``int`` 或数字字符串，渲染前统一归一为 ``int``。
         date: 文件名日期 ``YYYYMMDD``；留空取当天 UTC。
         template_name: 模板文件名。
-        gate_deadband: GATE 死区默认值（R1 保护开关，0 = 关闭）。
+        gate_deadband: GATE 死区（R1 保护）。``None`` = 跟随
+            ``spec.semantics.gate_deadband``（回测/实盘/导出同源）；给定数值则
+            **覆盖** spec —— 此时证据（val/DSR/成本敏感度）仍是旧死区下算出的，
+            调用方需自行说明。
     """
 
     platform = PLATFORM_SPEC
@@ -183,14 +186,14 @@ class ShenjiPort(TargetPort):
         magic: int | str | None = None,
         date: str = "",
         template_name: str = DEFAULT_TEMPLATE,
-        gate_deadband: float = 0.0,
+        gate_deadband: float | None = None,
     ) -> None:
         """初始化端口（不触碰文件系统，除非需要分配 magic）。"""
         self.ledger_path = ledger_path
         self.magic = magic
         self.date = date
         self.template_name = template_name
-        self.gate_deadband = float(gate_deadband)
+        self.gate_deadband = None if gate_deadband is None else float(gate_deadband)
 
     # ── 四件套 ─────────────────────────────────────────────────────────────
     def extract(self, spec: StrategySpec) -> dict[str, Any]:
@@ -209,11 +212,17 @@ class ShenjiPort(TargetPort):
         has_gate = GATE_TOKEN_NAME in op_names
 
         gate_token = -1
-        gate_func_name = ""
-        for tid, oname, _arity, fname in plan.op_entries:
+        for tid, oname, _arity, _fname in plan.op_entries:
             if oname == GATE_TOKEN_NAME and gate_token < 0:
                 gate_token = int(tid)
-                gate_func_name = fname
+
+        # 死区默认跟随 spec 语义：导出内核与回测/实盘读同一个值（唯一实现在
+        # core.ops.make_gate，模板不再自带第二份实现）。
+        gate_deadband = (
+            self.gate_deadband
+            if self.gate_deadband is not None
+            else float(spec.semantics.gate_deadband)
+        )
 
         # 词表版本必须与 payload 一致：token 只有搭配同一词表才有意义。
         if (
@@ -241,7 +250,7 @@ class ShenjiPort(TargetPort):
         version = 1
         param_space = build_param_space(
             neutral_band=spec.semantics.neutral_band,
-            gate_deadband=self.gate_deadband,
+            gate_deadband=gate_deadband,
             has_gate=has_gate,
         )
         formula = readable_formula(tokens)
@@ -277,7 +286,7 @@ class ShenjiPort(TargetPort):
             "feat_offset": FORMULA_VOCAB.operator_offset,
             "has_gate": has_gate,
             "gate_token": gate_token,
-            "gate_func_name": gate_func_name,
+            "gate_deadband": gate_deadband,
             "param_space": param_space,
             "class_name": _class_name(spec.name),
             "spec_json": spec_json,
@@ -313,8 +322,7 @@ class ShenjiPort(TargetPort):
             feat_offset=ctx["feat_offset"],
             has_gate=bool(ctx["has_gate"]),
             gate_token=ctx["gate_token"],
-            gate_func_name=ctx["gate_func_name"],
-            gate_deadband=self.gate_deadband,
+            gate_deadband=float(ctx["gate_deadband"]),
             roll_window=int(spec.semantics.roll_window),
             warmup_bars=int(spec.semantics.warmup_bars),
             neutral_band=float(spec.semantics.neutral_band),

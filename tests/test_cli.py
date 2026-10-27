@@ -7,7 +7,9 @@
 
 from __future__ import annotations
 
+import io
 import json
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -18,6 +20,9 @@ import typer
 from typer.testing import CliRunner
 
 from miaosuan.cli import (
+    _console_safe,
+    _die,
+    _echo,
     _extract_tokens,
     _history_payload,
     _resolve_search_space,
@@ -900,3 +905,53 @@ def test_mine_env_label_beats_filename(
     assert config.timeframe == "M30"
     assert config.symbol == "GBPUSD"
     assert "env 显式" in result.output
+
+
+# ── GBK 控制台：消息里的 emoji 不能把已成功的命令崩成退出码 1 ──────────────
+
+
+def _gbk_stream() -> tuple[Any, Any]:
+    """真 GBK 流（打包版 ``--noconsole`` + 中文 Windows 代码页的替身）。"""
+    buf = io.BytesIO()
+    return io.TextIOWrapper(buf, encoding="gbk", errors="strict"), buf
+
+
+def test_console_safe_replaces_only_unencodable_chars(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GBK 流上 ``⚠`` 变 ``?``，中文与数字必须原样留着（信息不能一起丢）。"""
+    stream, _buf = _gbk_stream()
+    monkeypatch.setattr(sys, "stdout", stream)
+    out = _console_safe("⚠ 死区 0.02 与 spec 0.0 不一致")
+    assert out.startswith("?")
+    assert "死区 0.02 与 spec 0.0 不一致" in out
+    out.encode("gbk")  # 兜底：结果必须真能写进 GBK 流
+
+
+def test_console_safe_is_noop_on_utf8_stream(monkeypatch: pytest.MonkeyPatch) -> None:
+    """UTF-8 环境（现代终端/CI）不得被改写——不能为了兼容把 emoji 全铲平。"""
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    assert _console_safe("⚠ 死区 0.02") == "⚠ 死区 0.02"
+
+
+def test_echo_survives_gbk_stdout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """回归：实测打包版 ``export --gate-deadband`` 因 ``_echo("⚠ …")`` 崩在写文件
+    之前——产物为空、退出码 1（用户视角就是「点了导出什么都没发生」）。"""
+    stream, buf = _gbk_stream()
+    monkeypatch.setattr(sys, "stdout", stream)
+    _echo("⚠ 说明文档生成失败（策略文件已写出）")
+    stream.flush()
+    written = buf.getvalue().decode("gbk")
+    assert "说明文档生成失败" in written
+
+
+def test_die_survives_gbk_stderr(monkeypatch: pytest.MonkeyPatch) -> None:
+    """错误路径同样不得因编码崩（``_die`` 走 stderr）。"""
+    _out_stream, _out_buf = _gbk_stream()
+    err_stream, err_buf = _gbk_stream()
+    monkeypatch.setattr(sys, "stdout", _out_stream)
+    monkeypatch.setattr(sys, "stderr", err_stream)
+    with pytest.raises(typer.Exit):
+        _die("⚠ 无法读取 spec")
+    err_stream.flush()
+    assert "无法读取 spec" in err_buf.getvalue().decode("gbk")

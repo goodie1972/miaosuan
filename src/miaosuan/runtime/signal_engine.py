@@ -6,13 +6,13 @@
 
 与回测引擎**共用同一口径**（G2 对拍的基石）::
 
-    compute_features(raw_dict)  →  StackVM(roll_window).execute(tokens, feats)
+    compute_features(raw_dict)  →  StackVM(roll_window, gate_deadband).execute(tokens, feats)
     →  tanh(factor) → |pos| < neutral_band 置 0（long_only 时负仓位归零）
 
-全部口径来自 ``Semantics``（``neutral_band`` / ``roll_window`` / ``long_short`` /
-``execution_lag_bars``），运行时不允许另立配置。逐 bar 语义：bar t 收盘时引擎
-产出 ``position[t]``——按 ``execution_lag_bars=1`` 于 t+1 开盘可执行，与回测的
-``target_ret[t] = log(open[t+2]/open[t+1])`` 收益对齐。
+全部口径来自 ``Semantics``（``neutral_band`` / ``roll_window`` / ``gate_deadband`` /
+``long_short`` / ``execution_lag_bars``），运行时不允许另立配置。逐 bar 语义：bar t
+收盘时引擎产出 ``position[t]``——按 ``execution_lag_bars=1`` 于 t+1 开盘可执行，与
+回测的 ``target_ret[t] = log(open[t+2]/open[t+1])`` 收益对齐。
 
 启动安全链（Sample G，顺序不可调换）：门禁 verdict → 词表版本 → 才允许挂载。
 """
@@ -91,7 +91,7 @@ class SignalEngine:
         # 中性带映射与 cli 回测预览同口径：0（未设）→ 默认 0.05
         self._neutral_band = float(sem.neutral_band or 0.0) or MIN_TRADE_EXPOSURE
         self._long_only = not sem.long_short
-        self._vm = StackVM(roll_window=int(sem.roll_window))
+        self._vm = StackVM(roll_window=int(sem.roll_window), gate_deadband=float(sem.gate_deadband))
         self._notifier = notifier
         # 历史缓冲（[1, T] 单品种）；ts → 已处理收盘 bar 水位（去重）
         self._history: dict[str, list[float]] = {

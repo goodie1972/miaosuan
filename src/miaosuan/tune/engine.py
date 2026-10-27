@@ -263,12 +263,16 @@ def load_param_space_from_spec(spec_path: str) -> list[ParamSpace]:
     ``long_only``——挖成 :class:`ParamSpace` 列表，缺省值跟随该 Spec 自身
     （贴合其既有语义），而非全局硬编码。
 
-    只挖这三项的原因：这是回测链路里**唯一可被参数改变且真实影响指标**的
-    语义维度。``roll_window`` 走 :class:`Semantics` 喂给 :class:`StackVM` 的
+    只挖这三项的原因：这是**语义空间**里唯一可被参数改变且真实影响指标的
+    三个维度。``roll_window`` 走 :class:`Semantics` 喂给 :class:`StackVM` 的
     因子归一化（影响信号 → 影响 metrics）；注意它**不是** :func:`run_full_backtest`
     的 ``rolling_window``（那个只是滚动夏普的**报告窗口**，不进 metrics，调它会
     污染夏普曲线）。因子 token 本身是「被挖出来的结果」，不参与调参（改了即换策略）；
     成本 / 画像属于 :class:`FrozenMarketProfile`，不属于可搜索的语义旋钮。
+
+    ``gate_deadband`` 不在这里（不自动进入搜索空间，避免改变既有挖掘基线），但
+    模式 B 从生成文件 ``PARAM_SPACE`` 拿到 ``GATE_DEADBAND`` 时会真实喂给回测，
+    与实盘/导出内核同源（见 :func:`evaluate_trial`）。
 
     Args:
         spec_path: StrategySpec JSON 文件路径。
@@ -354,9 +358,14 @@ def evaluate_trial(
     # 旋钮 → run_full_backtest 实参的映射（键名与 Semantics 字段逐字一致）：
     #   neutral_band → neutral_band（中性带阈值）
     #   roll_window  → factor_roll_window（喂给 StackVM，影响因子归一化）
-    # 未知参数（如平台专属的止损点数）在此被**忽略**，不传给回测。
+    #   gate_deadband / GATE_DEADBAND → factor_gate_deadband（喂给 StackVM 的 GATE 死区，
+    #     与实盘/导出内核同源；两种拼写分别是语义空间小写名与生成文件类属性名）
+    # 其余未知参数（如平台专属的止损点数）在此被**忽略**，不传给回测。
     neutral_band = params.get("neutral_band")
     roll_window = params.get("roll_window")
+    gate_deadband = params.get("gate_deadband")
+    if gate_deadband is None:
+        gate_deadband = params.get("GATE_DEADBAND")
 
     # long_only 可能来自 choice 空间（字符串 "True"/"False"），须做**真值**转换，
     # 否则 bool("False") == True（非空串），会把"只做多"误判成 False。
@@ -369,6 +378,7 @@ def evaluate_trial(
         neutral_band=float(neutral_band) if neutral_band is not None else MIN_TRADE_EXPOSURE,
         long_only=long_only,
         factor_roll_window=int(roll_window) if roll_window is not None else None,
+        factor_gate_deadband=float(gate_deadband) if gate_deadband is not None else 0.0,
     )
 
 

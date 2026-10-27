@@ -165,6 +165,7 @@ def generate_readme_zh(
 | 滚动窗口 | {se.roll_window} | z-score 窗口，前 {se.roll_window - 1} 根输出 0（clip ±3） |
 | 预热 bar | {se.warmup_bars} | 起算前丢弃的 bar 数 |
 | 中性带 | {se.neutral_band} | \\|tanh(因子)\\| 低于该值不出信号 |
+| GATE 死区 | {se.gate_deadband} | 零点滞回（R1）：0 = 关闭；回测/实盘/导出内核同一实现 |
 | 多空 | {"双向" if se.long_short else "单向"} | 仓位 = tanh(因子)，与回测口径一致 |
 | bar1 语义 | 不重绘 | 只用已收盘 K 线，最后一根未收盘 bar 不参与计算 |
 
@@ -273,6 +274,7 @@ def generate_readme_en(
 | Roll window | {se.roll_window} | z-score window; first {se.roll_window - 1} bars output 0 (clip ±3) |
 | Warmup bars | {se.warmup_bars} | Bars discarded before scoring starts |
 | Neutral band | {se.neutral_band} | \\|tanh(factor)\\| below this emits no signal |
+| GATE deadband | {se.gate_deadband} | Zero-crossing hysteresis (R1); 0 = off, same code path in backtest/live/export |
 | Long/short | {"both" if se.long_short else "single side"} | exposure = tanh(factor), matches backtest |
 | bar1 semantics | non-repainting | Uses closed candles only; last unclosed bar is ignored |
 
