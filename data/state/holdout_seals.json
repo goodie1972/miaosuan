@@ -50,6 +50,26 @@
         "horizon": 2,
         "seed": 8
       }
+    },
+    "sha256:593683657324dbc9e926738c6a5ce392354c2bbc2254e930c6fc665374abcdf8": {
+      "seq": 6,
+      "meta": {
+        "panel_fingerprint": "sha256:060b6b8b379a88720645c74d12e3d5f11410b6934a7dedb941c1256fa540186c",
+        "split_fingerprint": "sha256:1ec784086e2aaf86e98b53e089714f513146e9f475a8012238b7d3e759cc804a",
+        "n_bars": 5535,
+        "horizon": 2,
+        "seed": 20260910
+      }
+    },
+    "sha256:1b633f5ac2ad41ebb19daa0108b489769e825824589382d6299966209570e150": {
+      "seq": 7,
+      "meta": {
+        "panel_fingerprint": "sha256:060b6b8b379a88720645c74d12e3d5f11410b6934a7dedb941c1256fa540186c",
+        "split_fingerprint": "sha256:0a28f80d19f156158f9656a34ed9aeb349ea30910eb0547e1759046b843d2039",
+        "n_bars": 5535,
+        "horizon": 2,
+        "seed": 424242
+      }
     }
   }
 }
