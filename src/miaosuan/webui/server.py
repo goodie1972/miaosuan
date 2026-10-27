@@ -160,20 +160,34 @@ def _child_env() -> dict[str, str]:
     return child_process_env()
 
 
+def _decode_cli_line(chunk: bytes) -> str:
+    """单行解码：严格 UTF-8 → 严格 GBK → 两种宽松解码里挑乱码更少的那个。
+
+    末路必须比「选一个」：``errors="replace"`` 两种都能过，选错就整行乱码，
+    用 ``\ufffd`` 计数取小者让每行各自落在它真正的那个编码上。
+    """
+    for enc in ("utf-8", "gbk"):
+        try:
+            return chunk.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    candidates = [chunk.decode(enc, errors="replace") for enc in ("utf-8", "gbk")]
+    return min(candidates, key=lambda text: text.count("\ufffd"))
+
+
 def _decode_cli_bytes(raw: bytes) -> str:
     """解码 CLI 子进程输出：优先 UTF-8，失败则回退 GBK(cp936)。
 
-    ``_child_env`` 已尽力让子进程吐 UTF-8，但 **PyInstaller 冻结 exe** 会自带
-    stdio 编码、忽略 ``PYTHONIOENCODING``，在中文 Windows 上仍按 GBK 输出。
-    这里按字节自行解码：能严格解成 UTF-8 就用 UTF-8，否则按 GBK 解，彻底消除
-    导出/校验弹窗里的 ``\ufffd`` 乱码。
+    ``_child_env`` 已尽力让子进程吐 UTF-8，但 **PyInstaller 冻结 exe** 自带
+    stdio 编码、忽略 ``PYTHONIOENCODING``/``PYTHONUTF8``（实测仍按 GBK 输出）。
+    解码**逐行**进行：整段一把梭时，只要缓冲区里混进一行异编码字节，严格
+    UTF-8 就整体失败、所有中文行一起掉进同一个兜底分支，导出/校验弹窗会整屏
+    乱码（用户 2026-10-27 实拍）。按 ``\\n`` 切分对两种编码都安全（GBK 尾字节
+    不含 0x0A），因此每行只可能自己解错，不会连累其他行。
     """
     if not raw:
         return ""
-    try:
-        return raw.decode("utf-8")
-    except UnicodeDecodeError:
-        return raw.decode("gbk", errors="replace")
+    return "\n".join(_decode_cli_line(line.rstrip(b"\r")) for line in raw.split(b"\n"))
 
 
 def _spec_id(path: Path) -> str:
