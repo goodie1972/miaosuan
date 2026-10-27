@@ -25,4 +25,4 @@ __all__ = ["__version__", "TOOL_NAME"]
 TOOL_NAME: str = "miaosuan"
 
 # 语义化版本：MAJOR.MINOR.PATCH（架构 §9.3）
-__version__: str = "0.2.0"
+__version__: str = "0.2.1"

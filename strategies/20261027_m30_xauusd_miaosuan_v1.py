@@ -21,7 +21,8 @@ SAR_DIST → DELTA → DONCHIAN_POS_20 → MA_DIFF → GATE → TS_MEAN_20 → T
   止损 3×ATR 比平台兜底的 2×ATR 更宽，减少噪音扫损。
 * R1 保护：公式含 GATE 算子。GATE 在条件穿越 0 时会 O(1) 跳变，float32 归约误差
   可让符号在 ±1ULP 抖动，实盘表现为分支反复翻转。生成文件内置**死区滞回**
-  （``GATE_DEADBAND``）；默认 0.0 = 关闭（与回测逐位一致），调大即启用保护。
+  （``GATE_DEADBAND``，默认跟随本 spec 的 ``semantics.gate_deadband``）；实现由
+  ``miaosuan.core.ops.make_gate`` **原样搬运**，与回测/实盘逐位同源。0 = 关闭。
 证据（导出时刻快照，只读）
 -------------------------
 * 验证集得分：0.8762308324634503（5 折 Walk-Forward）
@@ -53,7 +54,7 @@ SAR_DIST → DELTA → DONCHIAN_POS_20 → MA_DIFF → GATE → TS_MEAN_20 → T
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 from strategies.base import BaseStrategy
@@ -87,6 +88,7 @@ _MIAOSUAN_SPEC_JSON = r"""{
     "warmup_bars": 499,
     "timeframe": "M30",
     "roll_window": 500,
+    "gate_deadband": 0.0,
     "execution_lag_bars": 1
   },
   "evidence": {
@@ -383,6 +385,51 @@ def op_gate(condition: np.ndarray, x: np.ndarray, y: np.ndarray) -> np.ndarray:
     out: np.ndarray = mask * x + (1.0 - mask) * y
     return out
 
+def op_gate_hysteresis(
+    condition: np.ndarray, x: np.ndarray, y: np.ndarray, deadband: float
+) -> np.ndarray:
+    """GATE 的死区滞回核心：``|condition| <= deadband`` 时沿用上一根的选择。
+
+    条件在 0 附近因浮点归约误差抖动 ±1ULP 时，原生 GATE 会反复翻转分支；死区把
+    「未明确越界」的根折叠成上一次的决定，因此只看历史、**不引入未来函数**。
+
+    每行（每个品种）各自持有滞回状态；首次出现越界决定**之前**沿用「取 y」，
+    与逐根递推 ``prev = 0`` 起点的实现逐位一致。
+    """
+    t = condition.shape[1]
+    # +1 = 明确做多（取 x）；0 = 明确做空侧（取 y）；-1 = 落在死区内，沿用上一次决定。
+    decided = np.where(condition > deadband, 1, np.where(condition < -deadband, 0, -1)).astype(
+        np.int64
+    )
+    last = np.maximum.accumulate(
+        np.where(decided >= 0, np.arange(t, dtype=np.int64).reshape(1, t), -1), axis=1
+    )
+    latest = np.take_along_axis(decided, np.clip(last, 0, t - 1), axis=1)
+    take_x = np.where(last >= 0, latest == 1, False)
+    out: np.ndarray = np.where(take_x, x, y)
+    return out
+
+def op_make_gate(deadband: float = 0.0) -> Callable[..., Any]:
+    """构造 GATE 算子 —— 死区滞回的**唯一实现**（回测 / 实盘 / 导出内核同源）。
+
+    ``deadband <= 0`` 直接返回 :func:`op_gate` 本体，因此默认口径与既有冻结基准
+    **逐位一致**；``> 0`` 返回闭包持有 deadband 的滞回版，**无模块级可变状态**
+    （同一进程内不同死区不会互相污染）。
+
+    Args:
+        deadband: 死区宽度（与 ``condition`` 同量纲）。``0`` = 关闭保护。
+
+    Returns:
+        三元算子 ``f(condition, x, y) -> [N, T]``（未套形状校验，由调用方包装）。
+    """
+    if deadband <= 0.0:
+        return op_gate
+
+    def _gate_with_deadband(condition: np.ndarray, x: np.ndarray, y: np.ndarray) -> np.ndarray:
+        return op_gate_hysteresis(condition, x, y, deadband)
+
+    return _gate_with_deadband
+
 def op_ts_rolling(x: np.ndarray, d: int) -> np.ndarray:
     """unfold 等价的因果滑动窗口，返回 ``[N, T, d]``。
 
@@ -413,11 +460,11 @@ def op_ts_sum(x: np.ndarray, d: int) -> np.ndarray:
     xp = np.concatenate([pad, x], axis=1)
     return np.lib.stride_tricks.sliding_window_view(xp, d, axis=1).sum(axis=-1)
 
-lambda_ts_mean_20_496 = lambda x: op_ts_mean(x, 20)
+lambda_ts_mean_20_565 = lambda x: op_ts_mean(x, 20)
 
-lambda_delta_519 = lambda x: op_delta(x, 1)
+lambda_delta_588 = lambda x: op_delta(x, 1)
 
-lambda_ts_sum_20_545 = lambda x: op_n2n(op_ts_sum(x, 20), nan=0.0)
+lambda_ts_sum_20_614 = lambda x: op_n2n(op_ts_sum(x, 20), nan=0.0)
 
 # ── 公式与算子/特征绑定 ────────────────────────────────────────────────────
 _FEAT_OFFSET = 65
@@ -429,7 +476,7 @@ _FEATURE_FUNCS = {
 }
 def _op_wrap_99(*operands: np.ndarray) -> np.ndarray:
     """算子 DELTA（arity=1）的入口包装。"""
-    return lambda_delta_519(*operands)
+    return lambda_delta_588(*operands)
 
 def _op_wrap_72(*operands: np.ndarray) -> np.ndarray:
     """算子 GATE（arity=3）的入口包装。"""
@@ -437,11 +484,11 @@ def _op_wrap_72(*operands: np.ndarray) -> np.ndarray:
 
 def _op_wrap_79(*operands: np.ndarray) -> np.ndarray:
     """算子 TS_MEAN_20（arity=1）的入口包装。"""
-    return lambda_ts_mean_20_496(*operands)
+    return lambda_ts_mean_20_565(*operands)
 
 def _op_wrap_114(*operands: np.ndarray) -> np.ndarray:
     """算子 TS_SUM_20（arity=1）的入口包装。"""
-    return lambda_ts_sum_20_545(*operands)
+    return lambda_ts_sum_20_614(*operands)
 
 def _op_wrap_71(*operands: np.ndarray) -> np.ndarray:
     """算子 SIGN（arity=1）的入口包装。"""
@@ -457,35 +504,13 @@ _OP_FUNCS = {
 }
 
 # ── R1：GATE 零点不连续保护（死区滞回，因果，无未来函数）───────────────────
+# 实现由 core/ops.py 的 make_gate **原样搬运**（op_make_gate），回测 / 实盘 /
+# 本文件三者共用同一份代码——不再在此另写第二份「等价」实现（手写必然漂移）。
+# deadband <= 0 时 op_make_gate 直接返回原生 GATE，与回测逐位一致。
 _GATE_DEADBAND = 0.0
 _GATE_TOKEN = 72
 
-
-def _make_gate_protected(deadband: float):
-    """构造启用死区滞回的 GATE 算子（闭包持有 deadband，**无模块级可变状态**）。
-
-    ``deadband <= 0`` 时退化为原生 GATE（与回测逐位一致）；``> 0`` 时，
-    ``|condition| <= DEADBAND`` 的区间沿用上一根的选择，消除 1-ULP 符号抖动
-    造成的分支翻转。逐根前向递推，**只看历史**，不引入未来函数。
-    """
-    def _gate_protected(condition: np.ndarray, x: np.ndarray, y: np.ndarray) -> np.ndarray:
-        if deadband <= 0.0:
-            return op_gate(condition, x, y)
-        _n, t = condition.shape
-        out = np.zeros_like(x)
-        prev = 0
-        for i in range(t):
-            c = float(condition[0, i])
-            if c > deadband:
-                prev = 1
-            elif c < -deadband:
-                prev = 0
-            out[0, i] = x[0, i] if prev else y[0, i]
-        return out
-    return _gate_protected
-
-
-_OP_FUNCS[_GATE_TOKEN] = (_make_gate_protected(_GATE_DEADBAND), 3)
+_OP_FUNCS[_GATE_TOKEN] = (op_make_gate(_GATE_DEADBAND), 3)
 
 # ── 栈式求值 + 滚动归一化（对齐 miaosuan.core.vm.StackVM）──────────────────
 _ROLL_WINDOW = 500
@@ -564,7 +589,7 @@ def compute_factor(
     # 每次调用都按本次 deadband 重置 gate 条目：闭包工厂不写模块级状态，
     # 「先带参后不带参」的调用序列不会互相污染（QA Round2 特别审查①）。
     _db = _GATE_DEADBAND if gate_deadband is None else float(gate_deadband)
-    _OP_FUNCS[_GATE_TOKEN] = (_make_gate_protected(_db), 3)
+    _OP_FUNCS[_GATE_TOKEN] = (op_make_gate(_db), 3)
     raw = {
         "open": np.atleast_2d(np.asarray(open_, dtype=np.float32)),
         "high": np.atleast_2d(np.asarray(high, dtype=np.float32)),

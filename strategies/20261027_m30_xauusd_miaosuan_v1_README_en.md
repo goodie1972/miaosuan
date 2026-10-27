@@ -19,6 +19,7 @@ SAR_DIST → DELTA → DONCHIAN_POS_20 → MA_DIFF → GATE → TS_MEAN_20 → T
 | Roll window | 500 | z-score window; first 499 bars output 0 (clip ±3) |
 | Warmup bars | 499 | Bars discarded before scoring starts |
 | Neutral band | 0.05 | \|tanh(factor)\| below this emits no signal |
+| GATE deadband | 0.0 | Zero-crossing hysteresis (R1); 0 = off, same code path in backtest/live/export |
 | Long/short | both | exposure = tanh(factor), matches backtest |
 | bar1 semantics | non-repainting | Uses closed candles only; last unclosed bar is ignored |
 
