@@ -128,12 +128,20 @@ def test_mine_three_buttons():
                 expect(btn_pause).to_be_hidden()  # 初始隐藏
                 expect(btn_restart).to_be_visible()
 
-                # ── 设置 data 值（直接注入，避免 select_option 失败） ──
-                page.evaluate("""
-                    var sel = document.getElementById('data');
-                    sel.innerHTML = '<option value="XAUUSD_M30.parquet">XAUUSD_M30.parquet</option>';
-                    sel.value = 'XAUUSD_M30.parquet';
-                """)
+                # ── 选中真实行情文件 ──
+                # 必须走原生流程：option 的 value 是后端返回的**绝对路径**（裸文件名会被
+                # /api/inspect 的目录白名单拒掉），且只有触发 change 才会回填标的/周期，
+                # 否则 /api/mine/start 会按契约 400「请填写标的」。
+                page.wait_for_function(
+                    "window.__dataRows && window.__dataRows.length > 0", timeout=10000
+                )
+                data_path = page.evaluate(
+                    "window.__dataRows.find(function (d) { return d.name === 'XAUUSD_M30.parquet'; }).path"
+                )
+                page.select_option("#data", data_path)
+                page.wait_for_function(
+                    "document.getElementById('symbol').value !== ''", timeout=10000
+                )
 
                 # ── 点击开始 ──
                 btn_start.click()
